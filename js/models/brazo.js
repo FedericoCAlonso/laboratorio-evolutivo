@@ -2,6 +2,9 @@
 // MÓDULO: MODELO BRAZO ROBÓTICO PLANAR (CINEMÁTICA INVERSA CON OBSTÁCULO)
 // =========================================================================
 
+// Identificador del temporizador de animación requestAnimationFrame para el brazo robótico.
+let idAnimacionBrazo = null;
+
 // Longitudes fijas de los 3 eslabones del brazo manipulador en unidades de modelado.
 export const LONGITUDES_ESLABONES_BRAZO = [45, 35, 25];
 
@@ -119,9 +122,19 @@ export const ModeloBrazoRobotico = {
     return distObjetivo + esfuerzoAngular * 15 + penalizacionColision;
   },
 
-  // Dibuja en Canvas 2D el brazo mecánico articulado, el obstáculo, el objetivo y las cotas de distancia.
+  // Detiene el ciclo continuo de animación en requestAnimationFrame.
+  detenerAnimacion() {
+    if (idAnimacionBrazo !== null) {
+      cancelAnimationFrame(idAnimacionBrazo);
+      idAnimacionBrazo = null;
+    }
+  },
+
+  // Dibuja en Canvas 2D el brazo mecánico articulado con animación cinemática fluida, trayectoria y HUD.
   dibujar(genoma, entrada, contenedor) {
     if (!contenedor) return;
+
+    this.detenerAnimacion();
 
     let canvas = contenedor.querySelector("canvas");
     if (!canvas) {
@@ -137,18 +150,6 @@ export const ModeloBrazoRobotico = {
     }
 
     const ctx = canvas.getContext("2d");
-    const dpr = window.devicePixelRatio || 1;
-    const anchoCSS = canvas.clientWidth || 800;
-    const altoCSS = canvas.clientHeight || 360;
-
-    if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
-      canvas.width = anchoCSS * dpr;
-      canvas.height = altoCSS * dpr;
-    }
-
-    ctx.resetTransform();
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, anchoCSS, altoCSS);
 
     const targetX = Number(entrada?.objetivoX !== undefined ? entrada.objetivoX : 55);
     const targetY = Number(entrada?.objetivoY !== undefined ? entrada.objetivoY : 40);
@@ -156,180 +157,244 @@ export const ModeloBrazoRobotico = {
     const obsY = Number(entrada?.obstaculoY !== undefined ? entrada.obstaculoY : 20);
     const obsRadio = Number(entrada?.obstaculoRadio !== undefined ? entrada.obstaculoRadio : 16);
 
-    // Sistema de coordenadas centrado en la base del manipulador.
-    const origenX = anchoCSS * 0.35;
-    const origenY = altoCSS * 0.55;
-    const escala = Math.min(anchoCSS, altoCSS) / 220;
+    const [targetTh1, targetTh2, targetTh3] = genoma;
+    let tiempoAnimacion = 0;
+    const historialEfector = [];
 
-    const toPx = (p) => ({
-      x: origenX + p.x * escala,
-      y: origenY - p.y * escala
-    });
+    const animar = () => {
+      if (!canvas.isConnected) {
+        if (idAnimacionBrazo !== null) {
+          cancelAnimationFrame(idAnimacionBrazo);
+          idAnimacionBrazo = null;
+        }
+        return;
+      }
 
-    // Fondo y cuadrícula cartesiana suave.
-    ctx.fillStyle = "rgba(0, 0, 0, 0.02)";
-    ctx.fillRect(0, 0, anchoCSS, altoCSS);
+      const dpr = window.devicePixelRatio || 1;
+      const anchoCSS = canvas.clientWidth || 800;
+      const altoCSS = canvas.clientHeight || 360;
 
-    ctx.strokeStyle = "rgba(100, 116, 139, 0.15)";
-    ctx.lineWidth = 1;
-    for (let x = -100; x <= 120; x += 20) {
-      const p = toPx({ x, y: 0 });
+      if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
+        canvas.width = anchoCSS * dpr;
+        canvas.height = altoCSS * dpr;
+      }
+
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, anchoCSS, altoCSS);
+
+      // Movimiento oscilatorio suave de alcance y retracción hacia la posición óptima evolucionada.
+      const factorInterpolacion = 0.5 - 0.5 * Math.cos(tiempoAnimacion);
+      const th1Actual = targetTh1 * factorInterpolacion;
+      const th2Actual = targetTh2 * factorInterpolacion;
+      const th3Actual = targetTh3 * factorInterpolacion;
+
+      // Sistema de coordenadas centrado en la base del manipulador.
+      const origenX = anchoCSS * 0.35;
+      const origenY = altoCSS * 0.55;
+      const escala = Math.min(anchoCSS, altoCSS) / 220;
+
+      const toPx = (p) => ({
+        x: origenX + p.x * escala,
+        y: origenY - p.y * escala
+      });
+
+      // Fondo y cuadrícula cartesiana suave.
+      ctx.fillStyle = "rgba(0, 0, 0, 0.02)";
+      ctx.fillRect(0, 0, anchoCSS, altoCSS);
+
+      ctx.strokeStyle = "rgba(100, 116, 139, 0.15)";
+      ctx.lineWidth = 1;
+      for (let x = -100; x <= 120; x += 20) {
+        const p = toPx({ x, y: 0 });
+        ctx.beginPath();
+        ctx.moveTo(p.x, 0);
+        ctx.lineTo(p.x, altoCSS);
+        ctx.stroke();
+      }
+      for (let y = -80; y <= 80; y += 20) {
+        const p = toPx({ x: 0, y });
+        ctx.beginPath();
+        ctx.moveTo(0, p.y);
+        ctx.lineTo(anchoCSS, p.y);
+        ctx.stroke();
+      }
+
+      // 1. Dibujo del obstáculo circular de colisión.
+      const pObs = toPx({ x: obsX, y: obsY });
+      const rObsPx = obsRadio * escala;
+
       ctx.beginPath();
-      ctx.moveTo(p.x, 0);
-      ctx.lineTo(p.x, altoCSS);
+      ctx.arc(pObs.x, pObs.y, rObsPx, 0, 2 * Math.PI);
+      ctx.fillStyle = "rgba(239, 68, 68, 0.18)";
+      ctx.fill();
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
       ctx.stroke();
-    }
-    for (let y = -80; y <= 80; y += 20) {
-      const p = toPx({ x: 0, y });
+      ctx.setLineDash([]);
+
+      ctx.font = "bold 11px system-ui";
+      ctx.fillStyle = "#ef4444";
+      ctx.textAlign = "center";
+      ctx.fillText("Zona Prohibida", pObs.x, pObs.y - rObsPx - 6);
+
+      // 2. Dibujo del objetivo (diana de precisión con pulso animado).
+      const pTar = toPx({ x: targetX, y: targetY });
+      const pulsoRadio = 14 + 2 * Math.sin(tiempoAnimacion * 4);
+
       ctx.beginPath();
-      ctx.moveTo(0, p.y);
-      ctx.lineTo(anchoCSS, p.y);
-      ctx.stroke();
-    }
-
-    // 1. Dibujo del obstáculo circular de colisión.
-    const pObs = toPx({ x: obsX, y: obsY });
-    const rObsPx = obsRadio * escala;
-
-    ctx.beginPath();
-    ctx.arc(pObs.x, pObs.y, rObsPx, 0, 2 * Math.PI);
-    ctx.fillStyle = "rgba(239, 68, 68, 0.18)";
-    ctx.fill();
-    ctx.strokeStyle = "#ef4444";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.font = "bold 11px system-ui";
-    ctx.fillStyle = "#ef4444";
-    ctx.textAlign = "center";
-    ctx.fillText("Zona Prohibida", pObs.x, pObs.y - rObsPx - 6);
-
-    // 2. Dibujo del objetivo (diana de precisión).
-    const pTar = toPx({ x: targetX, y: targetY });
-    ctx.beginPath();
-    ctx.arc(pTar.x, pTar.y, 14, 0, 2 * Math.PI);
-    ctx.fillStyle = "rgba(16, 185, 129, 0.2)";
-    ctx.fill();
-    ctx.strokeStyle = "#10b981";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(pTar.x, pTar.y, 5, 0, 2 * Math.PI);
-    ctx.fillStyle = "#10b981";
-    ctx.fill();
-
-    // Cruz de mira telescópica en el blanco.
-    ctx.beginPath();
-    ctx.moveTo(pTar.x - 18, pTar.y);
-    ctx.lineTo(pTar.x + 18, pTar.y);
-    ctx.moveTo(pTar.x, pTar.y - 18);
-    ctx.lineTo(pTar.x, pTar.y + 18);
-    ctx.strokeStyle = "#10b981";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    ctx.fillStyle = "#059669";
-    ctx.textAlign = "center";
-    ctx.fillText("Blanco", pTar.x, pTar.y + 26);
-
-    // 3. Resolución cinemática y dibujo del manipulador robótico.
-    const { p0, p1, p2, p3 } = resolverCinematicaBrazo(genoma);
-    const px0 = toPx(p0);
-    const px1 = toPx(p1);
-    const px2 = toPx(p2);
-    const px3 = toPx(p3);
-
-    // Pedestal de la base fija.
-    ctx.fillStyle = "#475569";
-    ctx.beginPath();
-    ctx.roundRect(px0.x - 22, px0.y - 10, 44, 20, 6);
-    ctx.fill();
-
-    // Función auxiliar para dibujar un eslabón con acabado de barra industrial.
-    const dibujarEslabon = (inicio, fin, color, grosor) => {
-      ctx.beginPath();
-      ctx.moveTo(inicio.x, inicio.y);
-      ctx.lineTo(fin.x, fin.y);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = grosor;
-      ctx.lineCap = "round";
+      ctx.arc(pTar.x, pTar.y, pulsoRadio, 0, 2 * Math.PI);
+      ctx.fillStyle = "rgba(16, 185, 129, 0.2)";
+      ctx.fill();
+      ctx.strokeStyle = "#10b981";
+      ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Línea central de contraste.
       ctx.beginPath();
-      ctx.moveTo(inicio.x, inicio.y);
-      ctx.lineTo(fin.x, fin.y);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
-      ctx.lineWidth = grosor * 0.3;
+      ctx.arc(pTar.x, pTar.y, 5, 0, 2 * Math.PI);
+      ctx.fillStyle = "#10b981";
+      ctx.fill();
+
+      // Cruz de mira telescópica en el blanco.
+      ctx.beginPath();
+      ctx.moveTo(pTar.x - 18, pTar.y);
+      ctx.lineTo(pTar.x + 18, pTar.y);
+      ctx.moveTo(pTar.x, pTar.y - 18);
+      ctx.lineTo(pTar.x, pTar.y + 18);
+      ctx.strokeStyle = "#10b981";
+      ctx.lineWidth = 1.5;
       ctx.stroke();
-    };
 
-    dibujarEslabon(px0, px1, "#0284c7", 12);
-    dibujarEslabon(px1, px2, "#0369a1", 10);
-    dibujarEslabon(px2, px3, "#075985", 8);
+      ctx.fillStyle = "#059669";
+      ctx.textAlign = "center";
+      ctx.fillText("Blanco", pTar.x, pTar.y + 26);
 
-    // Articulaciones rotativas (rodamientos).
-    const dibujarArticulacion = (pt, radio) => {
+      // 3. Resolución cinemática y dibujo del manipulador robótico.
+      const { p0, p1, p2, p3 } = resolverCinematicaBrazo([th1Actual, th2Actual, th3Actual]);
+      const px0 = toPx(p0);
+      const px1 = toPx(p1);
+      const px2 = toPx(p2);
+      const px3 = toPx(p3);
+
+      // Trazo de estela del efector final.
+      historialEfector.push(px3);
+      if (historialEfector.length > 80) historialEfector.shift();
+
+      if (historialEfector.length > 1) {
+        ctx.beginPath();
+        ctx.strokeStyle = "rgba(245, 158, 11, 0.4)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 3]);
+        for (let i = 0; i < historialEfector.length; i++) {
+          const pt = historialEfector[i];
+          if (i === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Pedestal de la base fija.
+      ctx.fillStyle = "#475569";
       ctx.beginPath();
-      ctx.arc(pt.x, pt.y, radio, 0, 2 * Math.PI);
+      ctx.roundRect(px0.x - 22, px0.y - 10, 44, 20, 6);
+      ctx.fill();
+
+      // Función auxiliar para dibujar un eslabón con acabado de barra industrial.
+      const dibujarEslabon = (inicio, fin, color, grosor) => {
+        ctx.beginPath();
+        ctx.moveTo(inicio.x, inicio.y);
+        ctx.lineTo(fin.x, fin.y);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = grosor;
+        ctx.lineCap = "round";
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(inicio.x, inicio.y);
+        ctx.lineTo(fin.x, fin.y);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+        ctx.lineWidth = grosor * 0.3;
+        ctx.stroke();
+      };
+
+      dibujarEslabon(px0, px1, "#0284c7", 12);
+      dibujarEslabon(px1, px2, "#0369a1", 10);
+      dibujarEslabon(px2, px3, "#075985", 8);
+
+      // Articulaciones rotativas (rodamientos).
+      const dibujarArticulacion = (pt, radio, label = "") => {
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, radio, 0, 2 * Math.PI);
+        ctx.fillStyle = "#f8fafc";
+        ctx.fill();
+        ctx.strokeStyle = "#1e293b";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, radio * 0.4, 0, 2 * Math.PI);
+        ctx.fillStyle = "#0284c7";
+        ctx.fill();
+
+        if (label) {
+          ctx.fillStyle = "#64748b";
+          ctx.font = "10px system-ui";
+          ctx.textAlign = "center";
+          ctx.fillText(label, pt.x, pt.y + radio + 12);
+        }
+      };
+
+      dibujarArticulacion(px0, 9, `θ1:${th1Actual.toFixed(0)}°`);
+      dibujarArticulacion(px1, 8, `θ2:${th2Actual.toFixed(0)}°`);
+      dibujarArticulacion(px2, 7, `θ3:${th3Actual.toFixed(0)}°`);
+
+      // Efector final (pinza / cabezal de agarre).
+      ctx.beginPath();
+      ctx.arc(px3.x, px3.y, 6.5, 0, 2 * Math.PI);
+      ctx.fillStyle = "#f59e0b";
+      ctx.fill();
+      ctx.strokeStyle = "#b45309";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Línea de distancia residual al blanco.
+      ctx.beginPath();
+      ctx.moveTo(px3.x, px3.y);
+      ctx.lineTo(pTar.x, pTar.y);
+      ctx.strokeStyle = "rgba(245, 158, 11, 0.8)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Diagnóstico cinemático y banner informativo.
+      const distReal = Math.hypot(p3.x - targetX, p3.y - targetY);
+      const d0 = distanciaPuntoASegmento({ x: obsX, y: obsY }, p0, p1);
+      const d1 = distanciaPuntoASegmento({ x: obsX, y: obsY }, p1, p2);
+      const d2 = distanciaPuntoASegmento({ x: obsX, y: obsY }, p2, p3);
+      const minObs = Math.min(d0, d1, d2);
+      const colisiona = minObs < obsRadio;
+
+      ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+      ctx.beginPath();
+      ctx.roundRect(14, 14, 310, 60, 8);
+      ctx.fill();
+
+      ctx.font = "bold 11px system-ui";
       ctx.fillStyle = "#f8fafc";
-      ctx.fill();
-      ctx.strokeStyle = "#1e293b";
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
+      ctx.textAlign = "left";
+      ctx.fillText(`Distancia al Blanco: ${distReal.toFixed(2)} mm (Efector: ${p3.x.toFixed(1)}, ${p3.y.toFixed(1)})`, 24, 34);
 
-      ctx.beginPath();
-      ctx.arc(pt.x, pt.y, radio * 0.4, 0, 2 * Math.PI);
-      ctx.fillStyle = "#0284c7";
-      ctx.fill();
+      ctx.fillStyle = colisiona ? "#f87171" : "#4ade80";
+      ctx.fillText(`Obstáculo: ${colisiona ? "COLISIÓN ⚠️" : "EVADIDO ✓"} (Dist: ${minObs.toFixed(1)} mm) | Mov: ${(factorInterpolacion * 100).toFixed(0)}%`, 24, 54);
+
+      tiempoAnimacion += 0.035;
+      idAnimacionBrazo = requestAnimationFrame(animar);
     };
 
-    dibujarArticulacion(px0, 9);
-    dibujarArticulacion(px1, 8);
-    dibujarArticulacion(px2, 7);
-
-    // Efector final (pinza / cabezal de agarre).
-    ctx.beginPath();
-    ctx.arc(px3.x, px3.y, 6, 0, 2 * Math.PI);
-    ctx.fillStyle = "#f59e0b";
-    ctx.fill();
-    ctx.strokeStyle = "#b45309";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Línea de distancia residual al blanco.
-    ctx.beginPath();
-    ctx.moveTo(px3.x, px3.y);
-    ctx.lineTo(pTar.x, pTar.y);
-    ctx.strokeStyle = "rgba(245, 158, 11, 0.8)";
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([3, 3]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Banner informativo superior de estado.
-    const distReal = Math.hypot(p3.x - targetX, p3.y - targetY);
-    const d0 = distanciaPuntoASegmento({ x: obsX, y: obsY }, p0, p1);
-    const d1 = distanciaPuntoASegmento({ x: obsX, y: obsY }, p1, p2);
-    const d2 = distanciaPuntoASegmento({ x: obsX, y: obsY }, p2, p3);
-    const minObs = Math.min(d0, d1, d2);
-    const colisiona = minObs < obsRadio;
-
-    ctx.fillStyle = "rgba(15, 23, 42, 0.75)";
-    ctx.beginPath();
-    ctx.roundRect(14, 14, 280, 56, 8);
-    ctx.fill();
-
-    ctx.font = "bold 11px system-ui";
-    ctx.fillStyle = "#f8fafc";
-    ctx.textAlign = "left";
-    ctx.fillText(`Distancia al Blanco : ${distReal.toFixed(2)} mm`, 24, 34);
-
-    ctx.fillStyle = colisiona ? "#f87171" : "#4ade80";
-    ctx.fillText(`Colisión con Obstáculo : ${colisiona ? "DETECTADA ⚠️" : "LIBRE ✓"} (D=${minObs.toFixed(1)})`, 24, 54);
+    idAnimacionBrazo = requestAnimationFrame(animar);
   },
 
   // Genera un reporte textual exhaustivo con los ángulos articulares y estado cinemático del robot.

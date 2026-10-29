@@ -91,6 +91,9 @@ export const ModeloBalanceoFases = {
     return desbalance + penalizacionTotal;
   },
 
+  // Detiene animaciones si las hubiera en este modelo.
+  detenerAnimacion() {},
+
   // Dibuja en el contenedor DOM las 3 barras apiladas (R, S, T), métricas y comparación.
   dibujar(genoma, entrada, contenedor, contexto = {}) {
     const circuitos = entrada.circuitos || [];

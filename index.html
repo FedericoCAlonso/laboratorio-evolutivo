@@ -17,29 +17,17 @@
         <div class="titulo-app">
           <span>🧬</span>
           <span>Laboratorio Evolutivo</span>
-          <span class="insignia-pwa">Material 3</span>
         </div>
         <div style="font-size: 0.82rem; color: var(--md-sys-color-on-surface-variant);">
           Optimizador genético multimodelo (NSGA-II Pareto + Web Workers + WASM)
         </div>
       </div>
 
-      <!-- Selector de Modo de Color y Paleta de Acento Material 3 -->
-      <div class="selector-tema-contenedor">
-        <!-- Selector de Modo: Claro / Oscuro / Auto -->
-        <div class="grupo-chips-tema" role="group" aria-label="Modo de Color">
-          <button type="button" id="btn-tema-claro" class="chip-tema-btn" title="Modo Claro">☀️ Claro</button>
-          <button type="button" id="btn-tema-oscuro" class="chip-tema-btn" title="Modo Oscuro">🌙 Oscuro</button>
-          <button type="button" id="btn-tema-auto" class="chip-tema-btn activo" title="Modo Automático del Sistema">🌓 Auto</button>
-        </div>
-
-        <!-- Selector de Paletas de Acento Tonales M3 -->
-        <div class="grupo-paletas-color" title="Paletas de Acento Material 3">
-          <button type="button" class="btn-dot-paleta activo" data-color="ocean" style="background: #0061a4;" title="Paleta Océano (Azul)"></button>
-          <button type="button" class="btn-dot-paleta" data-color="emerald" style="background: #006d44;" title="Paleta Esmeralda (Verde)"></button>
-          <button type="button" class="btn-dot-paleta" data-color="amethyst" style="background: #754bb7;" title="Paleta Amatista (Púrpura)"></button>
-          <button type="button" class="btn-dot-paleta" data-color="terracotta" style="background: #964817;" title="Paleta Terracota (Ámbar)"></button>
-        </div>
+      <!-- Acciones de cabecera: Botón de Configuración -->
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <button type="button" id="btn-abrir-configuracion" class="btn-m3-tonal" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;" title="Abrir configuración y opciones de apariencia">
+          ⚙️ Configuración
+        </button>
       </div>
     </header>
 
@@ -339,6 +327,53 @@
       <div class="modal-footer">
         <button type="button" id="btn-cancelar-guardar-preset" class="btn-secundario">Cancelar</button>
         <button type="button" id="btn-confirmar-guardar-preset" class="btn-exito">Guardar Preset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 6: Configuración del Sistema y Apariencia -->
+  <div id="modal-configuracion" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modal-titulo-config">
+    <div class="modal-dialog" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 id="modal-titulo-config">⚙️ Configuración y Apariencia</h3>
+        <button type="button" id="btn-cerrar-configuracion" class="btn-cerrar-modal" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="grupo-campo">
+          <label>Modo de Color / Tema</label>
+          <span class="descripcion-campo">Seleccione la preferencia visual de iluminación para la interfaz:</span>
+          <div class="grupo-chips-tema" role="group" aria-label="Modo de Color" style="margin-top: 0.5rem; justify-content: flex-start;">
+            <button type="button" id="btn-tema-claro" class="chip-tema-btn" title="Modo Claro">☀️ Claro</button>
+            <button type="button" id="btn-tema-oscuro" class="chip-tema-btn" title="Modo Oscuro">🌙 Oscuro</button>
+            <button type="button" id="btn-tema-auto" class="chip-tema-btn activo" title="Modo Automático del Sistema">🌓 Auto</button>
+          </div>
+        </div>
+
+        <div class="grupo-campo" style="margin-top: 1rem;">
+          <label>Paleta Tonal de Acento</label>
+          <span class="descripcion-campo">Elija la familia cromática dinámica de Material 3:</span>
+          <div style="display: flex; gap: 0.75rem; align-items: center; margin-top: 0.6rem; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button type="button" class="btn-dot-paleta activo" data-color="ocean" style="background: #0061a4; width: 32px; height: 32px;" title="Paleta Océano"></button>
+              <span style="font-size: 0.85rem; font-weight: 500;">Océano</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button type="button" class="btn-dot-paleta" data-color="emerald" style="background: #006d44; width: 32px; height: 32px;" title="Paleta Esmeralda"></button>
+              <span style="font-size: 0.85rem; font-weight: 500;">Esmeralda</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button type="button" class="btn-dot-paleta" data-color="amethyst" style="background: #754bb7; width: 32px; height: 32px;" title="Paleta Amatista"></button>
+              <span style="font-size: 0.85rem; font-weight: 500;">Amatista</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button type="button" class="btn-dot-paleta" data-color="terracotta" style="background: #964817; width: 32px; height: 32px;" title="Paleta Terracota"></button>
+              <span style="font-size: 0.85rem; font-weight: 500;">Terracota</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-cerrar-config-pie" class="btn-secundario">Cerrar</button>
       </div>
     </div>
   </div>

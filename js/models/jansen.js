@@ -652,12 +652,17 @@ export const ModeloPataJansen = {
     };
   },
 
-  // Dibuja en el Canvas interactivo las 13 barras animadas de la pata Jansen con su trayectoria y cota de obstáculo.
-  dibujar(genoma, entrada, contenedor, contexto = {}) {
+  // Detiene el ciclo continuo de animación en requestAnimationFrame.
+  detenerAnimacion() {
     if (idAnimacionJansen !== null) {
       cancelAnimationFrame(idAnimacionJansen);
       idAnimacionJansen = null;
     }
+  },
+
+  // Dibuja en el Canvas interactivo las 13 barras animadas de la pata Jansen con su trayectoria y cota de obstáculo.
+  dibujar(genoma, entrada, contenedor, contexto = {}) {
+    this.detenerAnimacion();
 
     const mMet = this.obtenerMetricasDetalladas(genoma, entrada);
     const mRef = this.obtenerMetricasDetalladas(JANSEN_VALORES_REFERENCIA, entrada);
@@ -732,7 +737,7 @@ export const ModeloPataJansen = {
       </div>
     `;
 
-    const canvas = document.getElementById("canvas-jansen");
+    const canvas = contenedor.querySelector("canvas");
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
 

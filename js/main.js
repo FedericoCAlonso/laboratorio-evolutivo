@@ -173,6 +173,14 @@ const elementosBiblioteca = {
   btnImportarDesdeBiblioteca: document.getElementById("btn-importar-desde-biblioteca")
 };
 
+// Referencias a los elementos del modal de configuración.
+const elementosConfiguracion = {
+  modal: document.getElementById("modal-configuracion"),
+  btnAbrir: document.getElementById("btn-abrir-configuracion"),
+  btnCerrar: document.getElementById("btn-cerrar-configuracion"),
+  btnCerrarPie: document.getElementById("btn-cerrar-config-pie")
+};
+
 // Inicializa el Web Worker con soporte para ES Modules y gestiona el canal postMessage.
 function inicializarWebWorker() {
   try {
@@ -464,6 +472,10 @@ function actualizarToolbar() {
 
 // Rellena el selector desplegable con la lista actualizada de modelos y opcionalmente selecciona uno.
 function actualizarSelectorModelos(idSeleccionar = null) {
+  if (modeloActual && typeof modeloActual.detenerAnimacion === "function") {
+    modeloActual.detenerAnimacion();
+  }
+
   elementosDOM.selectorModelo.innerHTML = "";
   MODELOS.forEach((mod) => {
     const opcion = document.createElement("option");
@@ -497,6 +509,9 @@ function inicializarSelectorModelos() {
   actualizarSelectorModelos(modeloActual.id);
 
   elementosDOM.selectorModelo.addEventListener("change", (e) => {
+    if (modeloActual && typeof modeloActual.detenerAnimacion === "function") {
+      modeloActual.detenerAnimacion();
+    }
     modeloActual = obtenerModeloPorId(e.target.value);
     window.__modeloActualId = modeloActual.id;
     elementosDOM.descripcionModelo.textContent = modeloActual.descripcion;
@@ -533,6 +548,9 @@ function mostrarSolucionInicialModelo() {
     }
 
     if (genomaInicial && modeloActual.dibujar) {
+      if (typeof modeloActual.detenerAnimacion === "function") {
+        modeloActual.detenerAnimacion();
+      }
       modeloActual.dibujar(genomaInicial, entrada, elementosDOM.contenedorDibujoModelo);
       elementosDOM.textoDescribirModelo.textContent = modeloActual.describir(genomaInicial, entrada);
     }
@@ -883,6 +901,9 @@ function manejarClickCanvasFitness(e) {
     );
 
     if (ultimaEntradaModelo !== null && modeloActual.dibujar) {
+      if (typeof modeloActual.detenerAnimacion === "function") {
+        modeloActual.detenerAnimacion();
+      }
       modeloActual.dibujar(
         seleccionado.genoma,
         ultimaEntradaModelo,
@@ -1002,6 +1023,23 @@ function registrarEventos() {
     });
   }
 
+  // Modal Configuración:
+  if (elementosConfiguracion.btnAbrir) {
+    elementosConfiguracion.btnAbrir.addEventListener("click", () => {
+      elementosConfiguracion.modal.style.display = "flex";
+    });
+  }
+  if (elementosConfiguracion.btnCerrar) {
+    elementosConfiguracion.btnCerrar.addEventListener("click", () => {
+      elementosConfiguracion.modal.style.display = "none";
+    });
+  }
+  if (elementosConfiguracion.btnCerrarPie) {
+    elementosConfiguracion.btnCerrarPie.addEventListener("click", () => {
+      elementosConfiguracion.modal.style.display = "none";
+    });
+  }
+
   // Cierre de modales con Escape y clic en el telón de fondo (backdrop)
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
@@ -1010,6 +1048,7 @@ function registrarEventos() {
       cerrarModalImportar(elementosImportar);
       cerrarModalGuardarPreset(elementosPreset);
       cerrarModalBiblioteca(elementosBiblioteca);
+      if (elementosConfiguracion.modal) elementosConfiguracion.modal.style.display = "none";
     }
   });
 
@@ -1018,7 +1057,8 @@ function registrarEventos() {
     elementosRenombrar.modal,
     elementosImportar.modal,
     elementosPreset.modal,
-    elementosBiblioteca.modal
+    elementosBiblioteca.modal,
+    elementosConfiguracion.modal
   ];
   modales.forEach(m => {
     if (m) {

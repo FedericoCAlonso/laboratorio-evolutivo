@@ -159,6 +159,9 @@ export function compilarModeloDinamico(definicionCruda) {
       }
     },
 
+    // Detiene animaciones si las hubiera en este modelo dinámico.
+    detenerAnimacion() {},
+
     // Dibuja en el DOM una representación visual por defecto con barras horizontales para cada variable y tarjetas de estado.
     dibujar(genoma, entrada, contenedor) {
       if (!contenedor) return;

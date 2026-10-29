@@ -314,12 +314,17 @@ export const ModeloPataCaminante = {
     };
   },
 
-  // Dibuja en el Canvas interactivo las 4 barras articuladas y la trayectoria animada del pie.
-  dibujar(genoma, entrada, contenedor, contexto = {}) {
+  // Detiene el ciclo continuo de animación en requestAnimationFrame.
+  detenerAnimacion() {
     if (idAnimacionPata !== null) {
       cancelAnimationFrame(idAnimacionPata);
       idAnimacionPata = null;
     }
+  },
+
+  // Dibuja en el Canvas interactivo las 4 barras articuladas y la trayectoria animada del pie.
+  dibujar(genoma, entrada, contenedor, contexto = {}) {
+    this.detenerAnimacion();
 
     const m = this.obtenerMetricasDetalladas(genoma, entrada);
 
@@ -382,7 +387,7 @@ export const ModeloPataCaminante = {
       </div>
     `;
 
-    const canvas = document.getElementById("canvas-mecanismo");
+    const canvas = contenedor.querySelector("canvas");
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
 
