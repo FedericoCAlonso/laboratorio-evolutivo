@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="description" content="Laboratorio Evolutivo: Optimizador genético genérico con modelos intercambiables en arquitectura modular ES Modules, Web Workers y WebAssembly">
+  <title>Laboratorio Evolutivo</title>
+  <!-- Estilos visuales desacoplados con soporte para modo claro y oscuro -->
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-contenedor">
+    <!-- Encabezado de la PWA -->
+    <header>
+      <div class="titulo-app">
+        <span>🧬</span>
+        <span>Laboratorio Evolutivo</span>
+        <span class="insignia-pwa">PWA</span>
+      </div>
+      <div style="font-size: 0.85rem; color: var(--texto-secundario);">
+        Optimizador genético con modelos intercambiables (ES Modules + Web Workers + WASM)
+      </div>
+    </header>
+
+    <!-- Mensaje de alerta para validaciones de entrada -->
+    <div id="contenedor-alerta" class="alerta"></div>
+
+    <!-- Sección de Selección de Modelo y Parámetros del Motor -->
+    <div class="grid-2">
+      <!-- Tarjeta: Selección de Modelo -->
+      <section class="tarjeta">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 0.5rem; flex-wrap: wrap;">
+          <h2 class="tarjeta-titulo" style="margin-bottom: 0;">
+            <span>📦 Modelo de Optimización</span>
+          </h2>
+          <div style="display: flex; gap: 0.5rem;">
+            <button type="button" id="btn-eliminar-modelo" class="btn-peligro" style="display: none; padding: 0.35rem 0.65rem; font-size: 0.8rem;" title="Eliminar modelo dinámico">🗑️ Eliminar</button>
+            <button type="button" id="btn-abrir-constructor" class="btn-secundario" style="padding: 0.35rem 0.75rem; font-size: 0.82rem;" title="Crear un modelo matemático personalizado">🛠️ Crear Modelo</button>
+          </div>
+        </div>
+        <div class="grupo-campo">
+          <label for="selector-modelo">Seleccionar Modelo</label>
+          <select id="selector-modelo" aria-label="Seleccionar Modelo"></select>
+          <span id="descripcion-modelo" class="descripcion-campo"></span>
+        </div>
+        <div id="contenedor-formulario-modelo">
+          <!-- Campos generados dinámicamente desde parametrosEntrada del modelo -->
+        </div>
+      </section>
+
+      <!-- Tarjeta: Parámetros del Motor Genético -->
+      <section class="tarjeta">
+        <h2 class="tarjeta-titulo">
+          <span>⚙️ Parámetros del Motor</span>
+        </h2>
+        <div class="grid-params">
+          <div class="grupo-campo">
+            <label for="param-poblacion">Población</label>
+            <input type="number" id="param-poblacion" min="4" max="2000" value="60">
+          </div>
+          <div class="grupo-campo">
+            <label for="param-generaciones">Generaciones</label>
+            <input type="number" id="param-generaciones" min="1" max="5000" value="200">
+          </div>
+          <div class="grupo-campo">
+            <label for="param-mutacion">Mutación</label>
+            <input type="number" id="param-mutacion" min="0" max="1" step="0.01" value="0.05">
+          </div>
+          <div class="grupo-campo">
+            <label for="param-elitismo">Elitismo</label>
+            <input type="number" id="param-elitismo" min="0" max="50" value="2">
+          </div>
+          <div class="grupo-campo">
+            <label for="param-torneo">Torneo</label>
+            <input type="number" id="param-torneo" min="1" max="50" value="3">
+          </div>
+          <div class="grupo-campo">
+            <label for="param-replicas-ruido">Réplicas Ruido</label>
+            <input type="number" id="param-replicas-ruido" min="1" max="50" value="5">
+          </div>
+        </div>
+
+        <div class="grupo-campo">
+          <label for="param-semilla">Semilla Aleatoria (Reproducibilidad)</label>
+          <div class="texto-semilla-grupo">
+            <input type="number" id="param-semilla" value="123456">
+            <button type="button" id="btn-nueva-semilla" class="btn-secundario" title="Generar nueva semilla">🎲 Nueva</button>
+          </div>
+          <span class="descripcion-campo">Con la misma semilla y parámetros, el resultado es 100% idéntico.</span>
+        </div>
+
+        <!-- Botones de control del algoritmo -->
+        <div class="botonera">
+          <button type="button" id="btn-correr" class="btn-exito">▶ Correr</button>
+          <button type="button" id="btn-pausar" class="btn-aviso" disabled>⏸ Pausar</button>
+          <button type="button" id="btn-detener" class="btn-peligro" disabled>⏹ Detener</button>
+        </div>
+
+        <!-- Barra de progreso -->
+        <div class="barra-progreso-contenedor">
+          <div id="barra-progreso" class="barra-progreso-relleno"></div>
+        </div>
+        <div class="indicadores-progreso">
+          <span id="texto-estado">Listo para comenzar</span>
+          <span id="texto-generacion">Gen 0 / 200</span>
+        </div>
+      </section>
+    </div>
+
+    <!-- Sección de Gráfico de Convergencia (Canvas 2D) -->
+    <section class="tarjeta">
+      <h2 class="tarjeta-titulo">
+        <span>📈 Curva de Convergencia del Fitness (Menor = Mejor)</span>
+        <span id="etiqueta-mejor-fitness" style="font-size: 0.9rem; color: var(--primario);">Fitness: --</span>
+      </h2>
+      <div class="grafico-contenedor">
+        <canvas id="canvas-fitness" width="800" height="220"></canvas>
+        <div class="leyenda-grafico">
+          <div class="item-leyenda">
+            <div class="color-leyenda" style="background-color: #10b981;"></div>
+            <span>Mejor Individuo</span>
+          </div>
+          <div class="item-leyenda">
+            <div class="color-leyenda" style="background-color: #8b5cf6;"></div>
+            <span>Promedio Población</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sección de Visualización de la Solución (Provista por el Modelo) -->
+    <section class="tarjeta">
+      <h2 class="tarjeta-titulo">
+        <span>🏆 Mejor Solución Encontrada</span>
+      </h2>
+      <!-- Contenedor donde el modelo actual dibuja su resultado visual -->
+      <div id="contenedor-dibujo-modelo"></div>
+
+      <!-- Contenedor para el texto legible describir() -->
+      <h3 style="font-size: 0.95rem; margin-top: 1rem; color: var(--texto-secundario);">Detalle Descriptivo</h3>
+      <pre id="texto-describir-modelo" class="texto-descriptivo">Presione "Correr" para iniciar la optimización y ver los resultados.</pre>
+    </section>
+
+    <!-- Pie de página con aviso de copyright privativo -->
+    <footer style="text-align: center; margin-top: 1.5rem; padding: 1rem 0; font-size: 0.8rem; color: var(--texto-secundario); border-top: 1px solid var(--borde);">
+      <span>&copy; 2026 Federico C. Alonso. Todos los derechos reservados. Software privativo y confidencial.</span>
+    </footer>
+  </div>
+
+  <!-- Modal: Constructor de Modelos Dinámicos (Low-Code) -->
+  <div id="modal-constructor-modelo" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modal-titulo-id">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="modal-titulo-id" class="modal-titulo">🛠️ Constructor de Modelos Dinámicos (Low-Code)</h3>
+        <button type="button" id="btn-cerrar-modal" class="btn-cerrar" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="alerta-constructor" class="alerta"></div>
+
+        <div class="grupo-campo">
+          <label for="input-nombre-modelo">Nombre del Modelo</label>
+          <input type="text" id="input-nombre-modelo" placeholder="Ej: Caja de Volumen">
+        </div>
+
+        <div class="grupo-campo">
+          <label for="input-desc-modelo">Descripción</label>
+          <input type="text" id="input-desc-modelo" placeholder="Ej: Minimiza el error de volumen y la superficie de material">
+        </div>
+
+        <div class="grupo-campo">
+          <label>Variables de Decisión (Genes)</label>
+          <div class="tabla-responsive">
+            <table class="tabla-datos" id="tabla-variables-constructor">
+              <thead>
+                <tr>
+                  <th>Nombre Variable</th>
+                  <th>Tipo</th>
+                  <th>Mínimo</th>
+                  <th>Máximo</th>
+                  <th style="width: 70px;">Acción</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-variables-constructor">
+                <!-- Filas dinámicas añadidas con el botón -->
+              </tbody>
+            </table>
+          </div>
+          <button type="button" id="btn-agregar-variable" class="btn-secundario" style="margin-top: 0.5rem;">➕ Agregar Variable</button>
+        </div>
+
+        <div class="grupo-campo">
+          <label for="textarea-codigo-evaluacion">Cuerpo de la Función de Evaluación (JavaScript)</label>
+          <span class="descripcion-campo">
+            Escriba el código JS que calcula y devuelve el <strong>fitness</strong> (número a minimizar).<br>
+            Argumentos disponibles: <code>vars</code> (valores de los genes, ej: <code>vars.ancho</code>) y <code>rng</code> (generador aleatorio determinista).
+          </span>
+          <textarea id="textarea-codigo-evaluacion" class="textarea-codigo" rows="8" spellcheck="false" placeholder="// Ejemplo:
+// const volumen = vars.ancho * vars.alto;
+// return Math.abs(volumen - 100);"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-cancelar-modelo" class="btn-secundario">Cancelar</button>
+        <button type="button" id="btn-guardar-modelo" class="btn-exito">💾 Guardar Modelo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Carga del punto de entrada modular con ES Modules nativos -->
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
