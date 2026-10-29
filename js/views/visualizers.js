@@ -12,6 +12,8 @@ import { simularManiobraOrbital } from "../models/orbita.js";
 import { simularRespuestaFiltroRLC } from "../models/filtro.js";
 import { resolverEstaticaArmadura } from "../models/armadura.js";
 import { simularCampoTermico } from "../models/termico.js";
+import { simularArregloAcustico } from "../models/acustica.js";
+import { simularTrayectoriaLorentz, calcularCampoMagneticoBz } from "../models/electromagnetismo.js";
 
 // Estado checkbox para superponer la curva original de Theo Jansen en el lienzo Canvas.
 let mostrarReferenciaJansen = true;
@@ -2474,7 +2476,548 @@ export class VisualizadorTermico {
 }
 
 // -------------------------------------------------------------------------
-// 12. VISUALIZADOR DE MODELOS DINÁMICOS LOW-CODE MULTI-NATURALEZA
+// 12. VISUALIZADOR DE ARREGLO ACÚSTICO Y BEAMFORMING (ONDAS 2D)
+// -------------------------------------------------------------------------
+export class VisualizadorAcustica {
+  constructor() {
+    this.animId = null;
+  }
+
+  detener() {
+    if (this.animId !== null) {
+      cancelAnimationFrame(this.animId);
+      this.animId = null;
+    }
+  }
+
+  render(contenedor, genoma, entrada, contexto = {}) {
+    if (!contenedor) return;
+    this.detener();
+
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 380;
+      canvas.style.width = "100%";
+      canvas.style.height = "380px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    const sim = simularArregloAcustico(genoma, entrada);
+    let tiempoAnimacion = 0;
+
+    const animar = () => {
+      if (!canvas.isConnected) {
+        this.detener();
+        return;
+      }
+
+      const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+      const anchoCSS = canvas.clientWidth || 800;
+      const altoCSS = canvas.clientHeight || 380;
+
+      if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
+        canvas.width = anchoCSS * dpr;
+        canvas.height = altoCSS * dpr;
+      }
+
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, anchoCSS, altoCSS);
+
+      // Fondo oscuro acústico
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, altoCSS);
+      bgGrad.addColorStop(0, "#080b14");
+      bgGrad.addColorStop(1, "#0d1322");
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, anchoCSS, altoCSS);
+
+      // Espacio acústico: ancho 1.6m, alto 1.4m
+      const centroX = anchoCSS / 2;
+      const baseY = altoCSS - 55;
+      const escalaM = Math.min((anchoCSS - 220) / 1.6, (baseY - 30) / 1.35);
+
+      const aCanvas = (xM, yM) => ({
+        x: centroX + xM * escalaM,
+        y: baseY - yM * escalaM
+      });
+
+      // 1. Renderizado de ondas de presión acústica animadas p(x, y, t)
+      const cols = 48;
+      const filas = 32;
+      const pasoX = 1.6 / cols;
+      const pasoY = 1.3 / filas;
+      const dxPx = pasoX * escalaM + 1.2;
+      const dyPx = pasoY * escalaM + 1.2;
+      const omegaT = tiempoAnimacion * 4.0;
+
+      for (let iy = 0; iy < filas; iy++) {
+        const yM = 0.05 + iy * pasoY;
+        for (let ix = 0; ix < cols; ix++) {
+          const xM = -0.8 + ix * pasoX;
+
+          let pInst = 0.0;
+          for (let i = 0; i < sim.transductores.length; i++) {
+            const tr = sim.transductores[i];
+            const dist = Math.hypot(xM - tr.x, yM - tr.y);
+            const atenuacion = tr.amp / Math.sqrt(dist + 0.04);
+            const fase = sim.numeroOndaK * dist - omegaT + tr.phi;
+            pInst += atenuacion * Math.cos(fase);
+          }
+
+          const norm = Math.max(-1, Math.min(1, pInst / 3.0));
+          const pt = aCanvas(xM, yM);
+
+          if (Math.abs(norm) > 0.05) {
+            let r, g, b, alpha;
+            if (norm > 0) {
+              r = Math.floor(40 + 160 * norm);
+              g = Math.floor(160 + 95 * norm);
+              b = 255;
+              alpha = 0.08 + 0.55 * norm;
+            } else {
+              const an = Math.abs(norm);
+              r = Math.floor(120 * an);
+              g = Math.floor(40 * an);
+              b = Math.floor(180 + 75 * an);
+              alpha = 0.06 + 0.45 * an;
+            }
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+            ctx.fillRect(pt.x - dxPx / 2, pt.y - dyPx / 2, dxPx, dyPx);
+          }
+        }
+      }
+
+      // 2. Cono y línea directiva del ángulo objetivo y real
+      const rGuia = 1.3 * escalaM;
+      const angObjRad = (sim.anguloObjetivoGrad * Math.PI) / 180.0;
+      const xObjFin = centroX + rGuia * Math.sin(angObjRad);
+      const yObjFin = baseY - rGuia * Math.cos(angObjRad);
+
+      ctx.fillStyle = "rgba(255, 180, 0, 0.06)";
+      ctx.beginPath();
+      ctx.moveTo(centroX, baseY);
+      ctx.arc(centroX, baseY, rGuia, -Math.PI / 2 + angObjRad - 0.15, -Math.PI / 2 + angObjRad + 0.15);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(255, 193, 7, 0.85)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(centroX, baseY);
+      ctx.lineTo(xObjFin, yObjFin);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const ptFoco = aCanvas(sim.xFoco, sim.yFoco);
+      ctx.strokeStyle = "#ffc107";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(ptFoco.x, ptFoco.y, 9, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255, 193, 7, 0.35)";
+      ctx.beginPath();
+      ctx.arc(ptFoco.x, ptFoco.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      const angPicoRad = (sim.anguloPico * Math.PI) / 180.0;
+      const xPicoFin = centroX + rGuia * Math.sin(angPicoRad);
+      const yPicoFin = baseY - rGuia * Math.cos(angPicoRad);
+
+      ctx.strokeStyle = "#00e676";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(centroX, baseY);
+      ctx.lineTo(xPicoFin, yPicoFin);
+      ctx.stroke();
+
+      // 3. Barra física de los 6 transductores acústicos
+      const trY = baseY + 8;
+      const anchoBarra = (sim.transductores.length - 1) * (sim.transductores[1]?.x - sim.transductores[0]?.x || 0.08) * escalaM + 40;
+      ctx.fillStyle = "#1e293b";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+      ctx.lineWidth = 1;
+      ctx.fillRect(centroX - anchoBarra / 2, trY, anchoBarra, 24);
+      ctx.strokeRect(centroX - anchoBarra / 2, trY, anchoBarra, 24);
+
+      sim.transductores.forEach((tr, i) => {
+        const pt = aCanvas(tr.x, 0);
+        const radioP = 7 + tr.amp * 5;
+
+        const glow = ctx.createRadialGradient(pt.x, trY + 12, 1, pt.x, trY + 12, radioP);
+        glow.addColorStop(0, "rgba(0, 229, 255, 0.9)");
+        glow.addColorStop(1, "rgba(0, 229, 255, 0)");
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(pt.x, trY + 12, radioP, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#00e5ff";
+        ctx.beginPath();
+        ctx.arc(pt.x, trY + 12, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        const agujaX = pt.x + 8 * Math.cos(tr.phi);
+        const agujaY = (trY + 12) + 8 * Math.sin(tr.phi);
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(pt.x, trY + 12);
+        ctx.lineTo(agujaX, agujaY);
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+        ctx.font = "9px Inter, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(`T${i + 1}`, pt.x, trY + 34);
+      });
+
+      // 4. Inset: Diagrama Polar de Radiación Angular en dB
+      const radioPolar = 65;
+      const polarCx = anchoCSS - 95;
+      const polarCy = 85;
+
+      ctx.fillStyle = "rgba(10, 16, 30, 0.85)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+      ctx.lineWidth = 1;
+      ctx.fillRect(polarCx - radioPolar - 15, polarCy - radioPolar - 15, radioPolar * 2 + 30, radioPolar * 2 + 30);
+      ctx.strokeRect(polarCx - radioPolar - 15, polarCy - radioPolar - 15, radioPolar * 2 + 30, radioPolar * 2 + 30);
+
+      const dBs = [0, -6, -12, -20];
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+      ctx.lineWidth = 1;
+      dBs.forEach((db) => {
+        const rDb = radioPolar * Math.pow(10, db / 20);
+        ctx.beginPath();
+        ctx.arc(polarCx, polarCy, rDb, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+      ctx.beginPath();
+      ctx.moveTo(polarCx - radioPolar, polarCy);
+      ctx.lineTo(polarCx + radioPolar, polarCy);
+      ctx.moveTo(polarCx, polarCy - radioPolar);
+      ctx.lineTo(polarCx, polarCy + radioPolar);
+      ctx.stroke();
+
+      ctx.beginPath();
+      let primerPunto = true;
+      sim.diagramaPolar.forEach((dp) => {
+        const rad = dp.anguloRad;
+        const rNorm = Math.max(0, (dp.gananciaDb + 26) / 26) * radioPolar;
+        const px = polarCx + rNorm * Math.sin(rad);
+        const py = polarCy - rNorm * Math.cos(rad);
+        if (primerPunto) {
+          ctx.moveTo(px, py);
+          primerPunto = false;
+        } else {
+          ctx.lineTo(px, py);
+        }
+      });
+      ctx.closePath();
+      ctx.fillStyle = "rgba(0, 230, 118, 0.25)";
+      ctx.fill();
+      ctx.strokeStyle = "#00e676";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "8px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("PATRÓN POLAR (dB)", polarCx, polarCy - radioPolar - 4);
+      ctx.fillText("0°", polarCx, polarCy - radioPolar + 9);
+      ctx.fillText("+60°", polarCx + radioPolar - 10, polarCy - 20);
+      ctx.fillText("-60°", polarCx - radioPolar + 10, polarCy - 20);
+
+      // 5. Panel HUD de métricas
+      ctx.fillStyle = "rgba(10, 16, 30, 0.82)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+      ctx.fillRect(16, 16, 260, 95);
+      ctx.strokeRect(16, 16, 260, 95);
+
+      ctx.font = "bold 12px Inter, system-ui, sans-serif";
+      ctx.fillStyle = "#38bdf8";
+      ctx.textAlign = "left";
+      ctx.fillText(`🔊 Phased Array Acústico (${sim.frecuenciaHz} Hz)`, 26, 34);
+
+      ctx.font = "11px Inter, system-ui, sans-serif";
+      ctx.fillStyle = "#e2e8f0";
+      ctx.fillText(`Ángulo Haz: ${sim.anguloPico.toFixed(1)}° (Obj: ${sim.anguloObjetivoGrad}°)`, 26, 52);
+      ctx.fillText(`Supresión Lóbulo (SLL): ${sim.relacionLobuloSecundarioDb.toFixed(1)} dB`, 26, 68);
+      ctx.fillText(`Ancho de Haz (-3dB): ${sim.anchoHaz3dB.toFixed(0)}°`, 26, 84);
+      ctx.fillText(`Longitud de Onda: ${(sim.longitudOndaM * 100).toFixed(1)} cm`, 26, 100);
+
+      tiempoAnimacion += 0.04;
+      this.animId = requestAnimationFrame(animar);
+    };
+
+    this.animId = requestAnimationFrame(animar);
+  }
+}
+
+// -------------------------------------------------------------------------
+// 13. VISUALIZADOR DE TRAMPA ELECTROMAGNÉTICA (FUERZA DE LORENTZ 2D)
+// -------------------------------------------------------------------------
+export class VisualizadorElectromagnetismo {
+  constructor() {
+    this.animId = null;
+  }
+
+  detener() {
+    if (this.animId !== null) {
+      cancelAnimationFrame(this.animId);
+      this.animId = null;
+    }
+  }
+
+  render(contenedor, genoma, entrada, contexto = {}) {
+    if (!contenedor) return;
+    this.detener();
+
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 380;
+      canvas.style.width = "100%";
+      canvas.style.height = "380px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    const sim = simularTrayectoriaLorentz(genoma, entrada);
+    let tiempoAnimacion = 0;
+
+    const animar = () => {
+      if (!canvas.isConnected) {
+        this.detener();
+        return;
+      }
+
+      const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+      const anchoCSS = canvas.clientWidth || 800;
+      const altoCSS = canvas.clientHeight || 380;
+
+      if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
+        canvas.width = anchoCSS * dpr;
+        canvas.height = altoCSS * dpr;
+      }
+
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, anchoCSS, altoCSS);
+
+      ctx.fillStyle = "#0a0d18";
+      ctx.fillRect(0, 0, anchoCSS, altoCSS);
+
+      const escala = Math.min((anchoCSS - 60) / 95, (altoCSS - 50) / 55);
+      const centroX = anchoCSS / 2;
+      const centroY = altoCSS / 2;
+
+      const aCanvas = (x, y) => ({
+        x: centroX + x * escala,
+        y: centroY - y * escala
+      });
+
+      // 1. Grilla y mapa de flujo magnético Bz(x, y)
+      const cols = 36;
+      const filas = 22;
+      const pasoX = 90 / cols;
+      const pasoY = 50 / filas;
+      const celdaW = pasoX * escala + 1;
+      const celdaH = pasoY * escala + 1;
+
+      for (let ix = 0; ix < cols; ix++) {
+        const gx = -45 + (ix + 0.5) * pasoX;
+        for (let iy = 0; iy < filas; iy++) {
+          const gy = -25 + (iy + 0.5) * pasoY;
+          const bz = calcularCampoMagneticoBz(gx, gy, sim.bobinas);
+          const pt = aCanvas(gx, gy);
+
+          if (Math.abs(bz) > 0.05) {
+            const bzNorm = Math.max(-1, Math.min(1, bz / 3.0));
+            let r, g, b, alpha;
+            if (bzNorm > 0) {
+              r = 20;
+              g = Math.floor(100 + 130 * bzNorm);
+              b = 255;
+              alpha = 0.06 + 0.28 * bzNorm;
+            } else {
+              const ab = Math.abs(bzNorm);
+              r = 255;
+              g = Math.floor(90 * (1 - ab));
+              b = 30;
+              alpha = 0.06 + 0.28 * ab;
+            }
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+            ctx.fillRect(pt.x - celdaW / 2, pt.y - celdaH / 2, celdaW, celdaH);
+          }
+        }
+      }
+
+      // 2. Paredes de la cámara de vacío
+      const pSupIzq = aCanvas(-44, 23);
+      const pInfDer = aCanvas(40, -23);
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.4)";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(pSupIzq.x, pSupIzq.y, pInfDer.x - pSupIzq.x, pInfDer.y - pSupIzq.y);
+
+      // Ranura de Inyección (izquierda)
+      const pIny0 = aCanvas(-44, 4);
+      const pIny1 = aCanvas(-44, -4);
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(pIny0.x, pIny0.y);
+      ctx.lineTo(pIny1.x, pIny1.y);
+      ctx.stroke();
+
+      // Rendija del detector de salida (derecha)
+      const pSal0 = aCanvas(sim.xSalida, sim.yObjetivo + 4.5);
+      const pSal1 = aCanvas(sim.xSalida, sim.yObjetivo - 4.5);
+      ctx.strokeStyle = "#00e676";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(pSal0.x, pSal0.y);
+      ctx.lineTo(pSal1.x, pSal1.y);
+      ctx.stroke();
+
+      const pBlanco = aCanvas(sim.xSalida + 3, sim.yObjetivo);
+      ctx.fillStyle = "#00e676";
+      ctx.beginPath();
+      ctx.arc(pBlanco.x, pBlanco.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3. Placas deflectoras electrostáticas
+      const pl1A = aCanvas(-28, 20.5);
+      const pl1B = aCanvas(28, 20.5);
+      ctx.strokeStyle = sim.vSuperior >= 0 ? "#ef4444" : "#3b82f6";
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(pl1A.x, pl1A.y);
+      ctx.lineTo(pl1B.x, pl1B.y);
+      ctx.stroke();
+
+      const pl2A = aCanvas(-28, -20.5);
+      const pl2B = aCanvas(28, -20.5);
+      ctx.strokeStyle = sim.vInferior >= 0 ? "#ef4444" : "#3b82f6";
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(pl2A.x, pl2A.y);
+      ctx.lineTo(pl2B.x, pl2B.y);
+      ctx.stroke();
+
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "10px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(`Placa Superior: ${sim.vSuperior.toFixed(0)} V`, centroX, pl1A.y - 8);
+      ctx.fillText(`Placa Inferior: ${sim.vInferior.toFixed(0)} V`, centroX, pl2A.y + 15);
+
+      // 4. Bobinas de los electroimanes
+      sim.bobinas.forEach((b, idx) => {
+        const pt = aCanvas(b.x, b.y);
+        const radioB = 14;
+
+        ctx.fillStyle = "#b45309";
+        ctx.strokeStyle = "#f59e0b";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, radioB, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#334155";
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, radioB - 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 10px Inter, system-ui, sans-serif";
+        const polaridad = b.corriente >= 0 ? "⊙ (+)" : "⊗ (-)";
+        ctx.fillText(polaridad, pt.x, pt.y + 3);
+
+        ctx.fillStyle = "#f8fafc";
+        ctx.font = "9px Inter, system-ui, sans-serif";
+        ctx.fillText(`L${idx + 1}: ${b.corriente.toFixed(1)} A`, pt.x, pt.y + (b.y > 0 ? -18 : 22));
+      });
+
+      // 5. Trayectorias del haz de partículas bajo la Fuerza de Lorentz
+      sim.trayectorias.forEach((tData, pIdx) => {
+        const camino = tData.camino;
+        if (!camino || camino.length === 0) return;
+
+        ctx.beginPath();
+        const inicio = aCanvas(camino[0].x, camino[0].y);
+        ctx.moveTo(inicio.x, inicio.y);
+        for (let k = 1; k < camino.length; k++) {
+          const pt = aCanvas(camino[k].x, camino[k].y);
+          ctx.lineTo(pt.x, pt.y);
+        }
+
+        ctx.strokeStyle = tData.salioPorColimador ? "rgba(0, 230, 118, 0.75)" : (tData.colision ? "rgba(239, 68, 68, 0.6)" : "rgba(56, 189, 248, 0.6)");
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+
+        const progreso = (tiempoAnimacion * 45 + pIdx * 18) % camino.length;
+        const idxActual = Math.floor(progreso);
+        const ptActual = aCanvas(camino[idxActual].x, camino[idxActual].y);
+
+        const glow = ctx.createRadialGradient(ptActual.x, ptActual.y, 1, ptActual.x, ptActual.y, 8);
+        glow.addColorStop(0, tData.salioPorColimador ? "#00e676" : "#38bdf8");
+        glow.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(ptActual.x, ptActual.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(ptActual.x, ptActual.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // 6. Panel HUD
+      ctx.fillStyle = "rgba(10, 16, 30, 0.85)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+      ctx.fillRect(16, 16, 260, 92);
+      ctx.strokeRect(16, 16, 260, 92);
+
+      ctx.font = "bold 12px Inter, system-ui, sans-serif";
+      ctx.fillStyle = "#f59e0b";
+      ctx.textAlign = "left";
+      ctx.fillText("⚡ Guía Electromagnética (Lorentz)", 26, 34);
+
+      ctx.font = "11px Inter, system-ui, sans-serif";
+      ctx.fillStyle = "#e2e8f0";
+      const colorTx = sim.tasaTransmision >= 80 ? "#00e676" : (sim.tasaTransmision >= 40 ? "#f59e0b" : "#ef4444");
+      ctx.fillText(`Transmisión: `, 26, 52);
+      ctx.fillStyle = colorTx;
+      ctx.fillText(`${sim.tasaTransmision.toFixed(0)}% (${sim.particulasTransmitidas}/5 transmitidas)`, 95, 52);
+
+      ctx.fillStyle = "#e2e8f0";
+      ctx.fillText(`Error en Detector: ${sim.errorPromedioSalida.toFixed(1)} mm`, 26, 68);
+      ctx.fillText(`Campo Bmax: ${sim.maxAbsBz.toFixed(2)} T | Potencia: ${sim.potenciaTotalWatts.toFixed(0)} W`, 26, 84);
+
+      tiempoAnimacion += 0.03;
+      this.animId = requestAnimationFrame(animar);
+    };
+
+    this.animId = requestAnimationFrame(animar);
+  }
+}
+
+// -------------------------------------------------------------------------
+// 14. VISUALIZADOR DE MODELOS DINÁMICOS LOW-CODE MULTI-NATURALEZA
 // -------------------------------------------------------------------------
 export class VisualizadorDinamico {
   constructor() {
@@ -2526,13 +3069,25 @@ export class VisualizadorDinamico {
       return;
     }
 
-    // 6. Representación de Distribución de Recursos / Cargas
+    // 6. Representación de Arreglo Acústico y Ondas 2D
+    if (tipo === "acustica_ondas_2d") {
+      new VisualizadorAcustica().render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+
+    // 7. Representación de Campo Electromagnético / Fuerza de Lorentz
+    if (tipo === "electromagnetismo_lorentz" || tipo === "campo_electromagnetico") {
+      new VisualizadorElectromagnetismo().render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+
+    // 8. Representación de Distribución de Recursos / Cargas
     if (tipo === "distribucion_recursos") {
       this._renderizarDistribucionRecursos(contenedor, genoma, varsDef, contexto);
       return;
     }
 
-    // 7. Representación por defecto: Calibración y medidores de variables
+    // 9. Representación por defecto: Calibración y medidores de variables
     this._renderizarCalibracionVariables(contenedor, genoma, varsDef, contexto);
   }
 
@@ -2973,6 +3528,8 @@ const visualizadoresRegistrados = {
   "filtro-rlc": new VisualizadorFiltro(),
   "armadura-puente": new VisualizadorArmadura(),
   "distribucion-termica": new VisualizadorTermico(),
+  "acustica-beamforming": new VisualizadorAcustica(),
+  "confinamiento-em": new VisualizadorElectromagnetismo(),
   "pata-caminante": new VisualizadorCaminante(),
   "balanceo-fases-trifasico": new VisualizadorFases()
 };

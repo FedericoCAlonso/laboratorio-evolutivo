@@ -80,6 +80,40 @@ export const PLANTILLAS_SIMULACION = {
       { nombre: "srvCache", tipo: "continuo", min: 0, max: 100 }
     ],
     codigoEvaluacion: `const cargas = [vars.srvWeb, vars.srvApp, vars.srvDB, vars.srvCache];\nconst suma = cargas.reduce((a, b) => a + b, 0);\nconst desbalance = Math.max(...cargas) - Math.min(...cargas);\nlet sobrecarga = 0;\ncargas.forEach(c => { if (c > 80) sobrecarga += (c - 80) * 4; });\nconst errorTotal = Math.abs(suma - 250);\nreturn [desbalance + sobrecarga, errorTotal];`
+  },
+  "acustica_beamforming": {
+    nombre: "Beamforming Acústico Phased Array",
+    descripcion: "Sintonización de fases relativas en un arreglo de altavoces para dirigir el haz sonoro hacia un ángulo objetivo.",
+    tipoVisualizacion: "acustica_ondas_2d",
+    variables: [
+      { nombre: "fase1", tipo: "continuo", min: -3.14, max: 3.14 },
+      { nombre: "fase2", tipo: "continuo", min: -3.14, max: 3.14 },
+      { nombre: "fase3", tipo: "continuo", min: -3.14, max: 3.14 },
+      { nombre: "fase4", tipo: "continuo", min: -3.14, max: 3.14 },
+      { nombre: "fase5", tipo: "continuo", min: -3.14, max: 3.14 },
+      { nombre: "fase6", tipo: "continuo", min: -3.14, max: 3.14 },
+      { nombre: "amp1", tipo: "continuo", min: 0.2, max: 1.0 },
+      { nombre: "amp2", tipo: "continuo", min: 0.2, max: 1.0 },
+      { nombre: "amp3", tipo: "continuo", min: 0.2, max: 1.0 },
+      { nombre: "amp4", tipo: "continuo", min: 0.2, max: 1.0 },
+      { nombre: "amp5", tipo: "continuo", min: 0.2, max: 1.0 },
+      { nombre: "amp6", tipo: "continuo", min: 0.2, max: 1.0 }
+    ],
+    codigoEvaluacion: `// Objetivo: Apuntar a theta = 25 grados\\nconst d = 0.085;\\nconst lambda = 0.1715;\\nconst k = (2 * Math.PI) / lambda;\\nconst sinTheta = Math.sin((25 * Math.PI) / 180);\\nconst fases = [vars.fase1, vars.fase2, vars.fase3, vars.fase4, vars.fase5, vars.fase6];\\nconst amps = [vars.amp1, vars.amp2, vars.amp3, vars.amp4, vars.amp5, vars.amp6];\\nlet re = 0, im = 0;\\nfor (let i = 0; i < 6; i++) {\\n  const x = (i - 2.5) * d;\\n  const f = fases[i] + k * x * sinTheta;\\n  re += amps[i] * Math.cos(f);\\n  im += amps[i] * Math.sin(f);\\n}\\nconst pot = re * re + im * im;\\nreturn [36.0 - pot, Math.abs(vars.amp1 - 0.5) + Math.abs(vars.amp6 - 0.5)];`
+  },
+  "confinamiento_em": {
+    nombre: "Guía EM y Fuerza de Lorentz",
+    descripcion: "Control de corrientes en electroimanes y placas deflectoras para enfocar iones hacia un colimador objetivo.",
+    tipoVisualizacion: "electromagnetismo_lorentz",
+    variables: [
+      { nombre: "i1", tipo: "continuo", min: -10, max: 10 },
+      { nombre: "i2", tipo: "continuo", min: -10, max: 10 },
+      { nombre: "i3", tipo: "continuo", min: -10, max: 10 },
+      { nombre: "i4", tipo: "continuo", min: -10, max: 10 },
+      { nombre: "vSup", tipo: "continuo", min: -200, max: 200 },
+      { nombre: "vInf", tipo: "continuo", min: -200, max: 200 }
+    ],
+    codigoEvaluacion: `// Desvío objetivo hacia detector en y = 6 con mínima potencia\\nconst potElectrica = (vars.i1*vars.i1 + vars.i2*vars.i2 + vars.i3*vars.i3 + vars.i4*vars.i4)*0.8;\\nconst balance = Math.abs((vars.vInf - vars.vSup) - 120);\\nreturn [balance, potElectrica];`
   }
 };
 

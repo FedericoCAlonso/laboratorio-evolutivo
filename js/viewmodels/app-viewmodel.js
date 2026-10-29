@@ -280,6 +280,12 @@ export class AppViewModel {
     if (modelo.id === "distribucion-termica") {
       return [-20.0, 12.0, 18.0, 10.0, -15.0, -14.0, 16.0, -16.0];
     }
+    if (modelo.id === "acustica-beamforming") {
+      return [-1.2, -0.7, -0.2, 0.3, 0.8, 1.3, 0.45, 0.75, 1.0, 1.0, 0.75, 0.45];
+    }
+    if (modelo.id === "confinamiento-em") {
+      return [4.5, -3.2, -4.5, 3.2, -80.0, 60.0];
+    }
     return null;
   }
 

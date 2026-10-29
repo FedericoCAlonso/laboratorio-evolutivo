@@ -14,6 +14,8 @@ import { ModeloTransferenciaOrbital } from "./orbita.js";
 import { ModeloFiltroRLC } from "./filtro.js";
 import { ModeloArmaduraPuente } from "./armadura.js";
 import { ModeloDistribucionTermica } from "./termico.js";
+import { ModeloArregloAcustico } from "./acustica.js";
+import { ModeloConfinamientoEM } from "./electromagnetismo.js";
 import { compilarModeloDinamico } from "../builder.js";
 
 // Reexporta los modelos individuales para facilitar su importación directa.
@@ -28,7 +30,9 @@ export {
   ModeloTransferenciaOrbital,
   ModeloFiltroRLC,
   ModeloArmaduraPuente,
-  ModeloDistribucionTermica
+  ModeloDistribucionTermica,
+  ModeloArregloAcustico,
+  ModeloConfinamientoEM
 };
 
 // Lista global de todos los modelos de optimización disponibles en la aplicación (estáticos y dinámicos).
@@ -42,6 +46,8 @@ export const MODELOS = [
   ModeloFiltroRLC,
   ModeloArmaduraPuente,
   ModeloDistribucionTermica,
+  ModeloArregloAcustico,
+  ModeloConfinamientoEM,
   ModeloBalanceoFases,
   ModeloPataCaminante
 ];

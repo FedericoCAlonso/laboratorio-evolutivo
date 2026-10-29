@@ -16,6 +16,8 @@ import {
   VisualizadorFiltro,
   VisualizadorArmadura,
   VisualizadorTermico,
+  VisualizadorAcustica,
+  VisualizadorElectromagnetismo,
   VisualizadorDinamico,
   obtenerVisualizador
 } from "./js/views/visualizers.js";
@@ -91,6 +93,8 @@ const visualizadores = [
   new VisualizadorFiltro(),
   new VisualizadorArmadura(),
   new VisualizadorTermico(),
+  new VisualizadorAcustica(),
+  new VisualizadorElectromagnetismo(),
   new VisualizadorDinamico()
 ];
 

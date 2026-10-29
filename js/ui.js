@@ -12,7 +12,9 @@ const HINTS_VISUALIZACION = {
   "trayectoria_particulas_2d": "Traza waypoints espaciales 2D, rutas dinámicas y zonas de obstáculos con evasión animada.",
   "serie_temporal": "Renderiza un osciloscopio en tiempo real con curva transitoria y(t) o respuesta en frecuencia.",
   "mecanismo_barras_2d": "Dibuja articulaciones cinemáticas y eslabones mecánicos conectados en el plano 2D.",
-  "distribucion_recursos": "Presenta barras apiladas e indicadores de balanceo de cargas y capacidad de servidores."
+  "distribucion_recursos": "Presenta barras apiladas e indicadores de balanceo de cargas y capacidad de servidores.",
+  "acustica_ondas_2d": "Simula la interferencia constructiva de ondas de presión acústica propagándose y el patrón polar de directividad.",
+  "electromagnetismo_lorentz": "Muestra el flujo magnético Bz, bobinas de electroimanes y la trayectoria del haz de iones bajo la fuerza de Lorentz."
 };
 
 // Muestra u oculta la barra superior de alerta con mensajes de error o validación.
