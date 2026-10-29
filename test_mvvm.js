@@ -4,7 +4,21 @@
 
 import { MODELOS, obtenerModeloPorId } from "./js/models/index.js";
 import { compilarModeloDinamico, clonarModeloExistente } from "./js/builder.js";
-import { VisualizadorJansen, VisualizadorBrazo, VisualizadorCohete, VisualizadorPID, VisualizadorCaminante, VisualizadorFases, VisualizadorDinamico, obtenerVisualizador } from "./js/views/visualizers.js";
+import {
+  VisualizadorJansen,
+  VisualizadorBrazo,
+  VisualizadorCohete,
+  VisualizadorPID,
+  VisualizadorCaminante,
+  VisualizadorFases,
+  VisualizadorPotencial,
+  VisualizadorOrbita,
+  VisualizadorFiltro,
+  VisualizadorArmadura,
+  VisualizadorTermico,
+  VisualizadorDinamico,
+  obtenerVisualizador
+} from "./js/views/visualizers.js";
 import { GraficoView } from "./js/views/grafico-view.js";
 
 console.log("=== INICIANDO PRUEBAS DE ARQUITECTURA MVVM ===");
@@ -72,6 +86,11 @@ const visualizadores = [
   new VisualizadorPID(),
   new VisualizadorCaminante(),
   new VisualizadorFases(),
+  new VisualizadorPotencial(),
+  new VisualizadorOrbita(),
+  new VisualizadorFiltro(),
+  new VisualizadorArmadura(),
+  new VisualizadorTermico(),
   new VisualizadorDinamico()
 ];
 
@@ -81,7 +100,7 @@ visualizadores.forEach(v => {
   }
   v.detener(); // Debe ejecutarse limpiamente sin arrojar errores
 });
-console.log("    ✓ Todos los 7 visualizadores implementan render() y detener() | OK");
+console.log(`    ✓ Todos los ${visualizadores.length} visualizadores implementan render() y detener() | OK`);
 
 MODELOS.forEach(m => {
   const vis = obtenerVisualizador(m.id);

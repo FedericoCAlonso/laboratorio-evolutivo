@@ -265,6 +265,21 @@ export class AppViewModel {
       const lineas = entrada?.circuitos || [500, 400, 350, 600, 300, 450, 550, 700, 250];
       return lineas.map(() => 0);
     }
+    if (modelo.id === "campo-potencial") {
+      return [-20.0, 15.0, -1.8, 15.0, -12.0, 1.5];
+    }
+    if (modelo.id === "orbita-transferencia") {
+      return [3.2, 0.0, 5.8, 2.4];
+    }
+    if (modelo.id === "filtro-rlc") {
+      return [2.7, -2.1, -6.8];
+    }
+    if (modelo.id === "armadura-puente") {
+      return [10.0, 0.0, 16.0, 10.0];
+    }
+    if (modelo.id === "distribucion-termica") {
+      return [-20.0, 12.0, 18.0, 10.0, -15.0, -14.0, 16.0, -16.0];
+    }
     return null;
   }
 

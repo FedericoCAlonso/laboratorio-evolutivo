@@ -2,6 +2,19 @@
 // MÓDULO: INTERFAZ DE USUARIO (FORMULARIOS DINÁMICOS, GRÁFICO CANVAS Y PROGRESO)
 // =========================================================================
 
+import { obtenerPlantillaSimulacion } from "./builder.js";
+
+// Textos de ayuda descriptivos para cada naturaleza de representación gráfica en el diseñador.
+const HINTS_VISUALIZACION = {
+  "calibracion": "Muestra el estado y magnitud de cada variable en indicadores visuales de barra y porcentaje de rango.",
+  "campo_potencial_2d": "Genera un mapa de calor 2D continuo con curvas de nivel (isolíneas equipotenciales), gradiente de fuerza y ubicación de partículas.",
+  "campo_vectorial_2d": "Muestra una grilla de vectores direccionales de velocidad y líneas de flujo con rotación de vórtices.",
+  "trayectoria_particulas_2d": "Traza waypoints espaciales 2D, rutas dinámicas y zonas de obstáculos con evasión animada.",
+  "serie_temporal": "Renderiza un osciloscopio en tiempo real con curva transitoria y(t) o respuesta en frecuencia.",
+  "mecanismo_barras_2d": "Dibuja articulaciones cinemáticas y eslabones mecánicos conectados en el plano 2D.",
+  "distribucion_recursos": "Presenta barras apiladas e indicadores de balanceo de cargas y capacidad de servidores."
+};
+
 // Muestra u oculta la barra superior de alerta con mensajes de error o validación.
 export function mostrarAlerta(mensaje, elementoAlerta) {
   if (!elementoAlerta) return;
@@ -660,7 +673,7 @@ export function actualizarBotonesControl(estado, btns, textoEstado) {
 
 // Abre el modal del constructor low-code reiniciando sus campos o precargando los datos existentes para edición.
 export function abrirModalConstructor(elementosModal, datosIniciales = null, esEdicion = false) {
-  const { modal, alerta, inputNombre, inputDesc, tbody, textareaCodigo } = elementosModal;
+  const { modal, alerta, inputNombre, inputDesc, tbody, textareaCodigo, selectTipoVisualizacion, selectPlantilla, hintTipoVisualizacion } = elementosModal;
   if (!modal) return;
 
   mostrarAlerta(null, alerta);
@@ -674,14 +687,55 @@ export function abrirModalConstructor(elementosModal, datosIniciales = null, esE
   modal.dataset.modo = esEdicion ? "edicion" : "creacion";
   modal.dataset.modeloId = datosIniciales?.id || "";
 
+  // Selector de plantillas de ejemplo
+  if (selectPlantilla) {
+    selectPlantilla.value = "";
+    selectPlantilla.onchange = (e) => {
+      const plantilla = obtenerPlantillaSimulacion(e.target.value);
+      if (!plantilla) return;
+      inputNombre.value = plantilla.nombre;
+      inputDesc.value = plantilla.descripcion;
+      if (selectTipoVisualizacion) {
+        selectTipoVisualizacion.value = plantilla.tipoVisualizacion || "calibracion";
+        if (hintTipoVisualizacion) {
+          hintTipoVisualizacion.textContent = HINTS_VISUALIZACION[selectTipoVisualizacion.value] || "";
+        }
+      }
+      textareaCodigo.value = plantilla.codigoEvaluacion;
+      tbody.innerHTML = "";
+      plantilla.variables.forEach(v => agregarFilaVariableConstructor(tbody, v));
+    };
+  }
+
+  // Escuchador para cambiar la ayuda contextual según la naturaleza de la simulación
+  if (selectTipoVisualizacion) {
+    selectTipoVisualizacion.onchange = (e) => {
+      if (hintTipoVisualizacion) {
+        hintTipoVisualizacion.textContent = HINTS_VISUALIZACION[e.target.value] || "";
+      }
+    };
+  }
+
   if (datosIniciales) {
     inputNombre.value = datosIniciales.nombre || "";
     inputDesc.value = datosIniciales.descripcion || "";
+    if (selectTipoVisualizacion) {
+      selectTipoVisualizacion.value = datosIniciales.tipoVisualizacion || "calibracion";
+      if (hintTipoVisualizacion) {
+        hintTipoVisualizacion.textContent = HINTS_VISUALIZACION[selectTipoVisualizacion.value] || "";
+      }
+    }
     textareaCodigo.value = datosIniciales.codigoEvaluacion || "";
     (datosIniciales.variables || []).forEach(v => agregarFilaVariableConstructor(tbody, v));
   } else {
     inputNombre.value = "";
     inputDesc.value = "";
+    if (selectTipoVisualizacion) {
+      selectTipoVisualizacion.value = "calibracion";
+      if (hintTipoVisualizacion) {
+        hintTipoVisualizacion.textContent = HINTS_VISUALIZACION["calibracion"];
+      }
+    }
     textareaCodigo.value = "// Minimizar el error cuadrático respecto a un volumen objetivo de 100\nconst volumen = vars.ancho * vars.alto;\nreturn Math.abs(volumen - 100);";
 
     // Fila 1 de ejemplo: ancho
@@ -980,11 +1034,12 @@ export function agregarFilaVariableConstructor(tbody, datosFila = {}) {
 
 // Extrae del formulario del modal los datos ingresados por el usuario para conformar la definición cruda del modelo.
 export function extraerDefinicionModeloDesdeUI(elementosModal) {
-  const { inputNombre, inputDesc, tbody, textareaCodigo } = elementosModal;
+  const { inputNombre, inputDesc, tbody, textareaCodigo, selectTipoVisualizacion } = elementosModal;
 
   const nombre = inputNombre.value.trim();
   const descripcion = inputDesc.value.trim();
   const codigoEvaluacion = textareaCodigo.value.trim();
+  const tipoVisualizacion = selectTipoVisualizacion ? selectTipoVisualizacion.value : "calibracion";
 
   const variables = [];
   const filas = tbody.querySelectorAll("tr");
@@ -1005,6 +1060,7 @@ export function extraerDefinicionModeloDesdeUI(elementosModal) {
   return {
     nombre,
     descripcion,
+    tipoVisualizacion,
     variables,
     codigoEvaluacion
   };

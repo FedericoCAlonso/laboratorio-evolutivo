@@ -1,5 +1,6 @@
 // =========================================================================
 // MÓDULO: REGISTRO CENTRAL DE MODELOS DE OPTIMIZACIÓN
+// MODELO DE DOMINIO PURO (ARQUITECTURA MVVM - SIN ACOPLAMIENTO A LA UI)
 // =========================================================================
 
 import { ModeloBalanceoFases } from "./fases.js";
@@ -8,6 +9,11 @@ import { ModeloPataJansen } from "./jansen.js";
 import { ModeloBrazoRobotico } from "./brazo.js";
 import { ModeloCoheteLanding } from "./cohete.js";
 import { ModeloControladorPID } from "./pid.js";
+import { ModeloCampoPotencial } from "./potencial.js";
+import { ModeloTransferenciaOrbital } from "./orbita.js";
+import { ModeloFiltroRLC } from "./filtro.js";
+import { ModeloArmaduraPuente } from "./armadura.js";
+import { ModeloDistribucionTermica } from "./termico.js";
 import { compilarModeloDinamico } from "../builder.js";
 
 // Reexporta los modelos individuales para facilitar su importación directa.
@@ -17,7 +23,12 @@ export {
   ModeloPataJansen,
   ModeloBrazoRobotico,
   ModeloCoheteLanding,
-  ModeloControladorPID
+  ModeloControladorPID,
+  ModeloCampoPotencial,
+  ModeloTransferenciaOrbital,
+  ModeloFiltroRLC,
+  ModeloArmaduraPuente,
+  ModeloDistribucionTermica
 };
 
 // Lista global de todos los modelos de optimización disponibles en la aplicación (estáticos y dinámicos).
@@ -26,6 +37,11 @@ export const MODELOS = [
   ModeloBrazoRobotico,
   ModeloCoheteLanding,
   ModeloControladorPID,
+  ModeloCampoPotencial,
+  ModeloTransferenciaOrbital,
+  ModeloFiltroRLC,
+  ModeloArmaduraPuente,
+  ModeloDistribucionTermica,
   ModeloBalanceoFases,
   ModeloPataCaminante
 ];

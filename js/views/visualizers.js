@@ -7,6 +7,11 @@ import { resolverCinematicaBrazo, distanciaPuntoASegmento } from "../models/braz
 import { simularDescensoCohete } from "../models/cohete.js";
 import { simularRespuestaPID } from "../models/pid.js";
 import { ModeloPataCaminante } from "../models/caminante.js";
+import { simularTrayectoriaParticula, calcularPotencialPunto, calcularCampoVectorial } from "../models/potencial.js";
+import { simularManiobraOrbital } from "../models/orbita.js";
+import { simularRespuestaFiltroRLC } from "../models/filtro.js";
+import { resolverEstaticaArmadura } from "../models/armadura.js";
+import { simularCampoTermico } from "../models/termico.js";
 
 // Estado checkbox para superponer la curva original de Theo Jansen en el lienzo Canvas.
 let mostrarReferenciaJansen = true;
@@ -1420,16 +1425,1492 @@ export class VisualizadorFases {
 }
 
 // -------------------------------------------------------------------------
-// 7. VISUALIZADOR DE MODELOS DINÁMICOS LOW-CODE
+// 7. VISUALIZADOR DE CAMPO DE POTENCIAL 2D Y DEFLEXIÓN ELECTROSTÁTICA
 // -------------------------------------------------------------------------
-export class VisualizadorDinamico {
-  detener() {}
+export class VisualizadorPotencial {
+  constructor() {
+    this.animId = null;
+  }
+
+  detener() {
+    if (this.animId !== null) {
+      cancelAnimationFrame(this.animId);
+      this.animId = null;
+    }
+  }
 
   render(contenedor, genoma, entrada, contexto = {}) {
     if (!contenedor) return;
+    this.detener();
+
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 380;
+      canvas.style.width = "100%";
+      canvas.style.height = "380px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    const sim = simularTrayectoriaParticula(genoma, entrada);
+    const tray = sim.trayectoria;
+
+    let tiempoAnimacion = 0;
+    let indiceParticula = 0;
+
+    const animar = () => {
+      if (!canvas.isConnected) {
+        this.detener();
+        return;
+      }
+
+      const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+      const anchoCSS = canvas.clientWidth || 800;
+      const altoCSS = canvas.clientHeight || 380;
+
+      if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
+        canvas.width = anchoCSS * dpr;
+        canvas.height = altoCSS * dpr;
+      }
+
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, anchoCSS, altoCSS);
+
+      const escala = Math.min(anchoCSS / 120, altoCSS / 85);
+      const centroX = anchoCSS / 2;
+      const centroY = altoCSS / 2;
+
+      const aCanvas = (x, y) => ({
+        x: centroX + x * escala,
+        y: centroY - y * escala
+      });
+
+      // 1. Mapa de calor de potencial V(x, y)
+      const celdasX = 36;
+      const celdasY = 24;
+      const pasoX = 110 / celdasX;
+      const pasoY = 75 / celdasY;
+      const anchoCeldaPx = pasoX * escala + 1;
+      const altoCeldaPx = pasoY * escala + 1;
+
+      for (let ix = 0; ix < celdasX; ix++) {
+        const gx = -55 + (ix + 0.5) * pasoX;
+        for (let iy = 0; iy < celdasY; iy++) {
+          const gy = -37.5 + (iy + 0.5) * pasoY;
+          const pot = calcularPotencialPunto(gx, gy, sim.electrodos, sim.cargasFijas);
+          const potNorm = Math.max(-1, Math.min(1, pot / 45));
+          let r, g, b, alpha;
+          if (potNorm >= 0) {
+            r = Math.floor(180 + 75 * potNorm);
+            g = Math.floor(90 * (1 - potNorm * 0.7));
+            b = 30;
+            alpha = 0.12 + 0.45 * potNorm;
+          } else {
+            const absN = Math.abs(potNorm);
+            r = 15;
+            g = Math.floor(110 * absN);
+            b = Math.floor(200 + 55 * absN);
+            alpha = 0.12 + 0.45 * absN;
+          }
+
+          const pt = aCanvas(gx, gy);
+          ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+          ctx.fillRect(pt.x - anchoCeldaPx / 2, pt.y - altoCeldaPx / 2, anchoCeldaPx, altoCeldaPx);
+        }
+      }
+
+      // 2. Grilla cartesiana y flechas del campo vectorial eléctrico E
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.lineWidth = 1;
+      for (let x = -50; x <= 50; x += 25) {
+        const p0 = aCanvas(x, -35);
+        const p1 = aCanvas(x, 35);
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.stroke();
+      }
+      for (let y = -30; y <= 30; y += 15) {
+        const p0 = aCanvas(-55, y);
+        const p1 = aCanvas(55, y);
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.stroke();
+      }
+
+      for (let x = -45; x <= 45; x += 15) {
+        for (let y = -25; y <= 25; y += 15) {
+          const { ex, ey } = calcularCampoVectorial(x, y, sim.electrodos, sim.cargasFijas);
+          const mag = Math.hypot(ex, ey);
+          if (mag > 0.05) {
+            const p = aCanvas(x, y);
+            const len = Math.min(14, mag * 0.8 + 3);
+            const dirX = (ex / mag) * len;
+            const dirY = -(ey / mag) * len;
+
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p.x + dirX, p.y + dirY);
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.28)";
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+
+            const ang = Math.atan2(dirY, dirX);
+            ctx.beginPath();
+            ctx.moveTo(p.x + dirX, p.y + dirY);
+            ctx.lineTo(p.x + dirX - 4 * Math.cos(ang - 0.45), p.y + dirY - 4 * Math.sin(ang - 0.45));
+            ctx.lineTo(p.x + dirX - 4 * Math.cos(ang + 0.45), p.y + dirY - 4 * Math.sin(ang + 0.45));
+            ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+            ctx.fill();
+          }
+        }
+      }
+
+      // 3. Barrera de sobrepotencial central
+      const pCentro = aCanvas(0, 0);
+      const radioObsPx = 6.0 * escala;
+      ctx.beginPath();
+      ctx.arc(pCentro.x, pCentro.y, radioObsPx, 0, 2 * Math.PI);
+      ctx.fillStyle = "rgba(239, 68, 68, 0.22)";
+      ctx.fill();
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = "bold 10px system-ui";
+      ctx.fillStyle = "#ef4444";
+      ctx.textAlign = "center";
+      ctx.fillText("Barrera Central", pCentro.x, pCentro.y - radioObsPx - 6);
+
+      // 4. Emisor y Colector diana
+      const pEmisor = aCanvas(sim.emisorX, sim.emisorY);
+      ctx.beginPath();
+      ctx.arc(pEmisor.x, pEmisor.y, 8, 0, 2 * Math.PI);
+      ctx.fillStyle = "#38bdf8";
+      ctx.fill();
+      ctx.strokeStyle = "#0284c7";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = "#0284c7";
+      ctx.font = "bold 10px system-ui";
+      ctx.fillText("Emisor e⁻", pEmisor.x, pEmisor.y + 18);
+
+      const pColector = aCanvas(sim.colectorX, sim.colectorY);
+      const pulsoCol = 9 + Math.sin(tiempoAnimacion * 4) * 2;
+      ctx.beginPath();
+      ctx.arc(pColector.x, pColector.y, pulsoCol, 0, 2 * Math.PI);
+      ctx.fillStyle = "rgba(16, 185, 129, 0.25)";
+      ctx.fill();
+      ctx.strokeStyle = "#10b981";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(pColector.x, pColector.y, 4, 0, 2 * Math.PI);
+      ctx.fillStyle = "#10b981";
+      ctx.fill();
+      ctx.fillStyle = "#059669";
+      ctx.fillText("Colector", pColector.x, pColector.y + 22);
+
+      // 5. Electrodos deflectores móviles
+      sim.electrodos.forEach((el, idx) => {
+        const pEl = aCanvas(el.x, el.y);
+        const esPositivo = el.q >= 0;
+        const colorEl = esPositivo ? "#f59e0b" : "#38bdf8";
+        const radioEl = 7 + Math.min(5, Math.abs(el.q) * 2);
+
+        ctx.beginPath();
+        ctx.arc(pEl.x, pEl.y, radioEl, 0, 2 * Math.PI);
+        ctx.fillStyle = esPositivo ? "rgba(245, 158, 11, 0.25)" : "rgba(56, 189, 248, 0.25)";
+        ctx.fill();
+        ctx.strokeStyle = colorEl;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(pEl.x, pEl.y, 4, 0, 2 * Math.PI);
+        ctx.fillStyle = colorEl;
+        ctx.fill();
+
+        ctx.font = "bold 10px system-ui";
+        ctx.fillStyle = colorEl;
+        ctx.textAlign = "center";
+        const sign = esPositivo ? "+" : "";
+        ctx.fillText(`Deflector ${idx + 1} (${sign}${el.q.toFixed(1)}µC)`, pEl.x, pEl.y - radioEl - 4);
+      });
+
+      // 6. Trayectoria calculada
+      if (tray.length > 1) {
+        ctx.beginPath();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 3]);
+        for (let i = 0; i < tray.length; i++) {
+          const pt = aCanvas(tray[i].x, tray[i].y);
+          if (i === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Partícula en movimiento animado a lo largo del haz
+      if (tray.length > 0) {
+        const ptAct = aCanvas(tray[indiceParticula].x, tray[indiceParticula].y);
+        const estelaInicio = Math.max(0, indiceParticula - 14);
+        ctx.beginPath();
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 3;
+        for (let i = estelaInicio; i <= indiceParticula; i++) {
+          const ptE = aCanvas(tray[i].x, tray[i].y);
+          if (i === estelaInicio) ctx.moveTo(ptE.x, ptE.y);
+          else ctx.lineTo(ptE.x, ptE.y);
+        }
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(ptAct.x, ptAct.y, 5, 0, 2 * Math.PI);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        if (indiceParticula < tray.length - 1) {
+          indiceParticula++;
+        } else {
+          indiceParticula = 0;
+        }
+      }
+
+      // 7. Telemetría HUD
+      ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+      ctx.beginPath();
+      ctx.roundRect(14, 14, 290, 68, 8);
+      ctx.fill();
+
+      ctx.font = "bold 11px system-ui";
+      ctx.fillStyle = "#f8fafc";
+      ctx.textAlign = "left";
+      ctx.fillText(`Distancia al Colector: ${sim.distanciaMinimaColector.toFixed(2)} mm`, 24, 34);
+      ctx.fillText(`Energía Cinética: ${sim.energiaCinematicaTotal.toFixed(1)} J | Pasos: ${tray.length}`, 24, 50);
+
+      ctx.fillStyle = sim.exitoLlegada ? "#4ade80" : (sim.colisionObstaculo ? "#f87171" : "#f59e0b");
+      const estadoTxt = sim.exitoLlegada ? "CAPTURA EXITOSA EN COLECTOR ✓" : (sim.colisionObstaculo ? "COLISIÓN CON BARRERA ✕" : "DESVÍO DE TRAYECTORIA ⚠️");
+      ctx.fillText(`Estado: ${estadoTxt}`, 24, 66);
+
+      tiempoAnimacion += 0.04;
+      this.animId = requestAnimationFrame(animar);
+    };
+
+    this.animId = requestAnimationFrame(animar);
+  }
+}
+
+// -------------------------------------------------------------------------
+// 8. VISUALIZADOR DE TRANSFERENCIA ORBITAL (MECÁNICA CELESTE 2D)
+// -------------------------------------------------------------------------
+export class VisualizadorOrbita {
+  constructor() {
+    this.animId = null;
+  }
+
+  detener() {
+    if (this.animId !== null) {
+      cancelAnimationFrame(this.animId);
+      this.animId = null;
+    }
+  }
+
+  render(contenedor, genoma, entrada, contexto = {}) {
+    if (!contenedor) return;
+    this.detener();
+
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 380;
+      canvas.style.width = "100%";
+      canvas.style.height = "380px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    const sim = simularManiobraOrbital(genoma, entrada);
+    const tray = sim.trayectoria;
+
+    let tiempoAnimacion = 0;
+    let indicePaso = 0;
+
+    const animar = () => {
+      if (!canvas.isConnected) {
+        this.detener();
+        return;
+      }
+
+      const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+      const anchoCSS = canvas.clientWidth || 800;
+      const altoCSS = canvas.clientHeight || 380;
+
+      if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
+        canvas.width = anchoCSS * dpr;
+        canvas.height = altoCSS * dpr;
+      }
+
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, anchoCSS, altoCSS);
+
+      // Fondo del espacio profundo con estrellas
+      ctx.fillStyle = "#090d16";
+      ctx.fillRect(0, 0, anchoCSS, altoCSS);
+
+      const escala = Math.min(anchoCSS, altoCSS) / 190;
+      const centroX = anchoCSS / 2;
+      const centroY = altoCSS / 2;
+
+      const aCanvas = (x, y) => ({
+        x: centroX + x * escala,
+        y: centroY - y * escala
+      });
+
+      // 1. Órbitas circulares de referencia (inicial y objetivo)
+      ctx.beginPath();
+      ctx.arc(centroX, centroY, sim.rInicial * escala, 0, 2 * Math.PI);
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(centroX, centroY, sim.rObjetivo * escala, 0, 2 * Math.PI);
+      ctx.strokeStyle = "rgba(16, 185, 129, 0.55)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.font = "10px system-ui";
+      ctx.fillStyle = "#38bdf8";
+      ctx.fillText(`Órbita Inicial (r = ${sim.rInicial} km)`, centroX, centroY - sim.rInicial * escala - 4);
+      ctx.fillStyle = "#10b981";
+      ctx.fillText(`Órbita Objetivo (rf = ${sim.rObjetivo} km)`, centroX, centroY - sim.rObjetivo * escala - 4);
+
+      // 2. Trayectoria calculada de transferencia
+      if (tray.length > 1) {
+        ctx.beginPath();
+        ctx.strokeStyle = "rgba(245, 158, 11, 0.6)";
+        ctx.lineWidth = 2;
+        for (let i = 0; i < tray.length; i++) {
+          const pt = aCanvas(tray[i].x, tray[i].y);
+          if (i === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        }
+        ctx.stroke();
+      }
+
+      // 3. Planeta central con atmósfera
+      const rPlanetaPx = sim.rPlaneta * escala;
+      const gradAtmosfera = ctx.createRadialGradient(centroX, centroY, rPlanetaPx * 0.8, centroX, centroY, rPlanetaPx * 1.35);
+      gradAtmosfera.addColorStop(0, "rgba(56, 189, 248, 0.35)");
+      gradAtmosfera.addColorStop(1, "rgba(56, 189, 248, 0)");
+      ctx.beginPath();
+      ctx.arc(centroX, centroY, rPlanetaPx * 1.35, 0, 2 * Math.PI);
+      ctx.fillStyle = gradAtmosfera;
+      ctx.fill();
+
+      // Superficie del planeta
+      const gradPlaneta = ctx.createRadialGradient(centroX - rPlanetaPx * 0.3, centroY - rPlanetaPx * 0.3, 2, centroX, centroY, rPlanetaPx);
+      gradPlaneta.addColorStop(0, "#38bdf8");
+      gradPlaneta.addColorStop(0.6, "#0284c7");
+      gradPlaneta.addColorStop(1, "#0f172a");
+      ctx.beginPath();
+      ctx.arc(centroX, centroY, rPlanetaPx, 0, 2 * Math.PI);
+      ctx.fillStyle = gradPlaneta;
+      ctx.fill();
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // 4. Satélite animado a lo largo del arco orbital
+      if (tray.length > 0) {
+        const ptAct = aCanvas(tray[indicePaso].x, tray[indicePaso].y);
+        const datoAct = tray[indicePaso];
+
+        // Llama de propulsión cuando se produce un encendido impulsivo (Delta V)
+        if (datoAct.encendido > 0) {
+          const velMag = Math.hypot(datoAct.vx, datoAct.vy) || 1;
+          const dirX = -(datoAct.vx / velMag);
+          const dirY = (datoAct.vy / velMag);
+          const llamaLen = 16 + Math.sin(tiempoAnimacion * 20) * 4;
+
+          ctx.beginPath();
+          ctx.moveTo(ptAct.x, ptAct.y);
+          ctx.lineTo(ptAct.x + dirX * llamaLen, ptAct.y + dirY * llamaLen);
+          ctx.strokeStyle = "#f97316";
+          ctx.lineWidth = 4;
+          ctx.lineCap = "round";
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(ptAct.x, ptAct.y);
+          ctx.lineTo(ptAct.x + dirX * (llamaLen * 0.6), ptAct.y + dirY * (llamaLen * 0.6));
+          ctx.strokeStyle = "#fde047";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        // Estructura del satélite (cuerpo + paneles solares)
+        ctx.fillStyle = "#38bdf8";
+        ctx.fillRect(ptAct.x - 12, ptAct.y - 2, 8, 4); // Panel izquierdo
+        ctx.fillRect(ptAct.x + 4, ptAct.y - 2, 8, 4);  // Panel derecho
+
+        ctx.beginPath();
+        ctx.arc(ptAct.x, ptAct.y, 4, 0, 2 * Math.PI);
+        ctx.fillStyle = "#f8fafc";
+        ctx.fill();
+        ctx.strokeStyle = "#f59e0b";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        if (indicePaso < tray.length - 1) {
+          indicePaso++;
+        } else {
+          indicePaso = 0;
+        }
+      }
+
+      // 5. Telemetría HUD
+      ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+      ctx.beginPath();
+      ctx.roundRect(14, 14, 290, 68, 8);
+      ctx.fill();
+
+      ctx.font = "bold 11px system-ui";
+      ctx.fillStyle = "#f8fafc";
+      ctx.textAlign = "left";
+      ctx.fillText(`Radio Final: ${sim.rFinal.toFixed(2)} km (Obj: ${sim.rObjetivo} km)`, 24, 34);
+      ctx.fillText(`Δv Total: ${sim.deltaVTotal.toFixed(2)} m/s | Excentricidad e: ${sim.excentricidadFinal.toFixed(4)}`, 24, 50);
+
+      ctx.fillStyle = sim.maniobraExitosa ? "#4ade80" : (sim.colisionPlaneta ? "#f87171" : "#f59e0b");
+      const estadoTxt = sim.maniobraExitosa ? "INSERCIÓN ORBITAL EXITOSA ✓" : (sim.colisionPlaneta ? "COLISIÓN PLANETARIA ✕" : "DESVÍO / ALTA EXCENTRICIDAD ⚠️");
+      ctx.fillText(`Estado: ${estadoTxt}`, 24, 66);
+
+      tiempoAnimacion += 0.04;
+      this.animId = requestAnimationFrame(animar);
+    };
+
+    this.animId = requestAnimationFrame(animar);
+  }
+}
+
+// -------------------------------------------------------------------------
+// 9. VISUALIZADOR DE FILTRO ANALÓGICO RLC (DIAGRAMA DE BODE)
+// -------------------------------------------------------------------------
+export class VisualizadorFiltro {
+  constructor() {
+    this.animId = null;
+  }
+
+  detener() {
+    if (this.animId !== null) {
+      cancelAnimationFrame(this.animId);
+      this.animId = null;
+    }
+  }
+
+  render(contenedor, genoma, entrada, contexto = {}) {
+    if (!contenedor) return;
+    this.detener();
+
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 380;
+      canvas.style.width = "100%";
+      canvas.style.height = "380px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    const sim = simularRespuestaFiltroRLC(genoma, entrada);
+    const pts = sim.respuesta;
+
+    let tiempoAnimacion = 0;
+
+    const animar = () => {
+      if (!canvas.isConnected) {
+        this.detener();
+        return;
+      }
+
+      const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+      const anchoCSS = canvas.clientWidth || 800;
+      const altoCSS = canvas.clientHeight || 380;
+
+      if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
+        canvas.width = anchoCSS * dpr;
+        canvas.height = altoCSS * dpr;
+      }
+
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, anchoCSS, altoCSS);
+
+      const margenIzq = 55;
+      const margenDer = 25;
+      const margenSup = 25;
+      const margenInf = 45;
+      const anchoG = anchoCSS - margenIzq - margenDer;
+      const altoG = altoCSS - margenSup - margenInf;
+
+      const logMinF = Math.log10(20.0);
+      const logMaxF = Math.log10(50000.0);
+      const minDB = -50.0;
+      const maxDB = 6.0;
+
+      const aCanvas = (f, db) => {
+        const x = margenIzq + ((Math.log10(f) - logMinF) / (logMaxF - logMinF)) * anchoG;
+        const y = margenSup + altoG - ((db - minDB) / (maxDB - minDB)) * altoG;
+        return { x, y };
+      };
+
+      // Fondo del osciloscopio de Bode
+      ctx.fillStyle = "rgba(0, 0, 0, 0.03)";
+      ctx.fillRect(margenIzq, margenSup, anchoG, altoG);
+
+      // 1. Zonas de máscara de frecuencia (banda de paso y stopband)
+      const pBwInf = aCanvas(Math.max(20, sim.fDeseada - sim.bwDeseado / 2), 0);
+      const pBwSup = aCanvas(sim.fDeseada + sim.bwDeseado / 2, 0);
+      ctx.fillStyle = "rgba(16, 185, 129, 0.12)";
+      ctx.fillRect(pBwInf.x, margenSup, pBwSup.x - pBwInf.x, altoG);
+
+      // 2. Grilla cartesiana logarítmica
+      ctx.strokeStyle = "rgba(100, 116, 139, 0.18)";
+      ctx.lineWidth = 1;
+      ctx.fillStyle = "#64748b";
+      ctx.font = "11px system-ui";
+
+      // Décadas de frecuencia
+      const decadas = [100, 1000, 10000];
+      ctx.textAlign = "center";
+      decadas.forEach(f => {
+        const p = aCanvas(f, 0);
+        ctx.beginPath();
+        ctx.moveTo(p.x, margenSup);
+        ctx.lineTo(p.x, margenSup + altoG);
+        ctx.stroke();
+        const fStr = f >= 1000 ? `${f / 1000} kHz` : `${f} Hz`;
+        ctx.fillText(fStr, p.x, margenSup + altoG + 16);
+      });
+
+      // Eje de magnitud dB
+      ctx.textAlign = "right";
+      for (let db = -40; db <= 0; db += 10) {
+        const p = aCanvas(100, db);
+        ctx.beginPath();
+        ctx.moveTo(margenIzq, p.y);
+        ctx.lineTo(margenIzq + anchoG, p.y);
+        ctx.stroke();
+        ctx.fillText(`${db} dB`, margenIzq - 6, p.y + 4);
+      }
+
+      // Línea de corte a -3 dB
+      const p3db = aCanvas(100, -3.0);
+      ctx.beginPath();
+      ctx.strokeStyle = "rgba(245, 158, 11, 0.7)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.moveTo(margenIzq, p3db.y);
+      ctx.lineTo(margenIzq + anchoG, p3db.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#b45309";
+      ctx.textAlign = "left";
+      ctx.fillText("-3 dB (Corte)", margenIzq + 8, p3db.y - 5);
+
+      // 3. Curva de respuesta en magnitud |H(f)|
+      if (pts.length > 1) {
+        ctx.beginPath();
+        ctx.strokeStyle = "#2563eb";
+        ctx.lineWidth = 2.5;
+        for (let i = 0; i < pts.length; i++) {
+          const pt = aCanvas(pts[i].f, pts[i].gananciaDB);
+          if (i === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        }
+        ctx.stroke();
+      }
+
+      // 4. Marcador en la frecuencia de resonancia pico f0
+      const pPico = aCanvas(sim.f0, sim.magMaximaDB);
+      ctx.beginPath();
+      ctx.arc(pPico.x, pPico.y, 6, 0, 2 * Math.PI);
+      ctx.fillStyle = "#10b981";
+      ctx.fill();
+      ctx.strokeStyle = "#065f46";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(pPico.x, margenSup);
+      ctx.lineTo(pPico.x, margenSup + altoG);
+      ctx.strokeStyle = "rgba(16, 185, 129, 0.6)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = "#059669";
+      ctx.font = "bold 11px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText(`f₀ = ${sim.f0.toFixed(0)} Hz`, pPico.x, margenSup - 6);
+
+      // 5. HUD de componentes y selectividad
+      ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+      ctx.beginPath();
+      ctx.roundRect(anchoCSS - 310, 14, 295, 68, 8);
+      ctx.fill();
+
+      const rStr = sim.R >= 1000 ? `${(sim.R / 1000).toFixed(2)}kΩ` : `${sim.R.toFixed(0)}Ω`;
+      const lStr = sim.L < 0.001 ? `${(sim.L * 1e6).toFixed(0)}µH` : `${(sim.L * 1000).toFixed(2)}mH`;
+      const cStr = sim.C < 1e-6 ? `${(sim.C * 1e9).toFixed(1)}nF` : `${(sim.C * 1e6).toFixed(2)}µF`;
+
+      ctx.font = "bold 11px system-ui";
+      ctx.fillStyle = "#f8fafc";
+      ctx.textAlign = "left";
+      ctx.fillText(`Componentes: R=${rStr} | L=${lStr} | C=${cStr}`, anchoCSS - 300, 34);
+      ctx.fillText(`Resonancia: ${sim.f0.toFixed(0)} Hz (Obj: ${sim.fDeseada} Hz) | Q: ${sim.Q.toFixed(2)}`, anchoCSS - 300, 50);
+
+      const sintonizado = sim.errorFrecuencia < 35;
+      ctx.fillStyle = sintonizado ? "#4ade80" : "#f87171";
+      ctx.fillText(`Sintonización: ${sintonizado ? "SINTONIZADO EN BANDA ✓" : "DESVIADO DE FRECUENCIA ✕"} (BW: ${sim.bwReal.toFixed(0)} Hz)`, anchoCSS - 300, 66);
+
+      tiempoAnimacion += 0.03;
+      this.animId = requestAnimationFrame(animar);
+    };
+
+    this.animId = requestAnimationFrame(animar);
+  }
+}
+
+// -------------------------------------------------------------------------
+// 10. VISUALIZADOR DE ARMADURA DE PUENTE (ESTRUCTURAS 2D)
+// -------------------------------------------------------------------------
+export class VisualizadorArmadura {
+  constructor() {
+    this.animId = null;
+  }
+
+  detener() {
+    if (this.animId !== null) {
+      cancelAnimationFrame(this.animId);
+      this.animId = null;
+    }
+  }
+
+  render(contenedor, genoma, entrada, contexto = {}) {
+    if (!contenedor) return;
+    this.detener();
+
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 380;
+      canvas.style.width = "100%";
+      canvas.style.height = "380px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    const sim = resolverEstaticaArmadura(genoma, entrada);
+
+    let tiempoAnimacion = 0;
+    let posVehiculoX = 0;
+
+    const animar = () => {
+      if (!canvas.isConnected) {
+        this.detener();
+        return;
+      }
+
+      const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+      const anchoCSS = canvas.clientWidth || 800;
+      const altoCSS = canvas.clientHeight || 380;
+
+      if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
+        canvas.width = anchoCSS * dpr;
+        canvas.height = altoCSS * dpr;
+      }
+
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, anchoCSS, altoCSS);
+
+      const margenX = 70;
+      const escala = (anchoCSS - 2 * margenX) / sim.luz;
+      const baseCalzadaY = altoCSS * 0.72;
+
+      const aCanvas = (pt) => ({
+        x: margenX + pt.x * escala,
+        y: baseCalzadaY - pt.y * escala
+      });
+
+      // 1. Río debajo del puente con ondas
+      ctx.fillStyle = "rgba(14, 165, 233, 0.12)";
+      ctx.fillRect(margenX - 20, baseCalzadaY + 12, (anchoCSS - 2 * margenX) + 40, altoCSS - (baseCalzadaY + 12));
+
+      // Estribos de soporte de hormigón en extremos
+      ctx.fillStyle = "#475569";
+      ctx.fillRect(margenX - 25, baseCalzadaY - 4, 30, 45);
+      ctx.fillRect(margenX + sim.luz * escala - 5, baseCalzadaY - 4, 30, 45);
+
+      // 2. Dibujo de las 11 barras de acero con código de esfuerzo de tensión/compresión
+      sim.barras.forEach(b => {
+        const pA = aCanvas(b.nodos[0]);
+        const pB = aCanvas(b.nodos[1]);
+
+        // Color según esfuerzo: rojo tracción, azul compresión
+        const esComp = b.esCompresion;
+        let colorBarra = esComp ? "#2563eb" : "#ef4444";
+        if (b.pandea) colorBarra = "#dc2626";
+
+        const grosor = Math.max(3, Math.min(10, Math.abs(b.fuerzaAxialKN) * 0.08 + 2.5));
+
+        ctx.beginPath();
+        ctx.moveTo(pA.x, pA.y);
+        ctx.lineTo(pB.x, pB.y);
+        ctx.strokeStyle = colorBarra;
+        ctx.lineWidth = grosor;
+        ctx.lineCap = "round";
+        ctx.stroke();
+
+        // Resaltado interior metálico
+        ctx.beginPath();
+        ctx.moveTo(pA.x, pA.y);
+        ctx.lineTo(pB.x, pB.y);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+        ctx.lineWidth = grosor * 0.3;
+        ctx.stroke();
+      });
+
+      // 3. Nudos articulados (pasadores cilíndricos)
+      sim.nodos.forEach((n, idx) => {
+        const pt = aCanvas(n);
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 6.5, 0, 2 * Math.PI);
+        ctx.fillStyle = "#0f172a";
+        ctx.fill();
+        ctx.strokeStyle = "#f8fafc";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 2.5, 0, 2 * Math.PI);
+        ctx.fillStyle = "#94a3b8";
+        ctx.fill();
+      });
+
+      // 4. Vectores de carga de tránsito P sobre la calzada (flechas verticales)
+      [sim.nodos[1], sim.nodos[2]].forEach((n, idx) => {
+        const pt = aCanvas(n);
+        ctx.beginPath();
+        ctx.moveTo(pt.x, pt.y - 28);
+        ctx.lineTo(pt.x, pt.y - 6);
+        ctx.strokeStyle = "#f59e0b";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Flecha
+        ctx.beginPath();
+        ctx.moveTo(pt.x, pt.y - 4);
+        ctx.lineTo(pt.x - 5, pt.y - 12);
+        ctx.lineTo(pt.x + 5, pt.y - 12);
+        ctx.fillStyle = "#f59e0b";
+        ctx.fill();
+
+        ctx.font = "bold 10px system-ui";
+        ctx.fillStyle = "#b45309";
+        ctx.textAlign = "center";
+        ctx.fillText(`P = ${sim.cargaP} kN`, pt.x, pt.y - 32);
+      });
+
+      // 5. Vehículo animado cruzando el puente
+      posVehiculoX = (posVehiculoX + 0.35) % (sim.luz + 10);
+      const ptVehiculo = aCanvas({ x: posVehiculoX, y: 0 });
+      ctx.fillStyle = "#0284c7";
+      ctx.fillRect(ptVehiculo.x - 10, ptVehiculo.y - 8, 20, 6);
+      ctx.fillStyle = "#0f172a";
+      ctx.beginPath();
+      ctx.arc(ptVehiculo.x - 6, ptVehiculo.y - 2, 2.5, 0, 2 * Math.PI);
+      ctx.arc(ptVehiculo.x + 6, ptVehiculo.y - 2, 2.5, 0, 2 * Math.PI);
+      ctx.fill();
+
+      // 6. Telemetría HUD
+      ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+      ctx.beginPath();
+      ctx.roundRect(14, 14, 305, 68, 8);
+      ctx.fill();
+
+      ctx.font = "bold 11px system-ui";
+      ctx.fillStyle = "#f8fafc";
+      ctx.textAlign = "left";
+      ctx.fillText(`Masa Total Acero: ${(sim.masaTotalKg / 1000).toFixed(2)} t (${sim.masaTotalKg.toFixed(0)} kg)`, 24, 34);
+      ctx.fillText(`Tensión Máx: ${sim.maxTensionMPa.toFixed(1)} MPa (Límite: ${sim.limiteTension} MPa)`, 24, 50);
+
+      const seguro = !sim.hayPandeo && sim.maxFactorUso <= 1.0;
+      ctx.fillStyle = seguro ? "#4ade80" : "#f87171";
+      const estadoTxt = seguro ? "ESTRUCTURA SEGURA (Factor Uso < 100%) ✓" : (sim.hayPandeo ? "ALERTA: PANDEO DE EULER ✕" : "SOBRETENSIÓN ADMISIBLE ✕");
+      ctx.fillText(`Estado: ${estadoTxt}`, 24, 66);
+
+      tiempoAnimacion += 0.03;
+      this.animId = requestAnimationFrame(animar);
+    };
+
+    this.animId = requestAnimationFrame(animar);
+  }
+}
+
+// -------------------------------------------------------------------------
+// 11. VISUALIZADOR DE DISIPACIÓN TÉRMICA 2D EN PLACA
+// -------------------------------------------------------------------------
+export class VisualizadorTermico {
+  constructor() {
+    this.animId = null;
+  }
+
+  detener() {
+    if (this.animId !== null) {
+      cancelAnimationFrame(this.animId);
+      this.animId = null;
+    }
+  }
+
+  render(contenedor, genoma, entrada, contexto = {}) {
+    if (!contenedor) return;
+    this.detener();
+
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 380;
+      canvas.style.width = "100%";
+      canvas.style.height = "380px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    const sim = simularCampoTermico(genoma, entrada);
+
+    let tiempoAnimacion = 0;
+
+    const animar = () => {
+      if (!canvas.isConnected) {
+        this.detener();
+        return;
+      }
+
+      const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+      const anchoCSS = canvas.clientWidth || 800;
+      const altoCSS = canvas.clientHeight || 380;
+
+      if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
+        canvas.width = anchoCSS * dpr;
+        canvas.height = altoCSS * dpr;
+      }
+
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, anchoCSS, altoCSS);
+
+      const escala = Math.min((anchoCSS - 80) / sim.anchoPlaca, (altoCSS - 80) / sim.altoPlaca);
+      const centroX = anchoCSS / 2;
+      const centroY = altoCSS / 2;
+
+      const aCanvas = (x, y) => ({
+        x: centroX + x * escala,
+        y: centroY - y * escala
+      });
+
+      // 1. Placa PCB con aletas de disipación perimetrales
+      const anchoPlacaPx = sim.anchoPlaca * escala;
+      const altoPlacaPx = sim.altoPlaca * escala;
+
+      ctx.fillStyle = "#1e293b";
+      ctx.fillRect(centroX - anchoPlacaPx / 2 - 8, centroY - altoPlacaPx / 2 - 8, anchoPlacaPx + 16, altoPlacaPx + 16);
+
+      // Aletas de aluminio del disipador
+      ctx.fillStyle = "#64748b";
+      for (let x = centroX - anchoPlacaPx / 2; x <= centroX + anchoPlacaPx / 2; x += 12) {
+        ctx.fillRect(x - 3, centroY - altoPlacaPx / 2 - 14, 6, 8);
+        ctx.fillRect(x - 3, centroY + altoPlacaPx / 2 + 6, 6, 8);
+      }
+
+      // 2. Renderizado del mapa de calor térmico T(x, y)
+      const nx = sim.nx;
+      const ny = sim.ny;
+      const celdaW = anchoPlacaPx / nx + 1;
+      const celdaH = altoPlacaPx / ny + 1;
+
+      for (let iy = 0; iy < ny; iy++) {
+        const y = - (sim.altoPlaca / 2) + (iy / (ny - 1)) * sim.altoPlaca;
+        for (let ix = 0; ix < nx; ix++) {
+          const x = - (sim.anchoPlaca / 2) + (ix / (nx - 1)) * sim.anchoPlaca;
+          const temp = sim.grilla[iy][ix];
+
+          // Colormap térmico: Tamb (25°C = azul/índigo) -> 45°C (verde) -> 65°C (naranja) -> 85°C+ (rojo/blanco)
+          const fracT = Math.max(0, Math.min(1, (temp - sim.tAmbiente) / Math.max(15, sim.tMax - sim.tAmbiente)));
+          let r, g, b;
+          if (fracT < 0.35) {
+            const f = fracT / 0.35;
+            r = Math.floor(20 + 40 * f);
+            g = Math.floor(80 + 120 * f);
+            b = Math.floor(200 - 40 * f);
+          } else if (fracT < 0.7) {
+            const f = (fracT - 0.35) / 0.35;
+            r = Math.floor(60 + 180 * f);
+            g = Math.floor(200 - 30 * f);
+            b = Math.floor(40 - 20 * f);
+          } else {
+            const f = (fracT - 0.7) / 0.3;
+            r = Math.floor(240 + 15 * f);
+            g = Math.floor(140 * (1 - f * 0.7));
+            b = Math.floor(30 + 180 * f);
+          }
+
+          const pt = aCanvas(x, y);
+          ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+          ctx.fillRect(pt.x - celdaW / 2, pt.y - celdaH / 2, celdaW, celdaH);
+        }
+      }
+
+      // 3. Encapsulados de los 4 componentes chips
+      sim.chips.forEach(c => {
+        const pt = aCanvas(c.x, c.y);
+        const rPx = c.r * escala;
+
+        ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+        ctx.beginPath();
+        ctx.roundRect(pt.x - rPx, pt.y - rPx, rPx * 2, rPx * 2, 4);
+        ctx.fill();
+        ctx.strokeStyle = "#f8fafc";
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+
+        ctx.font = "bold 10px system-ui";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.fillText(c.nombre, pt.x, pt.y - 2);
+        ctx.font = "9px system-ui";
+        ctx.fillStyle = "#fbbf24";
+        ctx.fillText(`${c.temperatura.toFixed(1)}°C`, pt.x, pt.y + 10);
+      });
+
+      // 4. Retícula pulsante en el punto caliente (Hotspot)
+      const ptHot = aCanvas(sim.xHotspot, sim.yHotspot);
+      const pulso = 10 + Math.sin(tiempoAnimacion * 5) * 3;
+      ctx.beginPath();
+      ctx.arc(ptHot.x, ptHot.y, pulso, 0, 2 * Math.PI);
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(ptHot.x, ptHot.y, 3, 0, 2 * Math.PI);
+      ctx.fillStyle = "#ef4444";
+      ctx.fill();
+
+      ctx.font = "bold 10px system-ui";
+      ctx.fillStyle = "#ef4444";
+      ctx.textAlign = "center";
+      ctx.fillText(`Tmax: ${sim.tMax.toFixed(1)}°C`, ptHot.x, ptHot.y - pulso - 4);
+
+      // 5. Telemetría HUD
+      ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+      ctx.beginPath();
+      ctx.roundRect(14, 14, 290, 68, 8);
+      ctx.fill();
+
+      ctx.font = "bold 11px system-ui";
+      ctx.fillStyle = "#f8fafc";
+      ctx.textAlign = "left";
+      ctx.fillText(`Punto Caliente Tmax: ${sim.tMax.toFixed(1)} °C (Tamb: ${sim.tAmbiente}°C)`, 24, 34);
+      ctx.fillText(`Temperatura Media: ${sim.tPromedio.toFixed(1)} °C | Gradiente: ${(sim.tMax - sim.tPromedio).toFixed(1)} °C`, 24, 50);
+
+      ctx.fillStyle = sim.sinSolapamiento ? "#4ade80" : "#f87171";
+      const estadoTxt = sim.sinSolapamiento ? "LAYOUT VÁLIDO (Sin interferencias) ✓" : "VIOLACIÓN DE SEPARACIÓN FÍSICA ✕";
+      ctx.fillText(`Estado: ${estadoTxt}`, 24, 66);
+
+      tiempoAnimacion += 0.03;
+      this.animId = requestAnimationFrame(animar);
+    };
+
+    this.animId = requestAnimationFrame(animar);
+  }
+}
+
+// -------------------------------------------------------------------------
+// 12. VISUALIZADOR DE MODELOS DINÁMICOS LOW-CODE MULTI-NATURALEZA
+// -------------------------------------------------------------------------
+export class VisualizadorDinamico {
+  constructor() {
+    this.animId = null;
+  }
+
+  detener() {
+    if (this.animId !== null) {
+      cancelAnimationFrame(this.animId);
+      this.animId = null;
+    }
+  }
+
+  render(contenedor, genoma, entrada, contexto = {}) {
+    if (!contenedor) return;
+    this.detener();
+
     const modelo = contexto.modelo;
+    const tipo = modelo?.tipoVisualizacion || modelo?.definicionCruda?.tipoVisualizacion || "calibracion";
     const varsDef = modelo?.variables || (modelo?.crearGenoma ? modelo.crearGenoma() : []);
 
+    // 1. Representación de Campo de Potencial 2D
+    if (tipo === "campo_potencial_2d") {
+      this._renderizarCampoPotencialDinamico(contenedor, genoma, varsDef, contexto);
+      return;
+    }
+
+    // 2. Representación de Campo Vectorial 2D
+    if (tipo === "campo_vectorial_2d") {
+      this._renderizarCampoVectorialDinamico(contenedor, genoma, varsDef, contexto);
+      return;
+    }
+
+    // 3. Representación de Trayectoria Espacial 2D
+    if (tipo === "trayectoria_particulas_2d") {
+      this._renderizarTrayectoriaDinamica(contenedor, genoma, varsDef, contexto);
+      return;
+    }
+
+    // 4. Representación de Serie Temporal u Oscilador
+    if (tipo === "serie_temporal") {
+      this._renderizarSerieTemporalDinamica(contenedor, genoma, varsDef, contexto);
+      return;
+    }
+
+    // 5. Representación de Mecanismo Articulado 2D
+    if (tipo === "mecanismo_barras_2d") {
+      this._renderizarMecanismoDinamico(contenedor, genoma, varsDef, contexto);
+      return;
+    }
+
+    // 6. Representación de Distribución de Recursos / Cargas
+    if (tipo === "distribucion_recursos") {
+      this._renderizarDistribucionRecursos(contenedor, genoma, varsDef, contexto);
+      return;
+    }
+
+    // 7. Representación por defecto: Calibración y medidores de variables
+    this._renderizarCalibracionVariables(contenedor, genoma, varsDef, contexto);
+  }
+
+  _renderizarCampoPotencialDinamico(contenedor, genoma, varsDef, contexto) {
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 360;
+      canvas.style.width = "100%";
+      canvas.style.height = "360px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+    const anchoCSS = canvas.clientWidth || 800;
+    const altoCSS = canvas.clientHeight || 360;
+
+    if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
+      canvas.width = anchoCSS * dpr;
+      canvas.height = altoCSS * dpr;
+    }
+
+    ctx.resetTransform();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, anchoCSS, altoCSS);
+
+    // Muestreo de campo escalar derivado de los genes
+    const celdasX = 30;
+    const celdasY = 20;
+    const cw = anchoCSS / celdasX;
+    const ch = altoCSS / celdasY;
+
+    // Detecta pares (x, y) de las variables
+    const puntosClave = [];
+    for (let i = 0; i < genoma.length - 1; i += 2) {
+      puntosClave.push({ x: genoma[i], y: genoma[i + 1] });
+    }
+
+    for (let ix = 0; ix < celdasX; ix++) {
+      for (let iy = 0; iy < celdasY; iy++) {
+        const mx = (ix / (celdasX - 1) - 0.5) * 80;
+        const my = (iy / (celdasY - 1) - 0.5) * 60;
+        let pot = 0;
+        puntosClave.forEach((p, idx) => {
+          const d = Math.hypot(mx - p.x, my - p.y);
+          pot += 100 / Math.sqrt(d * d + 9);
+        });
+
+        const norm = Math.max(0, Math.min(1, pot / 60));
+        ctx.fillStyle = `rgba(${Math.floor(240 * norm)}, ${Math.floor(100 + 120 * (1 - norm))}, ${Math.floor(255 * (1 - norm))}, 0.45)`;
+        ctx.fillRect(ix * cw, iy * ch, cw + 1, ch + 1);
+      }
+    }
+
+    // Puntos destacados de variables
+    puntosClave.forEach((p, idx) => {
+      const px = anchoCSS / 2 + (p.x / 40) * (anchoCSS / 2);
+      const py = altoCSS / 2 - (p.y / 30) * (altoCSS / 2);
+
+      ctx.beginPath();
+      ctx.arc(px, py, 7, 0, 2 * Math.PI);
+      ctx.fillStyle = "#f59e0b";
+      ctx.fill();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.font = "bold 10px system-ui";
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      ctx.fillText(`P${idx + 1} (${p.x.toFixed(1)}, ${p.y.toFixed(1)})`, px, py - 11);
+    });
+
+    // HUD
+    ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+    ctx.beginPath();
+    ctx.roundRect(14, 14, 260, 50, 8);
+    ctx.fill();
+    ctx.font = "bold 11px system-ui";
+    ctx.fillStyle = "#f8fafc";
+    ctx.textAlign = "left";
+    ctx.fillText("Naturaleza: Campo Escalar / Potencial 2D", 24, 34);
+    ctx.fillText(`Variables mapeadas: ${varsDef.length} genes`, 24, 50);
+  }
+
+  _renderizarCampoVectorialDinamico(contenedor, genoma, varsDef, contexto) {
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 360;
+      canvas.style.width = "100%";
+      canvas.style.height = "360px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+    const anchoCSS = canvas.clientWidth || 800;
+    const altoCSS = canvas.clientHeight || 360;
+
+    if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
+      canvas.width = anchoCSS * dpr;
+      canvas.height = altoCSS * dpr;
+    }
+
+    ctx.resetTransform();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, anchoCSS, altoCSS);
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.03)";
+    ctx.fillRect(0, 0, anchoCSS, altoCSS);
+
+    const vortexX = genoma[0] !== undefined ? genoma[0] : 0;
+    const vortexY = genoma[1] !== undefined ? genoma[1] : 0;
+    const circ = genoma[2] !== undefined ? genoma[2] : 2;
+
+    for (let x = 30; x < anchoCSS; x += 35) {
+      for (let y = 30; y < altoCSS; y += 35) {
+        const dx = (x - anchoCSS / 2) - vortexX;
+        const dy = (y - altoCSS / 2) - vortexY;
+        const r = Math.hypot(dx, dy) || 1;
+        const vx = - (dy / r) * (circ * 4);
+        const vy = (dx / r) * (circ * 4);
+        const len = Math.min(16, Math.hypot(vx, vy));
+
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + (vx / (len || 1)) * len, y + (vy / (len || 1)) * len);
+        ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+    }
+
+    ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+    ctx.beginPath();
+    ctx.roundRect(14, 14, 260, 50, 8);
+    ctx.fill();
+    ctx.font = "bold 11px system-ui";
+    ctx.fillStyle = "#f8fafc";
+    ctx.textAlign = "left";
+    ctx.fillText("Naturaleza: Campo Vectorial de Flujo", 24, 34);
+    ctx.fillText(`Circulación del vórtice: ${circ.toFixed(2)}`, 24, 50);
+  }
+
+  _renderizarTrayectoriaDinamica(contenedor, genoma, varsDef, contexto) {
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 360;
+      canvas.style.width = "100%";
+      canvas.style.height = "360px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+    const anchoCSS = canvas.clientWidth || 800;
+    const altoCSS = canvas.clientHeight || 360;
+
+    if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
+      canvas.width = anchoCSS * dpr;
+      canvas.height = altoCSS * dpr;
+    }
+
+    ctx.resetTransform();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, anchoCSS, altoCSS);
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.02)";
+    ctx.fillRect(0, 0, anchoCSS, altoCSS);
+
+    // Dibuja waypoints conectados
+    const puntos = [{ x: 40, y: altoCSS / 2 }];
+    for (let i = 0; i < genoma.length - 1; i += 2) {
+      puntos.push({
+        x: anchoCSS / 2 + (genoma[i] / 50) * (anchoCSS * 0.4),
+        y: altoCSS / 2 - (genoma[i + 1] / 50) * (altoCSS * 0.4)
+      });
+    }
+    puntos.push({ x: anchoCSS - 60, y: altoCSS / 2 - 30 });
+
+    ctx.beginPath();
+    ctx.strokeStyle = "#10b981";
+    ctx.lineWidth = 2.5;
+    puntos.forEach((p, idx) => {
+      if (idx === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    });
+    ctx.stroke();
+
+    puntos.forEach((p, idx) => {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 5, 0, 2 * Math.PI);
+      ctx.fillStyle = idx === 0 ? "#38bdf8" : (idx === puntos.length - 1 ? "#10b981" : "#f59e0b");
+      ctx.fill();
+    });
+
+    ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+    ctx.beginPath();
+    ctx.roundRect(14, 14, 270, 50, 8);
+    ctx.fill();
+    ctx.font = "bold 11px system-ui";
+    ctx.fillStyle = "#f8fafc";
+    ctx.textAlign = "left";
+    ctx.fillText("Naturaleza: Trayectoria / Waypoints 2D", 24, 34);
+    ctx.fillText(`Ruta con ${puntos.length} puntos nodales`, 24, 50);
+  }
+
+  _renderizarSerieTemporalDinamica(contenedor, genoma, varsDef, contexto) {
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 360;
+      canvas.style.width = "100%";
+      canvas.style.height = "360px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+    const anchoCSS = canvas.clientWidth || 800;
+    const altoCSS = canvas.clientHeight || 360;
+
+    if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
+      canvas.width = anchoCSS * dpr;
+      canvas.height = altoCSS * dpr;
+    }
+
+    ctx.resetTransform();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, anchoCSS, altoCSS);
+
+    const m = genoma[0] || 1;
+    const c = genoma[1] || 0.5;
+    const k = genoma[2] || 10;
+    const wn = Math.sqrt(k / m);
+    const zeta = c / (2 * Math.sqrt(m * k));
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.03)";
+    ctx.fillRect(50, 30, anchoCSS - 75, altoCSS - 60);
+
+    // Curva y(t)
+    ctx.beginPath();
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 2.5;
+    const nPts = 100;
+    for (let i = 0; i < nPts; i++) {
+      const t = (i / nPts) * 6.0;
+      const yVal = 1 - Math.exp(-zeta * wn * t) * Math.cos(wn * t);
+      const px = 50 + (i / nPts) * (anchoCSS - 75);
+      const py = altoCSS - 30 - yVal * (altoCSS * 0.45);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+    ctx.beginPath();
+    ctx.roundRect(14, 14, 270, 50, 8);
+    ctx.fill();
+    ctx.font = "bold 11px system-ui";
+    ctx.fillStyle = "#f8fafc";
+    ctx.textAlign = "left";
+    ctx.fillText("Naturaleza: Serie Temporal / Oscilador", 24, 34);
+    ctx.fillText(`wn = ${wn.toFixed(2)} rad/s | zeta = ${zeta.toFixed(2)}`, 24, 50);
+  }
+
+  _renderizarMecanismoDinamico(contenedor, genoma, varsDef, contexto) {
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 360;
+      canvas.style.width = "100%";
+      canvas.style.height = "360px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+    const anchoCSS = canvas.clientWidth || 800;
+    const altoCSS = canvas.clientHeight || 360;
+
+    if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
+      canvas.width = anchoCSS * dpr;
+      canvas.height = altoCSS * dpr;
+    }
+
+    ctx.resetTransform();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, anchoCSS, altoCSS);
+
+    const l1 = genoma[0] || 30;
+    const l2 = genoma[1] || 25;
+    const a1 = ((genoma[3] || 30) * Math.PI) / 180;
+    const a2 = a1 + ((genoma[4] || 45) * Math.PI) / 180;
+
+    const p0 = { x: anchoCSS * 0.4, y: altoCSS * 0.65 };
+    const p1 = { x: p0.x + l1 * 2 * Math.cos(a1), y: p0.y - l1 * 2 * Math.sin(a1) };
+    const p2 = { x: p1.x + l2 * 2 * Math.cos(a2), y: p1.y - l2 * 2 * Math.sin(a2) };
+
+    // Dibuja barras
+    ctx.beginPath();
+    ctx.moveTo(p0.x, p0.y);
+    ctx.lineTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 6;
+    ctx.lineCap = "round";
+    ctx.stroke();
+
+    // Pernos
+    [p0, p1, p2].forEach(p => {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 5, 0, 2 * Math.PI);
+      ctx.fillStyle = "#f59e0b";
+      ctx.fill();
+    });
+
+    ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+    ctx.beginPath();
+    ctx.roundRect(14, 14, 270, 50, 8);
+    ctx.fill();
+    ctx.font = "bold 11px system-ui";
+    ctx.fillStyle = "#f8fafc";
+    ctx.textAlign = "left";
+    ctx.fillText("Naturaleza: Mecanismo Articulado 2D", 24, 34);
+    ctx.fillText(`Efector en (${p2.x.toFixed(0)}, ${p2.y.toFixed(0)}) px`, 24, 50);
+  }
+
+  _renderizarDistribucionRecursos(contenedor, genoma, varsDef, contexto) {
+    let htmlBarras = "";
+    varsDef.forEach((v, idx) => {
+      const val = genoma[idx] !== undefined ? genoma[idx] : 0;
+      const pct = Math.max(0, Math.min(100, val));
+      htmlBarras += `
+        <div style="margin-bottom: 0.85rem;">
+          <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.25rem;">
+            <span style="font-weight: 600;">📦 ${v.nombre}</span>
+            <span style="font-family: monospace; font-weight: 600; color: var(--primario);">${val.toFixed(1)} u</span>
+          </div>
+          <div style="position: relative; height: 20px; background: var(--bg-input); border-radius: 6px; overflow: hidden; border: 1px solid var(--borde);">
+            <div style="width: ${pct}%; height: 100%; background: linear-gradient(90deg, var(--primario), var(--exito));"></div>
+          </div>
+        </div>
+      `;
+    });
+
+    contenedor.innerHTML = `
+      <div style="padding: 1.25rem; background: var(--bg-tarjeta); border: 1px solid var(--borde); border-radius: var(--radio-sm);">
+        <h4 style="font-size: 0.9rem; margin-bottom: 1rem; color: var(--texto-principal);">Distribución y Asignación de Recursos</h4>
+        ${htmlBarras}
+      </div>
+    `;
+  }
+
+  _renderizarCalibracionVariables(contenedor, genoma, varsDef, contexto) {
     let htmlBarras = "";
     varsDef.forEach((v, idx) => {
       const val = genoma[idx] !== undefined ? genoma[idx] : 0;
@@ -1487,6 +2968,11 @@ const visualizadoresRegistrados = {
   "brazo-robotico": new VisualizadorBrazo(),
   "cohete-landing": new VisualizadorCohete(),
   "controlador-pid": new VisualizadorPID(),
+  "campo-potencial": new VisualizadorPotencial(),
+  "orbita-transferencia": new VisualizadorOrbita(),
+  "filtro-rlc": new VisualizadorFiltro(),
+  "armadura-puente": new VisualizadorArmadura(),
+  "distribucion-termica": new VisualizadorTermico(),
   "pata-caminante": new VisualizadorCaminante(),
   "balanceo-fases-trifasico": new VisualizadorFases()
 };
@@ -1506,4 +2992,5 @@ export function detenerTodosLosVisualizadores() {
   Object.values(visualizadoresRegistrados).forEach(v => {
     if (typeof v.detener === "function") v.detener();
   });
+  visualizadorDinamicoCompartido.detener();
 }

@@ -90,7 +90,10 @@ export class AppView {
         inputNombre: document.getElementById("input-nombre-modelo"),
         inputDesc: document.getElementById("input-desc-modelo"),
         tbody: document.getElementById("tbody-variables-constructor"),
-        textareaCodigo: document.getElementById("textarea-codigo-evaluacion")
+        textareaCodigo: document.getElementById("textarea-codigo-evaluacion"),
+        selectTipoVisualizacion: document.getElementById("select-tipo-visualizacion"),
+        selectPlantilla: document.getElementById("select-plantilla-constructor"),
+        hintTipoVisualizacion: document.getElementById("hint-tipo-visualizacion")
       },
       biblioteca: {
         modal: document.getElementById("modal-biblioteca-simulaciones"),
@@ -169,7 +172,10 @@ export class AppView {
       // Renderiza la previsualización del modelo con su solución inicial.
       if (genomaInicial && this.dom.contenedorDibujoModelo) {
         const visualizador = obtenerVisualizador(modelo.id);
-        visualizador.render(this.dom.contenedorDibujoModelo, genomaInicial, this.vm.entradasModelo);
+        visualizador.render(this.dom.contenedorDibujoModelo, genomaInicial, this.vm.entradasModelo, {
+          modelo,
+          fitness: null
+        });
         this.dom.textoDescribirModelo.textContent = modelo.describir(genomaInicial, this.vm.entradasModelo);
       }
     });
@@ -222,7 +228,10 @@ export class AppView {
       const genomaADibujar = datos.mejorSolucion?.genoma;
       if (genomaADibujar && this.dom.contenedorDibujoModelo) {
         const visualizador = obtenerVisualizador(this.vm.modeloActual.id);
-        visualizador.render(this.dom.contenedorDibujoModelo, genomaADibujar, this.vm.entradasModelo);
+        visualizador.render(this.dom.contenedorDibujoModelo, genomaADibujar, this.vm.entradasModelo, {
+          modelo: this.vm.modeloActual,
+          fitness: datos.mejorSolucion?.fitness
+        });
         this.dom.textoDescribirModelo.textContent = this.vm.modeloActual.describir(genomaADibujar, this.vm.entradasModelo);
       }
     });
@@ -237,7 +246,10 @@ export class AppView {
         });
       }
       const visualizador = obtenerVisualizador(modelo.id);
-      visualizador.render(this.dom.contenedorDibujoModelo, individuo.genoma, entrada);
+      visualizador.render(this.dom.contenedorDibujoModelo, individuo.genoma, entrada, {
+        modelo,
+        fitness: individuo.fitness
+      });
       this.dom.textoDescribirModelo.textContent = modelo.describir(individuo.genoma, entrada);
     });
 

@@ -2,10 +2,98 @@
 // MÓDULO: CONSTRUCTOR DE MODELOS DINÁMICOS LOW-CODE (COMPILACIÓN Y VISUALIZADOR)
 // =========================================================================
 
+// Plantillas preconfiguradas para inspirar y servir de base a nuevas simulaciones de diversas naturalezas.
+export const PLANTILLAS_SIMULACION = {
+  "campo_potencial": {
+    nombre: "Campo de Potencial Electrostático 2D",
+    descripcion: "Optimiza la posición y polaridad de electrodos deflectores para guiar partículas minimizando la energía del campo y evitando barreras.",
+    tipoVisualizacion: "campo_potencial_2d",
+    variables: [
+      { nombre: "x1", tipo: "continuo", min: -35, max: 35 },
+      { nombre: "y1", tipo: "continuo", min: -30, max: 30 },
+      { nombre: "q1", tipo: "continuo", min: -3.0, max: 3.0 },
+      { nombre: "x2", tipo: "continuo", min: -35, max: 35 },
+      { nombre: "y2", tipo: "continuo", min: -30, max: 30 },
+      { nombre: "q2", tipo: "continuo", min: -3.0, max: 3.0 }
+    ],
+    codigoEvaluacion: `// Colector en (x=35, y=0) y barrera prohibida en (0, 0)\nconst distColector = Math.hypot(vars.x2 - 35, vars.y2);\nconst distBarrera = Math.hypot(vars.x1, vars.y1);\nconst colision = distBarrera < 8.0 ? 250 : 0;\nconst esfuerzoCargas = Math.abs(vars.q1) + Math.abs(vars.q2);\n\n// Retorna [f1 (Precisión), f2 (Energía)] para Frente de Pareto NSGA-II\nreturn [distColector + colision, esfuerzoCargas + (colision > 0 ? 5.0 : 0)];`
+  },
+  "campo_vectorial": {
+    nombre: "Vórtices y Campo Vectorial de Flujo",
+    descripcion: "Navegación y control en un campo vectorial de velocidades con vórtices rotacionales y corrientes forzadas.",
+    tipoVisualizacion: "campo_vectorial_2d",
+    variables: [
+      { nombre: "vortexX", tipo: "continuo", min: -30, max: 30 },
+      { nombre: "vortexY", tipo: "continuo", min: -25, max: 25 },
+      { nombre: "circulacion", tipo: "continuo", min: 1.0, max: 10.0 },
+      { nombre: "empujeX", tipo: "continuo", min: -10, max: 10 },
+      { nombre: "empujeY", tipo: "continuo", min: -10, max: 10 }
+    ],
+    codigoEvaluacion: `// Minimizar desvío respecto al vórtice deseado en (15, 10)\nconst dVortex = Math.hypot(vars.vortexX - 15, vars.vortexY - 10);\nconst esfuerzo = Math.hypot(vars.empujeX, vars.empujeY);\nreturn [dVortex, esfuerzo * 0.3 + Math.abs(vars.circulacion - 6.0)];`
+  },
+  "trayectoria": {
+    nombre: "Navegación Espacial con Obstáculos",
+    descripcion: "Optimización de waypoints cinemáticos para alcanzar un blanco eludiendo zonas circulares de exclusión.",
+    tipoVisualizacion: "trayectoria_particulas_2d",
+    variables: [
+      { nombre: "wp1X", tipo: "continuo", min: -40, max: 40 },
+      { nombre: "wp1Y", tipo: "continuo", min: -30, max: 30 },
+      { nombre: "wp2X", tipo: "continuo", min: -40, max: 40 },
+      { nombre: "wp2Y", tipo: "continuo", min: -30, max: 30 },
+      { nombre: "velocidad", tipo: "continuo", min: 5, max: 30 }
+    ],
+    codigoEvaluacion: `// Blanco en (45, 20) y obstáculo en (15, 5, radio=12)\nconst distBlanco = Math.hypot(vars.wp2X - 45, vars.wp2Y - 20);\nconst distObs = Math.hypot(vars.wp1X - 15, vars.wp1Y - 5);\nconst penalizacionColision = distObs < 12.0 ? 300 : 0;\nconst longitudRuta = Math.hypot(vars.wp1X, vars.wp1Y) + Math.hypot(vars.wp2X - vars.wp1X, vars.wp2Y - vars.wp1Y);\nreturn [distBlanco + penalizacionColision, longitudRuta * 0.15 + (penalizacionColision > 0 ? 5.0 : 0)];`
+  },
+  "serie_temporal": {
+    nombre: "Oscilador Dinámico Amortiguado",
+    descripcion: "Sintonización de amortiguamiento y frecuencia para respuesta temporal rápida sin sobrepico oscilatorio.",
+    tipoVisualizacion: "serie_temporal",
+    variables: [
+      { nombre: "masa", tipo: "continuo", min: 0.5, max: 10.0 },
+      { nombre: "amortiguamiento", tipo: "continuo", min: 0.1, max: 5.0 },
+      { nombre: "rigidez", tipo: "continuo", min: 2.0, max: 50.0 },
+      { nombre: "ganancia", tipo: "continuo", min: 1.0, max: 20.0 }
+    ],
+    codigoEvaluacion: `// Frecuencia natural wn y coeficiente de amortiguamiento zeta\nconst wn = Math.sqrt(vars.rigidez / vars.masa);\nconst zeta = vars.amortiguamiento / (2 * Math.sqrt(vars.masa * vars.rigidez));\nconst sobrepico = zeta < 1.0 ? Math.exp((-Math.PI * zeta) / Math.sqrt(Math.max(0.01, 1 - zeta * zeta))) * 100 : 0;\nconst tEstablecimiento = 4.0 / Math.max(0.1, zeta * wn);\nreturn [sobrepico, tEstablecimiento];`
+  },
+  "mecanismo": {
+    nombre: "Mecanismo Articulado de 3 Barras",
+    descripcion: "Optimiza la longitud y ángulos de un mecanismo articulado planar para alcanzar un objetivo cinemático.",
+    tipoVisualizacion: "mecanismo_barras_2d",
+    variables: [
+      { nombre: "longitud1", tipo: "continuo", min: 15, max: 50 },
+      { nombre: "longitud2", tipo: "continuo", min: 10, max: 40 },
+      { nombre: "longitud3", tipo: "continuo", min: 5, max: 30 },
+      { nombre: "angulo1", tipo: "continuo", min: -180, max: 180 },
+      { nombre: "angulo2", tipo: "continuo", min: -180, max: 180 }
+    ],
+    codigoEvaluacion: `const a1 = (vars.angulo1 * Math.PI) / 180;\nconst a2 = a1 + (vars.angulo2 * Math.PI) / 180;\nconst x = vars.longitud1 * Math.cos(a1) + vars.longitud2 * Math.cos(a2);\nconst y = vars.longitud1 * Math.sin(a1) + vars.longitud2 * Math.sin(a2);\nconst distBlanco = Math.hypot(x - 45, y - 25);\nconst masaTotal = vars.longitud1 + vars.longitud2 + vars.longitud3;\nreturn [distBlanco, masaTotal * 0.1];`
+  },
+  "distribucion": {
+    nombre: "Distribución de Cargas y Recursos",
+    descripcion: "Partición y balanceo de carga computacional entre servidores con penalización de saturación.",
+    tipoVisualizacion: "distribucion_recursos",
+    variables: [
+      { nombre: "srvWeb", tipo: "continuo", min: 0, max: 100 },
+      { nombre: "srvApp", tipo: "continuo", min: 0, max: 100 },
+      { nombre: "srvDB", tipo: "continuo", min: 0, max: 100 },
+      { nombre: "srvCache", tipo: "continuo", min: 0, max: 100 }
+    ],
+    codigoEvaluacion: `const cargas = [vars.srvWeb, vars.srvApp, vars.srvDB, vars.srvCache];\nconst suma = cargas.reduce((a, b) => a + b, 0);\nconst desbalance = Math.max(...cargas) - Math.min(...cargas);\nlet sobrecarga = 0;\ncargas.forEach(c => { if (c > 80) sobrecarga += (c - 80) * 4; });\nconst errorTotal = Math.abs(suma - 250);\nreturn [desbalance + sobrecarga, errorTotal];`
+  }
+};
+
+// Obtiene una copia profunda de una plantilla predefinida a partir de su clave.
+export function obtenerPlantillaSimulacion(clave) {
+  if (PLANTILLAS_SIMULACION[clave]) {
+    return JSON.parse(JSON.stringify(PLANTILLAS_SIMULACION[clave]));
+  }
+  return null;
+}
+
 // Compila de forma segura la función de evaluación ingresada por el usuario utilizando new Function envuelto en try/catch.
 export function compilarFuncionEvaluacion(codigoFuente) {
   try {
-    // new Function crea una función pura que recibe el diccionario de variables (vars) y el generador aleatorio (rng).
     const fn = new Function("vars", "rng", codigoFuente);
     return { ok: true, fn };
   } catch (error) {
@@ -111,11 +199,13 @@ export function compilarModeloDinamico(definicionCruda) {
   }));
 
   const modeloId = definicionCruda.id || generarIdModelo(definicionCruda.nombre);
+  const tipoVisualizacion = definicionCruda.tipoVisualizacion || "calibracion";
 
   return {
     id: modeloId,
     nombre: definicionCruda.nombre.trim(),
     descripcion: (definicionCruda.descripcion || "Modelo matemático personalizado creado dinámicamente.").trim(),
+    tipoVisualizacion,
     esDinamico: true,
     usaWasm: false,
     usaRuido: false,
@@ -123,6 +213,7 @@ export function compilarModeloDinamico(definicionCruda) {
     definicionCruda: {
       ...definicionCruda,
       id: modeloId,
+      tipoVisualizacion,
       variables: varsDef
     },
 
@@ -176,6 +267,7 @@ export function compilarModeloDinamico(definicionCruda) {
       let texto = `MODELO DINÁMICO: ${definicionCruda.nombre.toUpperCase()}\n`;
       texto += `========================================================================\n`;
       texto += `Descripción: ${definicionCruda.descripcion || "Sin descripción"}\n`;
+      texto += `Tipo de Representación: ${tipoVisualizacion}\n`;
       texto += `Identificador: ${modeloId}\n\n`;
       texto += `VARIABLES DE DECISIÓN OPTIMIZADAS:\n`;
       texto += `  Variable        | Tipo      | Rango [Mín, Máx]       | Valor Encontrado\n`;
@@ -188,7 +280,8 @@ export function compilarModeloDinamico(definicionCruda) {
         texto += `  ${v.nombre.padEnd(15, " ")} | ${v.tipo.padEnd(9, " ")} | ${rangoStr.padEnd(22, " ")} | ${valStr}\n`;
       });
 
-      texto += `\nFITNESS FINAL: ${fitness.toFixed(6)} (Menor = Mejor)\n`;
+      const fitStr = Array.isArray(fitness) ? `[${fitness.map(f => f.toFixed(4)).join(", ")}]` : fitness.toFixed(6);
+      texto += `\nFITNESS FINAL: ${fitStr} (Menor = Mejor)\n`;
       texto += `========================================================================\n`;
 
       return texto;
@@ -215,6 +308,7 @@ export function clonarModeloExistente(modeloOriginal, nuevoNombre = null) {
     id: `dinamico-${modeloOriginal.id}-${Math.floor(Math.random() * 9000 + 1000)}`,
     nombre: nombreCopia,
     descripcion: `Variante personalizada basada en ${modeloOriginal.nombre}. Modifique las variables y función de evaluación.`,
+    tipoVisualizacion: modeloOriginal.tipoVisualizacion || "calibracion",
     variables: genes.map((g, i) => ({
       nombre: g.nombre || `var${i + 1}`,
       tipo: g.tipo || "continuo",
@@ -240,24 +334,7 @@ export function exportarSimulacionJSON(objetoSimulacion) {
   return JSON.stringify(objetoSimulacion, null, 2);
 }
 
-// Importa y valida una definición de modelo dinámico a partir de una cadena JSON o archivo cargado.
+// Importa y valida una cadena JSON deserializándola a objeto de simulación.
 export function importarSimulacionJSON(jsonString) {
-  try {
-    const parseado = JSON.parse(jsonString);
-    if (!parseado || typeof parseado !== "object") {
-      throw new Error("El archivo no contiene un objeto JSON válido.");
-    }
-    if (parseado.variables && parseado.codigoEvaluacion) {
-      validarDefinicionModelo(parseado);
-      if (!parseado.id) {
-        parseado.id = `${generarIdModelo(parseado.nombre)}-${Math.floor(Math.random() * 9000 + 1000)}`;
-      }
-      return { tipo: "modelo", datos: parseado };
-    } else if (parseado.modeloId && parseado.parametrosMotor) {
-      return { tipo: "preset", datos: parseado };
-    }
-    throw new Error("La estructura del JSON no corresponde a un modelo dinámico ni a un preset de simulación.");
-  } catch (error) {
-    throw new Error(`Error importando JSON: ${error.message}`);
-  }
+  return JSON.parse(jsonString);
 }
