@@ -53,8 +53,8 @@ export const ModeloBalanceoFases = {
   ],
 
   // Crea el genoma definiendo un gen categórico (0=R, 1=S, 2=T) por cada circuito recibido.
-  crearGenoma(entrada) {
-    const listaCircuitos = entrada.circuitos || [];
+  crearGenoma(entrada = {}) {
+    const listaCircuitos = entrada?.circuitos || [500, 450, 400, 350, 300, 250, 200, 150];
     // Mapea cada circuito a un gen con valores discretos entre 0 y 2.
     return listaCircuitos.map(() => ({
       tipo: "categorico",

@@ -1,601 +1,903 @@
-    /* Variables de diseño con soporte para tema claro y tema oscuro mediante prefers-color-scheme */
-    :root {
-      --bg-principal: #f8fafc;
-      --bg-tarjeta: #ffffff;
-      --bg-input: #f1f5f9;
-      --borde: #e2e8f0;
-      --texto-principal: #0f172a;
-      --texto-secundario: #64748b;
-      --primario: #2563eb;
-      --primario-hover: #1d4ed8;
-      --exito: #10b981;
-      --exito-hover: #059669;
-      --aviso: #f59e0b;
-      --aviso-hover: #d97706;
-      --peligro: #ef4444;
-      --peligro-hover: #dc2626;
-      --radio: 12px;
-      --radio-sm: 8px;
-      --sombra: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-      --fuente: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg-principal: #0b1120;
-        --bg-tarjeta: #1e293b;
-        --bg-input: #334155;
-        --borde: #334155;
-        --texto-principal: #f8fafc;
-        --texto-secundario: #94a3b8;
-        --primario: #3b82f6;
-        --primario-hover: #60a5fa;
-        --sombra: 0 4px 10px rgba(0, 0, 0, 0.35);
-      }
-    }
-
-    /* Estilos globales y reseteo básico */
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      font-family: var(--fuente);
-      background-color: var(--bg-principal);
-      color: var(--texto-principal);
-      line-height: 1.5;
-      padding: 1rem;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    /* Contenedor principal responsive (diseñado móvil primero) */
-    .app-contenedor {
-      width: 100%;
-      max-width: 1050px;
-      display: flex;
-      flex-direction: column;
-      gap: 1.25rem;
-    }
-
-    /* Encabezado */
-    header {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      align-items: center;
-      gap: 0.75rem;
-      padding-bottom: 0.5rem;
-      border-bottom: 2px solid var(--borde);
-    }
-
-    .titulo-app {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 1.5rem;
-      font-weight: 800;
-      color: var(--primario);
-    }
-
-    .insignia-pwa {
-      font-size: 0.75rem;
-      font-weight: 600;
-      background: var(--bg-input);
-      color: var(--texto-secundario);
-      padding: 0.2rem 0.6rem;
-      border-radius: 999px;
-      border: 1px solid var(--borde);
-    }
-
-    /* Tarjetas y módulos */
-    .tarjeta {
-      background: var(--bg-tarjeta);
-      border: 1px solid var(--borde);
-      border-radius: var(--radio);
-      padding: 1.25rem;
-      box-shadow: var(--sombra);
-    }
-
-    .tarjeta-titulo {
-      font-size: 1.1rem;
-      font-weight: 700;
-      margin-bottom: 0.75rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.5rem;
-    }
-
-    /* Formularios y campos de entrada */
-    .grupo-campo {
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-      margin-bottom: 0.85rem;
-    }
-
-    label {
-      font-size: 0.875rem;
-      font-weight: 600;
-      color: var(--texto-principal);
-    }
-
-    .descripcion-campo {
-      font-size: 0.75rem;
-      color: var(--texto-secundario);
-    }
-
-    input, select, textarea {
-      width: 100%;
-      padding: 0.65rem 0.85rem;
-      border-radius: var(--radio-sm);
-      border: 1px solid var(--borde);
-      background-color: var(--bg-input);
-      color: var(--texto-principal);
-      font-size: 0.95rem;
-      font-family: inherit;
-      transition: border-color 0.15s ease, box-shadow 0.15s ease;
-      min-height: 44px;
-    }
-
-    input:focus, select:focus, textarea:focus {
-      outline: none;
-      border-color: var(--primario);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
-    }
-
-    /* Botonera de control táctil y accesible */
-    .botonera {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      margin-top: 1rem;
-    }
-
-    button {
-      cursor: pointer;
-      font-family: inherit;
-      font-weight: 600;
-      font-size: 0.95rem;
-      padding: 0.75rem 1.25rem;
-      border-radius: var(--radio-sm);
-      border: none;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.45rem;
-      min-height: 48px;
-      transition: transform 0.1s ease, background-color 0.15s ease, opacity 0.15s ease;
-      user-select: none;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    button:active {
-      transform: scale(0.98);
-    }
-
-    button:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .btn-exito {
-      background-color: var(--exito);
-      color: #ffffff;
-      flex: 1 1 140px;
-    }
-    .btn-exito:hover:not(:disabled) { background-color: var(--exito-hover); }
-
-    .btn-aviso {
-      background-color: var(--aviso);
-      color: #ffffff;
-      flex: 1 1 120px;
-    }
-    .btn-aviso:hover:not(:disabled) { background-color: var(--aviso-hover); }
-
-    .btn-peligro {
-      background-color: var(--peligro);
-      color: #ffffff;
-      flex: 1 1 120px;
-    }
-    .btn-peligro:hover:not(:disabled) { background-color: var(--peligro-hover); }
-
-    .btn-secundario {
-      background-color: var(--bg-input);
-      color: var(--texto-principal);
-      border: 1px solid var(--borde);
-    }
-    .btn-secundario:hover:not(:disabled) {
-      background-color: var(--borde);
-    }
-
-    /* Cuadrículas adaptables para pantallas móviles y escritorios */
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 1rem;
-    }
-
-    .grid-params {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-      gap: 0.75rem;
-    }
-
-    @media (min-width: 768px) {
-      .grid-2 {
-        grid-template-columns: 1fr 1fr;
-      }
-    }
-
-    /* Barra de progreso de generaciones */
-    .barra-progreso-contenedor {
-      width: 100%;
-      height: 10px;
-      background: var(--bg-input);
-      border-radius: 999px;
-      overflow: hidden;
-      margin: 0.85rem 0 0.4rem 0;
-    }
-
-    .barra-progreso-relleno {
-      height: 100%;
-      width: 0%;
-      background: var(--primario);
-      transition: width 0.15s ease-out;
-    }
-
-    .indicadores-progreso {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.825rem;
-      color: var(--texto-secundario);
-      font-weight: 600;
-    }
-
-    /* Gráfico Canvas 2D */
-    .grafico-contenedor {
-      width: 100%;
-      position: relative;
-      margin-top: 0.75rem;
-      background: var(--bg-input);
-      border-radius: var(--radio-sm);
-      border: 1px solid var(--borde);
-      overflow: hidden;
-    }
-
-    canvas {
-      display: block;
-      width: 100%;
-      height: 220px;
-    }
-
-    .leyenda-grafico {
-      display: flex;
-      justify-content: center;
-      gap: 1.5rem;
-      padding: 0.5rem;
-      font-size: 0.8rem;
-      font-weight: 600;
-      border-top: 1px solid var(--borde);
-      background: var(--bg-tarjeta);
-    }
-
-    .item-leyenda {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-
-    .color-leyenda {
-      width: 14px;
-      height: 4px;
-      border-radius: 2px;
-    }
-
-    /* Carteles y avisos de validación */
-    .alerta {
-      padding: 0.75rem 1rem;
-      border-radius: var(--radio-sm);
-      font-size: 0.875rem;
-      font-weight: 500;
-      margin-bottom: 1rem;
-      display: none;
-    }
-
-    .alerta-error {
-      background-color: rgba(239, 68, 68, 0.12);
-      border: 1px solid var(--peligro);
-      color: var(--peligro);
-      display: block;
-    }
-
-    /* Tablas dinámicas y editables */
-    .tabla-responsive {
-      width: 100%;
-      overflow-x: auto;
-      margin-top: 0.5rem;
-      border-radius: var(--radio-sm);
-      border: 1px solid var(--borde);
-    }
-
-    table.tabla-datos {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: 0.875rem;
-      min-width: 460px;
-    }
-
-    table.tabla-datos th, table.tabla-datos td {
-      padding: 0.5rem 0.65rem;
-      border-bottom: 1px solid var(--borde);
-    }
-
-    table.tabla-datos th {
-      background: var(--bg-input);
-      font-weight: 700;
-      color: var(--texto-secundario);
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-    }
-
-    table.tabla-datos td input, table.tabla-datos td select {
-      min-height: 36px;
-      padding: 0.4rem 0.5rem;
-      font-size: 0.875rem;
-    }
-
-    .btn-fila-borrar {
-      min-height: 36px;
-      padding: 0.35rem 0.65rem;
-      font-size: 0.85rem;
-      background: rgba(239, 68, 68, 0.12);
-      color: var(--peligro);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-    }
-
-    .btn-fila-borrar:hover {
-      background: var(--peligro);
-      color: #fff;
-    }
-
-    /* Estilos visuales del modelo de balanceo trifásico */
-    .comparativa-azar {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-    }
-
-    .tarjeta-stat {
-      background: var(--bg-input);
-      border-radius: var(--radio-sm);
-      padding: 0.75rem;
-      border: 1px solid var(--borde);
-      text-align: center;
-    }
-
-    .stat-etiqueta {
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: var(--texto-secundario);
-      text-transform: uppercase;
-    }
-
-    .stat-valor {
-      font-size: 1.35rem;
-      font-weight: 800;
-      margin: 0.2rem 0;
-    }
-
-    .stat-sub {
-      font-size: 0.75rem;
-      color: var(--texto-secundario);
-    }
-
-    .fases-contenedor {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 0.75rem;
-      margin-top: 1rem;
-    }
-
-    .columna-fase {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      background: var(--bg-input);
-      border-radius: var(--radio-sm);
-      padding: 0.75rem 0.5rem;
-      border: 2px solid transparent;
-    }
-
-    .columna-fase.fase-r { border-color: #ef4444; }
-    .columna-fase.fase-s { border-color: #f59e0b; }
-    .columna-fase.fase-t { border-color: #3b82f6; }
-
-    .fase-nombre {
-      font-weight: 800;
-      font-size: 1rem;
-    }
-
-    .fase-corriente {
-      font-size: 1.25rem;
-      font-weight: 800;
-      margin-bottom: 0.5rem;
-    }
-
-    .fase-barra-fondo {
-      width: 100%;
-      height: 260px;
-      background: var(--bg-tarjeta);
-      border-radius: var(--radio-sm);
-      border: 1px solid var(--borde);
-      display: flex;
-      flex-direction: column-reverse;
-      overflow: hidden;
-      position: relative;
-    }
-
-    .bloque-circuito {
-      width: 100%;
-      color: #ffffff;
-      font-size: 0.7rem;
-      font-weight: 700;
-      padding: 0.2rem 0.35rem;
-      box-sizing: border-box;
-      border-top: 1px solid rgba(255, 255, 255, 0.25);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      transition: opacity 0.15s ease;
-      display: flex;
-      align-items: center;
-    }
-
-    .bloque-circuito:hover {
-      opacity: 0.85;
-    }
-
-    .bloque-circuito.color-r { background: linear-gradient(135deg, #ef4444, #dc2626); }
-    .bloque-circuito.color-s { background: linear-gradient(135deg, #f59e0b, #d97706); }
-    .bloque-circuito.color-t { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-
-    /* Salida descriptiva */
-    pre.texto-descriptivo {
-      background: var(--bg-input);
-      color: var(--texto-principal);
-      padding: 1rem;
-      border-radius: var(--radio-sm);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 0.825rem;
-      line-height: 1.45;
-      overflow-x: auto;
-      white-space: pre-wrap;
-      border: 1px solid var(--borde);
-      margin-top: 0.75rem;
-    }
-
-    .texto-semilla-grupo {
-      display: flex;
-      gap: 0.4rem;
-      align-items: center;
-    }
-
-    /* Estilos del Modal del Constructor Low-Code */
-    .modal-backdrop {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: rgba(15, 23, 42, 0.7);
-      backdrop-filter: blur(4px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 1rem;
-      z-index: 1000;
-    }
-
-    .modal-dialog {
-      background: var(--bg-tarjeta);
-      border-radius: var(--radio);
-      border: 1px solid var(--borde);
-      width: 100%;
-      max-width: 740px;
-      max-height: 90vh;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
-      overflow: hidden;
-      animation: modalEntrada 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    @keyframes modalEntrada {
-      from {
-        opacity: 0;
-        transform: scale(0.95) translateY(10px);
-      }
-      to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-      }
-    }
-
-    .modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 1.1rem 1.5rem;
-      border-bottom: 1px solid var(--borde);
-    }
-
-    .modal-titulo {
-      font-size: 1.15rem;
-      font-weight: 600;
-      color: var(--texto-principal);
-    }
-
-    .btn-cerrar {
-      background: transparent;
-      border: none;
-      font-size: 1.6rem;
-      line-height: 1;
-      cursor: pointer;
-      color: var(--texto-secundario);
-      padding: 0 0.4rem;
-      border-radius: 4px;
-      transition: color 0.15s ease, background-color 0.15s ease;
-    }
-
-    .btn-cerrar:hover {
-      color: var(--peligro);
-      background-color: var(--bg-input);
-    }
-
-    .modal-body {
-      padding: 1.5rem;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 1.1rem;
-    }
-
-    .modal-footer {
-      display: flex;
-      justify-content: flex-end;
-      gap: 0.75rem;
-      padding: 1rem 1.5rem;
-      border-top: 1px solid var(--borde);
-      background: var(--bg-principal);
-    }
-
-    .textarea-codigo {
-      width: 100%;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      font-size: 0.85rem;
-      line-height: 1.45;
-      tab-size: 2;
-      padding: 0.85rem;
-      border: 1px solid var(--borde);
-      border-radius: var(--radio-sm);
-      background: var(--bg-input);
-      color: var(--texto-principal);
-      resize: vertical;
-      min-height: 140px;
-    }
-
-    .textarea-codigo:focus {
-      outline: none;
-      border-color: var(--primario);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-    }
+/* =========================================================================
+   SISTEMA DE DISEÑO GOOGLE MATERIAL 3 (M3) CON MODOS DE COLOR Y TEMAS
+   ========================================================================= */
+
+/* Tokens de base y paleta de color 1: Océano (Predeterminado) */
+:root {
+  /* Tipografía Material 3 */
+  --md-sys-typescale-font: Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  
+  /* Formas y redondez M3 */
+  --md-shape-corner-xs: 4px;
+  --md-shape-corner-sm: 8px;
+  --md-shape-corner-md: 12px;
+  --md-shape-corner-lg: 16px;
+  --md-shape-corner-xl: 24px;
+  --md-shape-corner-full: 9999px;
+
+  /* Elevaciones M3 */
+  --md-elevation-1: 0 1px 3px 1px rgba(0, 0, 0, 0.12), 0 1px 2px 0 rgba(0, 0, 0, 0.16);
+  --md-elevation-2: 0 2px 6px 2px rgba(0, 0, 0, 0.12), 0 1px 2px 0 rgba(0, 0, 0, 0.18);
+  --md-elevation-3: 0 4px 12px 3px rgba(0, 0, 0, 0.14), 0 1px 3px 0 rgba(0, 0, 0, 0.20);
+  --md-elevation-4: 0 6px 16px 4px rgba(0, 0, 0, 0.16), 0 2px 4px 0 rgba(0, 0, 0, 0.22);
+
+  /* Transición fluida de temas */
+  --md-transicion: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                   color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                   border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                   box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* -------------------------------------------------------------------------
+   PALETAS TONALES M3 - TEMA CLARO (LIGHT THEME)
+   ------------------------------------------------------------------------- */
+:root, [data-theme="light"] {
+  /* 1. Paleta Océano (Blue) */
+  --md-sys-color-primary: #0061a4;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #d1e4ff;
+  --md-sys-color-on-primary-container: #001d36;
+  --md-sys-color-secondary: #535f70;
+  --md-sys-color-secondary-container: #d7e3f7;
+  --md-sys-color-on-secondary-container: #101c2b;
+  --md-sys-color-tertiary: #6b5778;
+  --md-sys-color-tertiary-container: #f2daff;
+  --md-sys-color-surface: #fdfcff;
+  --md-sys-color-surface-dim: #ded8e1;
+  --md-sys-color-surface-container: #f3edf7;
+  --md-sys-color-surface-container-high: #ece6f0;
+  --md-sys-color-surface-container-highest: #e6e0e9;
+  --md-sys-color-on-surface: #1a1c1e;
+  --md-sys-color-on-surface-variant: #43474e;
+  --md-sys-color-outline: #73777f;
+  --md-sys-color-outline-variant: #c3c7d0;
+  --md-sys-color-error: #ba1a1a;
+  --md-sys-color-error-container: #ffdad6;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-success: #006d44;
+  --md-sys-color-success-container: #95f7bf;
+  --md-sys-color-on-success: #ffffff;
+  --md-sys-color-warning: #8b5000;
+  --md-sys-color-warning-container: #ffdcbe;
+}
+
+/* 2. Paleta Esmeralda (Green) - Claro */
+[data-color="emerald"] {
+  --md-sys-color-primary: #006d44;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #95f7bf;
+  --md-sys-color-on-primary-container: #002111;
+  --md-sys-color-secondary: #4f6353;
+  --md-sys-color-secondary-container: #d1e8d4;
+  --md-sys-color-on-secondary-container: #0c1f13;
+  --md-sys-color-surface: #fcfdf7;
+  --md-sys-color-surface-container: #edf5ed;
+  --md-sys-color-surface-container-high: #e3ede3;
+}
+
+/* 3. Paleta Amatista (Purple) - Claro */
+[data-color="amethyst"] {
+  --md-sys-color-primary: #754bb7;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #eedcff;
+  --md-sys-color-on-primary-container: #2a0054;
+  --md-sys-color-secondary: #655a6f;
+  --md-sys-color-secondary-container: #ecddf7;
+  --md-sys-color-on-secondary-container: #21182a;
+  --md-sys-color-surface: #fffbff;
+  --md-sys-color-surface-container: #f5edfa;
+  --md-sys-color-surface-container-high: #efe3f5;
+}
+
+/* 4. Paleta Terracota (Amber / Orange) - Claro */
+[data-color="terracotta"] {
+  --md-sys-color-primary: #964817;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #ffdbcc;
+  --md-sys-color-on-primary-container: #351000;
+  --md-sys-color-secondary: #765748;
+  --md-sys-color-secondary-container: #ffdbcc;
+  --md-sys-color-on-secondary-container: #2c160b;
+  --md-sys-color-surface: #fffbff;
+  --md-sys-color-surface-container: #faefe8;
+  --md-sys-color-surface-container-high: #f4e6de;
+}
+
+/* -------------------------------------------------------------------------
+   PALETAS TONALES M3 - TEMA OSCURO (DARK THEME)
+   ------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --md-sys-color-primary: #9ecaff;
+    --md-sys-color-on-primary: #003258;
+    --md-sys-color-primary-container: #00497d;
+    --md-sys-color-on-primary-container: #d1e4ff;
+    --md-sys-color-secondary: #bbc7db;
+    --md-sys-color-secondary-container: #3b4858;
+    --md-sys-color-on-secondary-container: #d7e3f7;
+    --md-sys-color-tertiary: #d6bee4;
+    --md-sys-color-tertiary-container: #523f5f;
+    --md-sys-color-surface: #101418;
+    --md-sys-color-surface-dim: #101418;
+    --md-sys-color-surface-container: #1d2024;
+    --md-sys-color-surface-container-high: #272a2f;
+    --md-sys-color-surface-container-highest: #32353a;
+    --md-sys-color-on-surface: #e2e2e6;
+    --md-sys-color-on-surface-variant: #c3c7d0;
+    --md-sys-color-outline: #8d9199;
+    --md-sys-color-outline-variant: #43474e;
+    --md-sys-color-error: #ffb4ab;
+    --md-sys-color-error-container: #93000a;
+    --md-sys-color-on-error: #690005;
+    --md-sys-color-success: #79daa4;
+    --md-sys-color-success-container: #005232;
+    --md-sys-color-on-success: #003920;
+    --md-sys-color-warning: #ffb77c;
+    --md-sys-color-warning-container: #683b00;
+  }
+}
+
+[data-theme="dark"] {
+  --md-sys-color-primary: #9ecaff;
+  --md-sys-color-on-primary: #003258;
+  --md-sys-color-primary-container: #00497d;
+  --md-sys-color-on-primary-container: #d1e4ff;
+  --md-sys-color-secondary: #bbc7db;
+  --md-sys-color-secondary-container: #3b4858;
+  --md-sys-color-on-secondary-container: #d7e3f7;
+  --md-sys-color-tertiary: #d6bee4;
+  --md-sys-color-tertiary-container: #523f5f;
+  --md-sys-color-surface: #101418;
+  --md-sys-color-surface-dim: #101418;
+  --md-sys-color-surface-container: #1d2024;
+  --md-sys-color-surface-container-high: #272a2f;
+  --md-sys-color-surface-container-highest: #32353a;
+  --md-sys-color-on-surface: #e2e2e6;
+  --md-sys-color-on-surface-variant: #c3c7d0;
+  --md-sys-color-outline: #8d9199;
+  --md-sys-color-outline-variant: #43474e;
+  --md-sys-color-error: #ffb4ab;
+  --md-sys-color-error-container: #93000a;
+  --md-sys-color-on-error: #690005;
+  --md-sys-color-success: #79daa4;
+  --md-sys-color-success-container: #005232;
+  --md-sys-color-on-success: #003920;
+  --md-sys-color-warning: #ffb77c;
+  --md-sys-color-warning-container: #683b00;
+}
+
+/* 2. Paleta Esmeralda - Oscuro */
+[data-theme="dark"][data-color="emerald"],
+[data-color="emerald"]:not([data-theme="light"]):not([data-theme="dark"]) {
+  @media (prefers-color-scheme: dark) {
+    --md-sys-color-primary: #79daa4;
+    --md-sys-color-on-primary: #003920;
+    --md-sys-color-primary-container: #005232;
+    --md-sys-color-on-primary-container: #95f7bf;
+    --md-sys-color-surface: #0f1511;
+    --md-sys-color-surface-container: #1a221c;
+    --md-sys-color-surface-container-high: #242d26;
+  }
+}
+[data-theme="dark"][data-color="emerald"] {
+  --md-sys-color-primary: #79daa4;
+  --md-sys-color-on-primary: #003920;
+  --md-sys-color-primary-container: #005232;
+  --md-sys-color-on-primary-container: #95f7bf;
+  --md-sys-color-surface: #0f1511;
+  --md-sys-color-surface-container: #1a221c;
+  --md-sys-color-surface-container-high: #242d26;
+}
+
+/* 3. Paleta Amatista - Oscuro */
+[data-theme="dark"][data-color="amethyst"],
+[data-color="amethyst"]:not([data-theme="light"]):not([data-theme="dark"]) {
+  @media (prefers-color-scheme: dark) {
+    --md-sys-color-primary: #d9b9ff;
+    --md-sys-color-on-primary: #441786;
+    --md-sys-color-primary-container: #5c319d;
+    --md-sys-color-on-primary-container: #eedcff;
+    --md-sys-color-surface: #151118;
+    --md-sys-color-surface-container: #211c26;
+    --md-sys-color-surface-container-high: #2c2632;
+  }
+}
+[data-theme="dark"][data-color="amethyst"] {
+  --md-sys-color-primary: #d9b9ff;
+  --md-sys-color-on-primary: #441786;
+  --md-sys-color-primary-container: #5c319d;
+  --md-sys-color-on-primary-container: #eedcff;
+  --md-sys-color-surface: #151118;
+  --md-sys-color-surface-container: #211c26;
+  --md-sys-color-surface-container-high: #2c2632;
+}
+
+/* 4. Paleta Terracota - Oscuro */
+[data-theme="dark"][data-color="terracotta"],
+[data-color="terracotta"]:not([data-theme="light"]):not([data-theme="dark"]) {
+  @media (prefers-color-scheme: dark) {
+    --md-sys-color-primary: #ffb68f;
+    --md-sys-color-on-primary: #542100;
+    --md-sys-color-primary-container: #753403;
+    --md-sys-color-on-primary-container: #ffdbcc;
+    --md-sys-color-surface: #17120f;
+    --md-sys-color-surface-container: #251c17;
+    --md-sys-color-surface-container-high: #312620;
+  }
+}
+[data-theme="dark"][data-color="terracotta"] {
+  --md-sys-color-primary: #ffb68f;
+  --md-sys-color-on-primary: #542100;
+  --md-sys-color-primary-container: #753403;
+  --md-sys-color-on-primary-container: #ffdbcc;
+  --md-sys-color-surface: #17120f;
+  --md-sys-color-surface-container: #251c17;
+  --md-sys-color-surface-container-high: #312620;
+}
+
+/* -------------------------------------------------------------------------
+   MAPEO DE VARIABLES HISTÓRICAS PARA MÁXIMA RETROCOMPATIBILIDAD
+   ------------------------------------------------------------------------- */
+:root {
+  --bg-principal: var(--md-sys-color-surface);
+  --bg-tarjeta: var(--md-sys-color-surface-container);
+  --bg-input: var(--md-sys-color-surface-container-high);
+  --borde: var(--md-sys-color-outline-variant);
+  --texto-principal: var(--md-sys-color-on-surface);
+  --texto-secundario: var(--md-sys-color-on-surface-variant);
+  --primario: var(--md-sys-color-primary);
+  --primario-hover: var(--md-sys-color-primary);
+  --exito: var(--md-sys-color-success);
+  --aviso: var(--md-sys-color-warning);
+  --peligro: var(--md-sys-color-error);
+  --radio: var(--md-shape-corner-xl);
+  --radio-sm: var(--md-shape-corner-md);
+  --sombra: var(--md-elevation-1);
+  --fuente: var(--md-sys-typescale-font);
+}
+
+/* -------------------------------------------------------------------------
+   ESTILOS GENERALES Y LAYOUT
+   ------------------------------------------------------------------------- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--md-sys-typescale-font);
+  background-color: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  line-height: 1.5;
+  padding: 1rem;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: var(--md-transicion);
+}
+
+.app-contenedor {
+  width: 100%;
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* -------------------------------------------------------------------------
+   ENCABEZADO TOP APP BAR (MATERIAL 3)
+   ------------------------------------------------------------------------- */
+header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--md-sys-color-surface-container);
+  border-radius: var(--md-shape-corner-xl);
+  box-shadow: var(--md-elevation-1);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  transition: var(--md-transicion);
+}
+
+.titulo-app {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--md-sys-color-primary);
+}
+
+.insignia-pwa {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--md-shape-corner-full);
+}
+
+/* Selector de Tema y Modos de Color en Header */
+.selector-tema-contenedor {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.grupo-chips-tema {
+  display: inline-flex;
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-shape-corner-full);
+  padding: 2px;
+}
+
+.chip-tema-btn {
+  background: transparent;
+  border: none;
+  border-radius: var(--md-shape-corner-full);
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: all 0.2s ease;
+  min-height: 32px;
+}
+
+.chip-tema-btn.activo {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  box-shadow: var(--md-elevation-1);
+}
+
+.grupo-paletas-color {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.btn-dot-paleta {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+  padding: 0;
+  min-height: auto;
+}
+
+.btn-dot-paleta:hover {
+  transform: scale(1.15);
+}
+
+.btn-dot-paleta.activo {
+  border-color: var(--md-sys-color-on-surface);
+  transform: scale(1.2);
+  box-shadow: var(--md-elevation-1);
+}
+
+/* -------------------------------------------------------------------------
+   TARJETAS MATERIAL 3 (ELEVATED & OUTLINED CARDS)
+   ------------------------------------------------------------------------- */
+.tarjeta {
+  background: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-shape-corner-xl);
+  padding: 1.5rem;
+  box-shadow: var(--md-elevation-1);
+  transition: var(--md-transicion);
+}
+
+.tarjeta-titulo {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--md-sys-color-on-surface);
+}
+
+/* -------------------------------------------------------------------------
+   BARRA DE ACCIONES DE SIMULACIÓN (CRUD TOOLBAR)
+   ------------------------------------------------------------------------- */
+.barra-acciones-simulacion {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--md-sys-color-surface-container-high);
+  border-radius: var(--md-shape-corner-lg);
+  border: 1px solid var(--md-sys-color-outline-variant);
+}
+
+/* -------------------------------------------------------------------------
+   BOTONES MATERIAL 3 (FILLED, TONAL, OUTLINED, ELEVATED)
+   ------------------------------------------------------------------------- */
+button, .btn-m3 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.6rem 1.1rem;
+  border-radius: var(--md-shape-corner-full);
+  border: 1px solid transparent;
+  cursor: pointer;
+  min-height: 40px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
+/* Filled Button (High Emphasis) */
+.btn-exito, .btn-m3-filled {
+  background-color: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  box-shadow: var(--md-elevation-1);
+}
+.btn-exito:hover:not(:disabled), .btn-m3-filled:hover:not(:disabled) {
+  box-shadow: var(--md-elevation-2);
+  filter: brightness(1.06);
+}
+
+/* Tonal Button (Medium Emphasis) */
+.btn-secundario, .btn-m3-tonal {
+  background-color: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+.btn-secundario:hover:not(:disabled), .btn-m3-tonal:hover:not(:disabled) {
+  filter: brightness(0.95);
+}
+
+/* Outlined Button (Low Emphasis) */
+.btn-m3-outlined {
+  background-color: transparent;
+  color: var(--md-sys-color-primary);
+  border: 1px solid var(--md-sys-color-outline);
+}
+.btn-m3-outlined:hover:not(:disabled) {
+  background-color: rgba(var(--md-sys-color-primary), 0.08);
+}
+
+/* Warning Button */
+.btn-aviso {
+  background-color: var(--md-sys-color-warning);
+  color: #ffffff;
+}
+.btn-aviso:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+/* Error / Danger Button */
+.btn-peligro, .btn-m3-error {
+  background-color: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-error);
+  border-color: transparent;
+}
+.btn-peligro:hover:not(:disabled), .btn-m3-error:hover:not(:disabled) {
+  background-color: var(--md-sys-color-error);
+  color: var(--md-sys-color-on-error);
+}
+
+button:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.botonera {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+/* -------------------------------------------------------------------------
+   CAMPOS DE FORMULARIO (MATERIAL 3 INPUTS & SELECTS)
+   ------------------------------------------------------------------------- */
+.grupo-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.9rem;
+}
+
+label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.descripcion-campo {
+  font-size: 0.75rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+input, select, textarea {
+  width: 100%;
+  padding: 0.65rem 0.95rem;
+  border-radius: var(--md-shape-corner-md);
+  border: 1px solid var(--md-sys-color-outline);
+  background-color: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  min-height: 44px;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--md-sys-color-primary);
+  border-width: 2px;
+  padding: 0.62rem 0.92rem;
+  box-shadow: 0 0 0 3px rgba(0, 97, 164, 0.15);
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+}
+
+.grid-params {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .grid-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.texto-semilla-grupo {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* -------------------------------------------------------------------------
+   BARRA DE PROGRESO MATERIAL 3 (LINEAR PROGRESS INDICATOR)
+   ------------------------------------------------------------------------- */
+.barra-progreso-contenedor {
+  width: 100%;
+  height: 8px;
+  background: var(--md-sys-color-surface-container-highest);
+  border-radius: var(--md-shape-corner-full);
+  overflow: hidden;
+  margin: 1rem 0 0.5rem 0;
+}
+
+.barra-progreso-relleno {
+  height: 100%;
+  width: 0%;
+  background: var(--md-sys-color-primary);
+  border-radius: var(--md-shape-corner-full);
+  transition: width 0.15s ease-out;
+}
+
+.indicadores-progreso {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--md-sys-color-on-surface-variant);
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------------------------
+   GRÁFICOS CANVAS Y LEYENDA
+   ------------------------------------------------------------------------- */
+.grafico-contenedor {
+  width: 100%;
+  position: relative;
+  margin-top: 0.75rem;
+  background: var(--md-sys-color-surface-container-high);
+  border-radius: var(--md-shape-corner-lg);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  overflow: hidden;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 230px;
+}
+
+.leyenda-grafico {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.item-leyenda {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.color-leyenda {
+  width: 14px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+/* -------------------------------------------------------------------------
+   ALERTAS Y NOTIFICACIONES M3 (SNACKBARS & BANNERS)
+   ------------------------------------------------------------------------- */
+.alerta {
+  padding: 0.85rem 1.15rem;
+  border-radius: var(--md-shape-corner-lg);
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  display: none;
+  animation: deslizarEntrada 0.2s ease-out;
+}
+
+.alerta-error {
+  background-color: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-error);
+  border: 1px solid var(--md-sys-color-error);
+}
+
+.alerta-exito {
+  background-color: var(--md-sys-color-success-container);
+  color: var(--md-sys-color-success);
+  border: 1px solid var(--md-sys-color-success);
+}
+
+@keyframes deslizarEntrada {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Toast flotante de notificación */
+#toast-m3 {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: var(--md-sys-color-on-surface);
+  color: var(--md-sys-color-surface);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--md-shape-corner-full);
+  box-shadow: var(--md-elevation-3);
+  font-size: 0.875rem;
+  font-weight: 600;
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+#toast-m3.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+/* -------------------------------------------------------------------------
+   TABLAS Y VISTAS DE DETALLE
+   ------------------------------------------------------------------------- */
+.tabla-responsive {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: var(--md-shape-corner-md);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  margin-top: 0.4rem;
+}
+
+.tabla-datos {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.tabla-datos th, .tabla-datos td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.tabla-datos th {
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  font-weight: 700;
+  text-align: left;
+}
+
+.btn-fila-borrar {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  background: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-error);
+  border-radius: var(--md-shape-corner-sm);
+  min-height: auto;
+}
+
+.texto-descriptivo {
+  background: var(--md-sys-color-surface-container-high);
+  padding: 1rem;
+  border-radius: var(--md-shape-corner-md);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  font-family: monospace;
+  font-size: 0.825rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 280px;
+  overflow-y: auto;
+  color: var(--md-sys-color-on-surface);
+}
+
+/* -------------------------------------------------------------------------
+   DIÁLOGOS Y MODALES MATERIAL 3 (SCRIM CON EFECTO BLUR)
+   ------------------------------------------------------------------------- */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 1000;
+  animation: fadeModal 0.2s ease-out;
+}
+
+@keyframes fadeModal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-dialog {
+  background: var(--md-sys-color-surface);
+  border-radius: var(--md-shape-corner-xl);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  box-shadow: var(--md-elevation-4);
+  width: 100%;
+  max-width: 680px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: scaleModal 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes scaleModal {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container);
+}
+
+.modal-header h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface);
+}
+
+.btn-cerrar-modal {
+  background: transparent;
+  border: none;
+  font-size: 1.25rem;
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: var(--md-shape-corner-full);
+  min-height: auto;
+  width: 32px;
+  height: 32px;
+}
+
+.modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container);
+}
+
+/* Tarjetas en la biblioteca de simulaciones */
+.grid-biblioteca {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.tarjeta-simulacion-biblioteca {
+  background: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-shape-corner-lg);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.tarjeta-simulacion-biblioteca:hover {
+  box-shadow: var(--md-elevation-2);
+  border-color: var(--md-sys-color-primary);
+}
+
+.tarjeta-simulacion-biblioteca h4 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.badge-tipo-sim {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--md-shape-corner-full);
+}
+.badge-dinamico {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+.badge-nativo {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+.badge-preset {
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-surface);
+}

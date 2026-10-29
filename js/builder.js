@@ -255,3 +255,48 @@ export function compilarModeloDinamico(definicionCruda) {
     }
   };
 }
+
+// Clona una definición de modelo dinámico asignándole un nuevo identificador y nombre con sufijo (Copia).
+export function clonarModeloDinamico(definicionOriginal, nuevoNombre = null) {
+  const copia = JSON.parse(JSON.stringify(definicionOriginal));
+  copia.nombre = (nuevoNombre || `${copia.nombre} (Copia)`).trim();
+  copia.id = `${generarIdModelo(copia.nombre)}-${Math.floor(Math.random() * 9000 + 1000)}`;
+  return copia;
+}
+
+// Renombra un modelo dinámico actualizando su título, descripción e identificador seguro.
+export function renombrarModeloDinamico(definicionOriginal, nuevoNombre, nuevaDescripcion = null) {
+  const actualizado = JSON.parse(JSON.stringify(definicionOriginal));
+  actualizado.nombre = nuevoNombre.trim();
+  if (nuevaDescripcion !== null) {
+    actualizado.descripcion = nuevaDescripcion.trim();
+  }
+  return actualizado;
+}
+
+// Exporta una definición de modelo dinámico o preset a formato JSON serializado legible.
+export function exportarSimulacionJSON(objetoSimulacion) {
+  return JSON.stringify(objetoSimulacion, null, 2);
+}
+
+// Importa y valida una definición de modelo dinámico a partir de una cadena JSON o archivo cargado.
+export function importarSimulacionJSON(jsonString) {
+  try {
+    const parseado = JSON.parse(jsonString);
+    if (!parseado || typeof parseado !== "object") {
+      throw new Error("El archivo no contiene un objeto JSON válido.");
+    }
+    if (parseado.variables && parseado.codigoEvaluacion) {
+      validarDefinicionModelo(parseado);
+      if (!parseado.id) {
+        parseado.id = `${generarIdModelo(parseado.nombre)}-${Math.floor(Math.random() * 9000 + 1000)}`;
+      }
+      return { tipo: "modelo", datos: parseado };
+    } else if (parseado.modeloId && parseado.parametrosMotor) {
+      return { tipo: "preset", datos: parseado };
+    }
+    throw new Error("La estructura del JSON no corresponde a un modelo dinámico ni a un preset de simulación.");
+  } catch (error) {
+    throw new Error(`Error importando JSON: ${error.message}`);
+  }
+}

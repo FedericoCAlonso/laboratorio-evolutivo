@@ -5,16 +5,29 @@
 import { ModeloBalanceoFases } from "./fases.js";
 import { ModeloPataCaminante } from "./caminante.js";
 import { ModeloPataJansen } from "./jansen.js";
+import { ModeloBrazoRobotico } from "./brazo.js";
+import { ModeloCoheteLanding } from "./cohete.js";
+import { ModeloControladorPID } from "./pid.js";
 import { compilarModeloDinamico } from "../builder.js";
 
 // Reexporta los modelos individuales para facilitar su importación directa.
-export { ModeloBalanceoFases, ModeloPataCaminante, ModeloPataJansen };
+export {
+  ModeloBalanceoFases,
+  ModeloPataCaminante,
+  ModeloPataJansen,
+  ModeloBrazoRobotico,
+  ModeloCoheteLanding,
+  ModeloControladorPID
+};
 
 // Lista global de todos los modelos de optimización disponibles en la aplicación (estáticos y dinámicos).
 export const MODELOS = [
+  ModeloPataJansen,
+  ModeloBrazoRobotico,
+  ModeloCoheteLanding,
+  ModeloControladorPID,
   ModeloBalanceoFases,
-  ModeloPataCaminante,
-  ModeloPataJansen
+  ModeloPataCaminante
 ];
 
 // Registra un nuevo modelo dinámico compilado en la lista global evitando duplicados por identificador.

@@ -658,13 +658,21 @@ export function actualizarBotonesControl(estado, btns, textoEstado) {
   }
 }
 
-// Abre el modal del constructor low-code reiniciando sus campos y precargando filas de variables de ejemplo si está vacío.
-export function abrirModalConstructor(elementosModal, datosIniciales = null) {
+// Abre el modal del constructor low-code reiniciando sus campos o precargando los datos existentes para edición.
+export function abrirModalConstructor(elementosModal, datosIniciales = null, esEdicion = false) {
   const { modal, alerta, inputNombre, inputDesc, tbody, textareaCodigo } = elementosModal;
   if (!modal) return;
 
   mostrarAlerta(null, alerta);
   tbody.innerHTML = "";
+
+  const tituloEl = modal.querySelector(".modal-header h3");
+  if (tituloEl) {
+    tituloEl.textContent = esEdicion ? "✏️ Editar Simulación (Low-Code)" : "🛠️ Diseñador de Simulaciones (Low-Code)";
+  }
+
+  modal.dataset.modo = esEdicion ? "edicion" : "creacion";
+  modal.dataset.modeloId = datosIniciales?.id || "";
 
   if (datosIniciales) {
     inputNombre.value = datosIniciales.nombre || "";
@@ -692,6 +700,216 @@ export function cerrarModalConstructor(elementosModal) {
   if (!modal) return;
   mostrarAlerta(null, alerta);
   modal.style.display = "none";
+}
+
+// Muestra una notificación flotante estilo Snackbar de Material 3 con auto-ocultamiento.
+export function mostrarToast(mensaje, duracion = 3200) {
+  let toast = document.getElementById("toast-m3");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "toast-m3";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = mensaje;
+  toast.classList.add("visible");
+
+  if (toast._timer) clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => {
+    toast.classList.remove("visible");
+  }, duracion);
+}
+
+// Aplica el tema de modo (light/dark/auto) y paleta tonal de color en los atributos raíz del documento.
+export function aplicarTemaColor(modo = "auto", acento = "ocean") {
+  const html = document.documentElement;
+  html.setAttribute("data-theme", modo);
+  html.setAttribute("data-color", acento);
+
+  // Sincroniza el botón activo del modo
+  document.querySelectorAll(".chip-tema-btn").forEach(btn => {
+    const id = btn.id;
+    const esActivo = (modo === "light" && id.includes("claro")) ||
+                     (modo === "dark" && id.includes("oscuro")) ||
+                     (modo === "auto" && id.includes("auto"));
+    btn.classList.toggle("activo", esActivo);
+  });
+
+  // Sincroniza el dot activo de la paleta
+  document.querySelectorAll(".btn-dot-paleta").forEach(btn => {
+    btn.classList.toggle("activo", btn.dataset.color === acento);
+  });
+}
+
+// Actualiza la visibilidad de los botones de la barra de acciones de simulación según el modelo activo.
+export function actualizarToolbarAcciones(modeloActual, elementosToolbar) {
+  const { btnEditar, btnRenombrar, btnEliminar, btnCopiar, btnExportar, btnGuardarPreset } = elementosToolbar;
+  const esDinamico = Boolean(modeloActual && modeloActual.esDinamico);
+
+  if (btnEditar) btnEditar.style.display = esDinamico ? "inline-flex" : "none";
+  if (btnRenombrar) btnRenombrar.style.display = esDinamico ? "inline-flex" : "none";
+  if (btnEliminar) btnEliminar.style.display = esDinamico ? "inline-flex" : "none";
+
+  if (btnCopiar) btnCopiar.style.display = "inline-flex";
+  if (btnExportar) btnExportar.style.display = "inline-flex";
+  if (btnGuardarPreset) btnGuardarPreset.style.display = "inline-flex";
+}
+
+// Abre el diálogo de renombrado rápido para modificar el título y descripción de una simulación.
+export function abrirModalRenombrar(elementosRenombrar, modelo) {
+  const { modal, inputNombre, inputDesc } = elementosRenombrar;
+  if (!modal) return;
+  modal.dataset.modeloId = modelo.id;
+  inputNombre.value = modelo.nombre || "";
+  inputDesc.value = modelo.descripcion || "";
+  modal.style.display = "flex";
+  inputNombre.focus();
+}
+
+// Cierra el diálogo de renombrado rápido.
+export function cerrarModalRenombrar(elementosRenombrar) {
+  if (elementosRenombrar.modal) {
+    elementosRenombrar.modal.style.display = "none";
+  }
+}
+
+// Abre el modal para importar simulaciones en formato JSON.
+export function abrirModalImportar(elementosImportar) {
+  const { modal, alerta, textarea, inputArchivo } = elementosImportar;
+  if (!modal) return;
+  mostrarAlerta(null, alerta);
+  if (textarea) textarea.value = "";
+  if (inputArchivo) inputArchivo.value = "";
+  modal.style.display = "flex";
+}
+
+// Cierra el modal de importación JSON.
+export function cerrarModalImportar(elementosImportar) {
+  if (elementosImportar.modal) {
+    elementosImportar.modal.style.display = "none";
+  }
+}
+
+// Abre el diálogo para guardar un preset con la configuración actual completa.
+export function abrirModalGuardarPreset(elementosPreset, sugerenciaNombre = "") {
+  const { modal, inputNombre } = elementosPreset;
+  if (!modal) return;
+  inputNombre.value = sugerenciaNombre;
+  modal.style.display = "flex";
+  inputNombre.focus();
+}
+
+// Cierra el diálogo de guardar preset.
+export function cerrarModalGuardarPreset(elementosPreset) {
+  if (elementosPreset.modal) {
+    elementosPreset.modal.style.display = "none";
+  }
+}
+
+// Renderiza y abre la biblioteca completa con todas las simulaciones y presets guardados.
+export function abrirModalBiblioteca(elementosBiblioteca, modelos, presets, onAccion) {
+  const { modal, contenedor, inputBuscar } = elementosBiblioteca;
+  if (!modal || !contenedor) return;
+
+  const renderizarItems = (filtro = "") => {
+    contenedor.innerHTML = "";
+    const filtroNorm = filtro.toLowerCase().trim();
+
+    // 1. Modelos (Nativos y Dinámicos)
+    modelos.forEach(mod => {
+      const textoBuscar = `${mod.nombre} ${mod.descripcion || ""}`.toLowerCase();
+      if (filtroNorm && !textoBuscar.includes(filtroNorm)) return;
+
+      const card = document.createElement("div");
+      card.className = "tarjeta-simulacion-biblioteca";
+
+      const badgeClase = mod.esDinamico ? "badge-dinamico" : "badge-nativo";
+      const badgeTexto = mod.esDinamico ? "Dinámico Low-Code" : "Modelo Nativo";
+
+      card.innerHTML = `
+        <div>
+          <h4>
+            <span>${mod.nombre}</span>
+            <span class="badge-tipo-sim ${badgeClase}">${badgeTexto}</span>
+          </h4>
+          <p style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.35rem;">
+            ${mod.descripcion || "Sin descripción"}
+          </p>
+        </div>
+        <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem;">
+          <button type="button" class="btn-m3-filled btn-cargar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">▶ Cargar</button>
+          <button type="button" class="btn-m3-tonal btn-copiar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">📑 Copiar</button>
+          ${mod.esDinamico ? `
+            <button type="button" class="btn-m3-tonal btn-editar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">✏️ Editar</button>
+            <button type="button" class="btn-m3-tonal btn-renombrar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">🏷️ Renombrar</button>
+            <button type="button" class="btn-m3-outlined btn-exportar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">📤 Exportar</button>
+            <button type="button" class="btn-peligro btn-eliminar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">🗑️ Borrar</button>
+          ` : `
+            <button type="button" class="btn-m3-outlined btn-exportar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">📤 Exportar</button>
+          `}
+        </div>
+      `;
+
+      card.querySelector(".btn-cargar-sim")?.addEventListener("click", () => onAccion("cargar", mod.id));
+      card.querySelector(".btn-copiar-sim")?.addEventListener("click", () => onAccion("copiar", mod.id));
+      card.querySelector(".btn-editar-sim")?.addEventListener("click", () => onAccion("editar", mod.id));
+      card.querySelector(".btn-renombrar-sim")?.addEventListener("click", () => onAccion("renombrar", mod.id));
+      card.querySelector(".btn-exportar-sim")?.addEventListener("click", () => onAccion("exportar", mod.id));
+      card.querySelector(".btn-eliminar-sim")?.addEventListener("click", () => onAccion("eliminar", mod.id));
+
+      contenedor.appendChild(card);
+    });
+
+    // 2. Presets de Escenario Guardados
+    (presets || []).forEach(pre => {
+      const textoBuscar = `${pre.nombre} preset escenario`.toLowerCase();
+      if (filtroNorm && !textoBuscar.includes(filtroNorm)) return;
+
+      const card = document.createElement("div");
+      card.className = "tarjeta-simulacion-biblioteca";
+
+      card.innerHTML = `
+        <div>
+          <h4>
+            <span>⭐ ${pre.nombre}</span>
+            <span class="badge-tipo-sim badge-preset">Preset Escenario</span>
+          </h4>
+          <p style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.35rem;">
+            Modelo base: <strong>${pre.modeloId}</strong> | Creado: ${new Date(pre.fechaCreacion || Date.now()).toLocaleDateString()}
+          </p>
+        </div>
+        <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem;">
+          <button type="button" class="btn-m3-filled btn-cargar-preset" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${pre.id}">⭐ Cargar Preset</button>
+          <button type="button" class="btn-m3-outlined btn-exportar-preset" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${pre.id}">📤 Exportar</button>
+          <button type="button" class="btn-peligro btn-eliminar-preset" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${pre.id}">🗑️ Borrar</button>
+        </div>
+      `;
+
+      card.querySelector(".btn-cargar-preset")?.addEventListener("click", () => onAccion("cargarPreset", pre.id));
+      card.querySelector(".btn-exportar-preset")?.addEventListener("click", () => onAccion("exportarPreset", pre.id));
+      card.querySelector(".btn-eliminar-preset")?.addEventListener("click", () => onAccion("eliminarPreset", pre.id));
+
+      contenedor.appendChild(card);
+    });
+
+    if (contenedor.children.length === 0) {
+      contenedor.innerHTML = `<div style="padding: 2rem; text-align: center; color: var(--md-sys-color-on-surface-variant); grid-column: 1 / -1;">No se encontraron simulaciones que coincidan con la búsqueda.</div>`;
+    }
+  };
+
+  renderizarItems(inputBuscar ? inputBuscar.value : "");
+
+  if (inputBuscar) {
+    inputBuscar.oninput = (e) => renderizarItems(e.target.value);
+  }
+
+  modal.style.display = "flex";
+}
+
+// Cierra la biblioteca modal de simulaciones.
+export function cerrarModalBiblioteca(elementosBiblioteca) {
+  if (elementosBiblioteca.modal) {
+    elementosBiblioteca.modal.style.display = "none";
+  }
 }
 
 // Inserta una nueva fila de configuración de variable en la tabla del constructor low-code.

@@ -14,10 +14,18 @@ import {
   cargarConfiguracion,
   cargarModelosDinamicos,
   guardarUnModeloDinamico,
-  eliminarModeloDinamico
+  eliminarModeloDinamico,
+  cargarPresets,
+  guardarUnPreset,
+  eliminarPreset,
+  guardarPreferenciaTema,
+  cargarPreferenciaTema
 } from "./storage.js";
 import {
   mostrarAlerta,
+  mostrarToast,
+  aplicarTemaColor,
+  actualizarToolbarAcciones,
   construirFormularioModelo,
   obtenerDatosEntradaModelo,
   obtenerParametrosMotor,
@@ -28,9 +36,24 @@ import {
   abrirModalConstructor,
   cerrarModalConstructor,
   agregarFilaVariableConstructor,
-  extraerDefinicionModeloDesdeUI
+  extraerDefinicionModeloDesdeUI,
+  abrirModalRenombrar,
+  cerrarModalRenombrar,
+  abrirModalImportar,
+  cerrarModalImportar,
+  abrirModalGuardarPreset,
+  cerrarModalGuardarPreset,
+  abrirModalBiblioteca,
+  cerrarModalBiblioteca
 } from "./ui.js";
-import { compilarModeloDinamico, validarDefinicionModelo } from "./builder.js";
+import {
+  compilarModeloDinamico,
+  validarDefinicionModelo,
+  clonarModeloDinamico,
+  renombrarModeloDinamico,
+  exportarSimulacionJSON,
+  importarSimulacionJSON
+} from "./builder.js";
 import { Motor } from "./core/motor.js";
 
 // Instancia activa del Web Worker para cómputo en segundo plano.
@@ -65,7 +88,17 @@ const elementosDOM = {
   textoDescribirModelo: document.getElementById("texto-describir-modelo"),
   contenedorAlerta: document.getElementById("contenedor-alerta"),
   btnAbrirConstructor: document.getElementById("btn-abrir-constructor"),
+  btnEditarModelo: document.getElementById("btn-editar-modelo"),
+  btnCopiarModelo: document.getElementById("btn-copiar-modelo"),
+  btnRenombrarModelo: document.getElementById("btn-renombrar-modelo"),
+  btnGuardarPreset: document.getElementById("btn-guardar-preset"),
+  btnExportarModelo: document.getElementById("btn-exportar-modelo"),
+  btnImportarModelo: document.getElementById("btn-importar-modelo"),
   btnEliminarModelo: document.getElementById("btn-eliminar-modelo"),
+  btnAbrirBiblioteca: document.getElementById("btn-abrir-biblioteca"),
+  btnTemaClaro: document.getElementById("btn-tema-claro"),
+  btnTemaOscuro: document.getElementById("btn-tema-oscuro"),
+  btnTemaAuto: document.getElementById("btn-tema-auto"),
   inputPoblacion: document.getElementById("param-poblacion"),
   inputGeneraciones: document.getElementById("param-generaciones"),
   inputMutacion: document.getElementById("param-mutacion"),
@@ -97,6 +130,47 @@ const elementosModal = {
   btnCancelar: document.getElementById("btn-cancelar-modelo"),
   btnGuardar: document.getElementById("btn-guardar-modelo"),
   btnAgregarVar: document.getElementById("btn-agregar-variable")
+};
+
+// Referencias a los elementos del modal de renombrado rápido.
+const elementosRenombrar = {
+  modal: document.getElementById("modal-renombrar-simulacion"),
+  inputNombre: document.getElementById("input-nuevo-nombre"),
+  inputDesc: document.getElementById("input-nueva-desc"),
+  btnCerrar: document.getElementById("btn-cerrar-renombrar"),
+  btnCancelar: document.getElementById("btn-cancelar-renombrar"),
+  btnConfirmar: document.getElementById("btn-confirmar-renombrar")
+};
+
+// Referencias a los elementos del modal de importación JSON.
+const elementosImportar = {
+  modal: document.getElementById("modal-importar-simulacion"),
+  alerta: document.getElementById("alerta-importar"),
+  inputArchivo: document.getElementById("input-archivo-importar"),
+  textarea: document.getElementById("textarea-json-importar"),
+  btnCerrar: document.getElementById("btn-cerrar-importar"),
+  btnCancelar: document.getElementById("btn-cancelar-importar"),
+  btnConfirmar: document.getElementById("btn-confirmar-importar")
+};
+
+// Referencias a los elementos del modal de guardado de presets.
+const elementosPreset = {
+  modal: document.getElementById("modal-guardar-preset"),
+  inputNombre: document.getElementById("input-nombre-preset"),
+  btnCerrar: document.getElementById("btn-cerrar-guardar-preset"),
+  btnCancelar: document.getElementById("btn-cancelar-guardar-preset"),
+  btnConfirmar: document.getElementById("btn-confirmar-guardar-preset")
+};
+
+// Referencias a los elementos del modal de la biblioteca general.
+const elementosBiblioteca = {
+  modal: document.getElementById("modal-biblioteca-simulaciones"),
+  contenedor: document.getElementById("contenedor-items-biblioteca"),
+  inputBuscar: document.getElementById("input-buscar-biblioteca"),
+  btnCerrar: document.getElementById("btn-cerrar-biblioteca"),
+  btnCerrarPie: document.getElementById("btn-cerrar-biblioteca-pie"),
+  btnNuevoDesdeBiblioteca: document.getElementById("btn-nuevo-desde-biblioteca"),
+  btnImportarDesdeBiblioteca: document.getElementById("btn-importar-desde-biblioteca")
 };
 
 // Inicializa el Web Worker con soporte para ES Modules y gestiona el canal postMessage.
@@ -172,7 +246,7 @@ function procesarMensajeWorker(evento) {
 
       // El dibujo del modelo se ejecuta de forma segura en el hilo principal.
       const genomaADibujar = individuoParetoSeleccionado ? individuoParetoSeleccionado.genoma : datos.mejorGenoma;
-      if (genomaADibujar && ultimaEntradaModelo !== null) {
+      if (genomaADibujar && ultimaEntradaModelo !== null && modeloActual.dibujar) {
         modeloActual.dibujar(
           genomaADibujar,
           ultimaEntradaModelo,
@@ -217,7 +291,7 @@ function procesarMensajeWorker(evento) {
       );
 
       // El dibujo del modelo se ejecuta de forma segura en el hilo principal.
-      if (datos.mejorGenoma && ultimaEntradaModelo !== null) {
+      if (datos.mejorGenoma && ultimaEntradaModelo !== null && modeloActual.dibujar) {
         modeloActual.dibujar(
           datos.mejorGenoma,
           ultimaEntradaModelo,
@@ -368,7 +442,7 @@ function restaurarEstadoApp() {
       window.__modeloActualId = modeloActual.id;
       elementosDOM.selectorModelo.value = modeloActual.id;
       elementosDOM.descripcionModelo.textContent = modeloActual.descripcion;
-      actualizarBotonEliminarModelo();
+      actualizarToolbar();
     }
   }
 
@@ -376,11 +450,16 @@ function restaurarEstadoApp() {
   construirFormularioModelo(modeloActual, elementosDOM.contenedorFormularioModelo, valoresModelo, elementosDOM.contenedorAlerta);
 }
 
-// Actualiza la visibilidad del botón de eliminar según si el modelo seleccionado es dinámico o integrado.
-function actualizarBotonEliminarModelo() {
-  if (elementosDOM.btnEliminarModelo) {
-    elementosDOM.btnEliminarModelo.style.display = modeloActual.esDinamico ? "inline-block" : "none";
-  }
+// Sincroniza la visibilidad de las acciones de la barra de herramientas de simulación.
+function actualizarToolbar() {
+  actualizarToolbarAcciones(modeloActual, {
+    btnEditar: elementosDOM.btnEditarModelo,
+    btnRenombrar: elementosDOM.btnRenombrarModelo,
+    btnEliminar: elementosDOM.btnEliminarModelo,
+    btnCopiar: elementosDOM.btnCopiarModelo,
+    btnExportar: elementosDOM.btnExportarModelo,
+    btnGuardarPreset: elementosDOM.btnGuardarPreset
+  });
 }
 
 // Rellena el selector desplegable con la lista actualizada de modelos y opcionalmente selecciona uno.
@@ -401,7 +480,7 @@ function actualizarSelectorModelos(idSeleccionar = null) {
   elementosDOM.selectorModelo.value = modeloActual.id;
   window.__modeloActualId = modeloActual.id;
   elementosDOM.descripcionModelo.textContent = modeloActual.descripcion;
-  actualizarBotonEliminarModelo();
+  actualizarToolbar();
   datosMultiobjetivoActuales = null;
   individuoParetoSeleccionado = null;
   if (elementosDOM.tituloGrafico) {
@@ -421,7 +500,7 @@ function inicializarSelectorModelos() {
     modeloActual = obtenerModeloPorId(e.target.value);
     window.__modeloActualId = modeloActual.id;
     elementosDOM.descripcionModelo.textContent = modeloActual.descripcion;
-    actualizarBotonEliminarModelo();
+    actualizarToolbar();
     construirFormularioModelo(modeloActual, elementosDOM.contenedorFormularioModelo, null, elementosDOM.contenedorAlerta);
     mostrarSolucionInicialModelo();
   });
@@ -440,6 +519,12 @@ function mostrarSolucionInicialModelo() {
       genomaInicial = defGenes.map(g => (g.min + g.max) / 2);
     } else if (modeloActual.id === "pata-jansen") {
       genomaInicial = [38.0, 7.8, 41.5, 39.3, 40.1, 55.8, 39.4, 36.7, 65.7, 49.0, 50.0, 61.9];
+    } else if (modeloActual.id === "brazo-robotico") {
+      genomaInicial = [30.0, -45.0, 30.0];
+    } else if (modeloActual.id === "cohete-landing") {
+      genomaInicial = [12000, 10000, 8000, 6000, -2.0, 0.0, 2.0, 0.0];
+    } else if (modeloActual.id === "controlador-pid") {
+      genomaInicial = [6.0, 2.5, 1.2];
     } else if (modeloActual.id === "pata-caminante") {
       genomaInicial = [-1.8, 0.5, 3.0, 2.5, 3.0, 0.0];
     } else if (modeloActual.id === "balanceo-fases-trifasico") {
@@ -456,12 +541,17 @@ function mostrarSolucionInicialModelo() {
   }
 }
 
-// Procesa el guardado del modelo creado en el constructor low-code y lo persiste.
+// Procesa el guardado del modelo creado o modificado en el constructor low-code y lo persiste.
 function procesarGuardadoModeloDinamico() {
   try {
     mostrarAlerta(null, elementosModal.alerta);
     const defCruda = extraerDefinicionModeloDesdeUI(elementosModal);
     validarDefinicionModelo(defCruda);
+
+    const esEdicion = elementosModal.modal.dataset.modo === "edicion";
+    if (esEdicion && elementosModal.modal.dataset.modeloId) {
+      defCruda.id = elementosModal.modal.dataset.modeloId;
+    }
 
     const modeloCompilado = compilarModeloDinamico(defCruda);
     guardarUnModeloDinamico(modeloCompilado.definicionCruda);
@@ -478,9 +568,288 @@ function procesarGuardadoModeloDinamico() {
     // Actualiza la lista desplegable y selecciona el modelo recién guardado.
     actualizarSelectorModelos(modeloCompilado.id);
     cerrarModalConstructor(elementosModal);
+    mostrarToast(esEdicion ? `✓ Simulación '${modeloCompilado.nombre}' actualizada` : `✓ Simulación '${modeloCompilado.nombre}' creada`);
   } catch (error) {
     mostrarAlerta(error.message, elementosModal.alerta);
   }
+}
+
+// Duplica una simulación existente (nativa o dinámica) y genera una nueva variante modificable.
+function procesarCopiarSimulacion(idModeloACopiar = null) {
+  const objetivo = idModeloACopiar ? obtenerModeloPorId(idModeloACopiar) : modeloActual;
+  if (!objetivo) return;
+
+  let defNueva;
+  if (objetivo.esDinamico && objetivo.definicionCruda) {
+    defNueva = clonarModeloDinamico(objetivo.definicionCruda);
+  } else {
+    // Convierte el modelo nativo a una definición dinámica clonada para permitir experimentación.
+    const genes = objetivo.crearGenoma ? objetivo.crearGenoma() : [];
+    defNueva = {
+      nombre: `${objetivo.nombre} (Copia)`,
+      descripcion: `Variante personalizada basada en ${objetivo.nombre}. Modifique las variables y función de evaluación.`,
+      variables: genes.map((g, i) => ({
+        nombre: g.nombre || `var${i + 1}`,
+        tipo: g.tipo || "continuo",
+        min: g.min !== undefined ? g.min : 0,
+        max: g.max !== undefined ? g.max : 100
+      })),
+      codigoEvaluacion: `// Definición basada en ${objetivo.nombre}\n// Variables disponibles en 'vars':\nlet coste = 0;\nfor (const k in vars) {\n  coste += Math.pow(vars[k], 2);\n}\nreturn Math.sqrt(coste);`
+    };
+    defNueva.id = `dinamico-${objetivo.id}-${Math.floor(Math.random() * 9000 + 1000)}`;
+  }
+
+  const compilado = compilarModeloDinamico(defNueva);
+  guardarUnModeloDinamico(compilado.definicionCruda);
+  registrarModeloDinamico(compilado);
+
+  if (workerOptimizacion) {
+    workerOptimizacion.postMessage({
+      comando: "registrarModeloDinamico",
+      definicion: compilado.definicionCruda
+    });
+  }
+
+  actualizarSelectorModelos(compilado.id);
+  mostrarToast(`📑 Simulación '${compilado.nombre}' creada con éxito`);
+}
+
+// Procesa el renombrado de un modelo dinámico activo.
+function procesarRenombrarConfirmacion() {
+  const id = elementosRenombrar.modal.dataset.modeloId || modeloActual.id;
+  const modelo = obtenerModeloPorId(id);
+  if (!modelo || !modelo.esDinamico) return;
+
+  const nuevoNombre = elementosRenombrar.inputNombre.value.trim();
+  const nuevaDesc = elementosRenombrar.inputDesc.value.trim();
+  if (!nuevoNombre) {
+    alert("El nombre de la simulación no puede estar vacío.");
+    return;
+  }
+
+  const defActualizada = renombrarModeloDinamico(modelo.definicionCruda, nuevoNombre, nuevaDesc);
+  const compilado = compilarModeloDinamico(defActualizada);
+  guardarUnModeloDinamico(compilado.definicionCruda);
+  registrarModeloDinamico(compilado);
+
+  if (workerOptimizacion) {
+    workerOptimizacion.postMessage({
+      comando: "registrarModeloDinamico",
+      definicion: compilado.definicionCruda
+    });
+  }
+
+  actualizarSelectorModelos(compilado.id);
+  cerrarModalRenombrar(elementosRenombrar);
+  mostrarToast(`🏷️ Simulación renombrada a '${compilado.nombre}'`);
+}
+
+// Descarga un archivo JSON en el navegador del usuario a partir de un objeto serializable.
+function descargarArchivoJSON(nombreArchivo, objetoDatos) {
+  const json = exportarSimulacionJSON(objetoDatos);
+  const blob = new Blob([json], { type: "application/json;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = nombreArchivo.endsWith(".json") ? nombreArchivo : `${nombreArchivo}.json`;
+  document.body.appendChild(enlace);
+  enlace.click();
+  document.body.removeChild(enlace);
+  URL.revokeObjectURL(url);
+}
+
+// Exporta la definición de la simulación actualmente activa a un archivo JSON descargable.
+function procesarExportarSimulacionActual() {
+  if (!modeloActual) return;
+  const objeto = modeloActual.esDinamico
+    ? modeloActual.definicionCruda
+    : {
+        tipo: "modelo-nativo",
+        id: modeloActual.id,
+        nombre: modeloActual.nombre,
+        descripcion: modeloActual.descripcion,
+        variables: (modeloActual.crearGenoma ? modeloActual.crearGenoma() : []).map((g, i) => ({
+          nombre: g.nombre || `var${i + 1}`,
+          tipo: g.tipo || "continuo",
+          min: g.min,
+          max: g.max
+        }))
+      };
+  descargarArchivoJSON(`${modeloActual.id}-export.json`, objeto);
+  mostrarToast(`📤 '${modeloActual.nombre}' exportado correctamente`);
+}
+
+// Procesa la importación de una simulación o preset desde archivo JSON o texto pegado.
+function procesarImportarConfirmacion() {
+  const archivo = elementosImportar.inputArchivo.files[0];
+  const textoPegado = elementosImportar.textarea.value.trim();
+
+  const procesarContenidoJSON = (jsonString) => {
+    try {
+      mostrarAlerta(null, elementosImportar.alerta);
+      const resultado = importarSimulacionJSON(jsonString);
+
+      if (resultado.tipo === "modelo") {
+        const modeloCompilado = compilarModeloDinamico(resultado.datos);
+        guardarUnModeloDinamico(modeloCompilado.definicionCruda);
+        registrarModeloDinamico(modeloCompilado);
+
+        if (workerOptimizacion) {
+          workerOptimizacion.postMessage({
+            comando: "registrarModeloDinamico",
+            definicion: modeloCompilado.definicionCruda
+          });
+        }
+
+        actualizarSelectorModelos(modeloCompilado.id);
+        cerrarModalImportar(elementosImportar);
+        mostrarToast(`📥 Modelo '${modeloCompilado.nombre}' importado con éxito`);
+      } else if (resultado.tipo === "preset") {
+        guardarUnPreset(resultado.datos);
+        aplicarPreset(resultado.datos);
+        cerrarModalImportar(elementosImportar);
+        mostrarToast(`📥 Preset '${resultado.datos.nombre}' importado y aplicado`);
+      }
+    } catch (error) {
+      mostrarAlerta(error.message, elementosImportar.alerta);
+    }
+  };
+
+  if (archivo) {
+    const lector = new FileReader();
+    lector.onload = (e) => procesarContenidoJSON(e.target.result);
+    lector.onerror = () => mostrarAlerta("Error al leer el archivo seleccionado.", elementosImportar.alerta);
+    lector.readAsText(archivo);
+  } else if (textoPegado) {
+    procesarContenidoJSON(textoPegado);
+  } else {
+    mostrarAlerta("Seleccione un archivo .json o pegue el contenido JSON para importar.", elementosImportar.alerta);
+  }
+}
+
+// Procesa el guardado del estado actual del modelo y motor como un Preset con nombre.
+function procesarGuardarPresetConfirmacion() {
+  const nombre = elementosPreset.inputNombre.value.trim() || `Preset ${modeloActual.nombre} (${new Date().toLocaleTimeString()})`;
+  try {
+    const nuevoPreset = {
+      id: `preset-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      nombre,
+      fechaCreacion: Date.now(),
+      modeloId: modeloActual.id,
+      entradasModelo: obtenerDatosEntradaModelo(modeloActual),
+      parametrosMotor: obtenerParametrosMotor()
+    };
+    guardarUnPreset(nuevoPreset);
+    cerrarModalGuardarPreset(elementosPreset);
+    mostrarToast(`⭐ Preset '${nombre}' guardado`);
+  } catch (error) {
+    alert(`Error al guardar el preset: ${error.message}`);
+  }
+}
+
+// Aplica los parámetros de motor y entradas de simulación contenidas en un Preset guardado.
+function aplicarPreset(preset) {
+  if (!preset || !preset.modeloId) return;
+  actualizarSelectorModelos(preset.modeloId);
+
+  // Restaurar parámetros del motor
+  if (preset.parametrosMotor) {
+    const p = preset.parametrosMotor;
+    if (p.tamanoPoblacion !== undefined) elementosDOM.inputPoblacion.value = p.tamanoPoblacion;
+    if (p.generaciones !== undefined) elementosDOM.inputGeneraciones.value = p.generaciones;
+    if (p.tasaMutacion !== undefined) elementosDOM.inputMutacion.value = p.tasaMutacion;
+    if (p.elitismo !== undefined) elementosDOM.inputElitismo.value = p.elitismo;
+    if (p.tamanoTorneo !== undefined) elementosDOM.inputTorneo.value = p.tamanoTorneo;
+    if (p.replicasRuido !== undefined) elementosDOM.inputReplicasRuido.value = p.replicasRuido;
+    if (p.semilla !== undefined) elementosDOM.inputSemilla.value = p.semilla;
+  }
+
+  // Restaurar formulario de entradas del modelo
+  if (preset.entradasModelo) {
+    construirFormularioModelo(modeloActual, elementosDOM.contenedorFormularioModelo, preset.entradasModelo, elementosDOM.contenedorAlerta);
+  }
+
+  mostrarSolucionInicialModelo();
+  mostrarToast(`⭐ Preset '${preset.nombre}' cargado`);
+}
+
+// Abre la biblioteca general de simulaciones permitiendo cargar, editar, copiar o eliminar elementos.
+function abrirBibliotecaSimulaciones() {
+  const presets = cargarPresets();
+  abrirModalBiblioteca(elementosBiblioteca, MODELOS, presets, (accion, id) => {
+    if (accion === "cargar") {
+      actualizarSelectorModelos(id);
+      cerrarModalBiblioteca(elementosBiblioteca);
+      mostrarToast(`✓ Modelo seleccionado`);
+    } else if (accion === "copiar") {
+      procesarCopiarSimulacion(id);
+      cerrarModalBiblioteca(elementosBiblioteca);
+    } else if (accion === "editar") {
+      const mod = obtenerModeloPorId(id);
+      if (mod && mod.esDinamico) {
+        cerrarModalBiblioteca(elementosBiblioteca);
+        abrirModalConstructor(elementosModal, mod.definicionCruda, true);
+      }
+    } else if (accion === "renombrar") {
+      const mod = obtenerModeloPorId(id);
+      if (mod && mod.esDinamico) {
+        cerrarModalBiblioteca(elementosBiblioteca);
+        abrirModalRenombrar(elementosRenombrar, mod);
+      }
+    } else if (accion === "exportar") {
+      const mod = obtenerModeloPorId(id);
+      if (mod) {
+        const obj = mod.esDinamico ? mod.definicionCruda : { tipo: "modelo-nativo", id: mod.id, nombre: mod.nombre, descripcion: mod.descripcion };
+        descargarArchivoJSON(`${mod.id}-export.json`, obj);
+        mostrarToast(`📤 Modelo exportado`);
+      }
+    } else if (accion === "eliminar") {
+      const mod = obtenerModeloPorId(id);
+      if (mod && mod.esDinamico && window.confirm(`¿Eliminar la simulación '${mod.nombre}'?`)) {
+        eliminarModeloDinamico(id);
+        eliminarModeloDinamicoDelRegistro(id);
+        if (modeloActual.id === id) {
+          actualizarSelectorModelos(MODELOS[0].id);
+        }
+        mostrarToast(`🗑️ Simulación eliminada`);
+        abrirBibliotecaSimulaciones();
+      }
+    } else if (accion === "cargarPreset") {
+      const pres = presets.find(p => p.id === id);
+      if (pres) {
+        cerrarModalBiblioteca(elementosBiblioteca);
+        aplicarPreset(pres);
+      }
+    } else if (accion === "exportarPreset") {
+      const pres = presets.find(p => p.id === id);
+      if (pres) {
+        descargarArchivoJSON(`${pres.nombre.replace(/\s+/g, "_")}-preset.json`, pres);
+        mostrarToast(`📤 Preset exportado`);
+      }
+    } else if (accion === "eliminarPreset") {
+      if (window.confirm("¿Eliminar este preset de escenario?")) {
+        eliminarPreset(id);
+        mostrarToast("🗑️ Preset eliminado");
+        abrirBibliotecaSimulaciones();
+      }
+    }
+  });
+}
+
+// Aplica y persiste el modo de tema (light, dark, auto).
+function cambiarModoTema(modo) {
+  const temaActual = cargarPreferenciaTema();
+  temaActual.modo = modo;
+  guardarPreferenciaTema(temaActual);
+  aplicarTemaColor(temaActual.modo, temaActual.acento);
+}
+
+// Aplica y persiste la paleta tonal de acento de Material 3.
+function cambiarAcentoColor(acento) {
+  const temaActual = cargarPreferenciaTema();
+  temaActual.acento = acento;
+  guardarPreferenciaTema(temaActual);
+  aplicarTemaColor(temaActual.modo, temaActual.acento);
 }
 
 // Solicita confirmación y elimina un modelo dinámico del almacenamiento y del registro activo.
@@ -493,6 +862,7 @@ function procesarEliminacionModeloDinamico() {
   eliminarModeloDinamico(modeloActual.id);
   eliminarModeloDinamicoDelRegistro(modeloActual.id);
   actualizarSelectorModelos(MODELOS[0].id);
+  mostrarToast(`🗑️ Modelo '${modeloActual.nombre}' eliminado`);
 }
 
 // Permite al usuario hacer clic en cualquier punto del Frente de Pareto para previsualizar instantáneamente ese mecanismo.
@@ -537,7 +907,7 @@ function manejarMouseMoveCanvasFitness(e) {
   elementosDOM.canvasFitness.style.cursor = cercano ? "pointer" : "crosshair";
 }
 
-// Registra todos los escuchadores de eventos interactivos del DOM principal y modal.
+// Registra todos los escuchadores de eventos interactivos del DOM principal, modales y temas.
 function registrarEventos() {
   elementosDOM.btnCorrer.addEventListener("click", iniciarCorrida);
   elementosDOM.btnPausar.addEventListener("click", alternarPausa);
@@ -548,10 +918,47 @@ function registrarEventos() {
   elementosDOM.canvasFitness.addEventListener("click", manejarClickCanvasFitness);
   elementosDOM.canvasFitness.addEventListener("mousemove", manejarMouseMoveCanvasFitness);
 
-  // Eventos del constructor de modelos low-code:
-  elementosDOM.btnAbrirConstructor.addEventListener("click", () => abrirModalConstructor(elementosModal));
-  elementosDOM.btnEliminarModelo.addEventListener("click", procesarEliminacionModeloDinamico);
+  // Controles de Modo de Color y Paletas de Acento Material 3:
+  if (elementosDOM.btnTemaClaro) elementosDOM.btnTemaClaro.addEventListener("click", () => cambiarModoTema("light"));
+  if (elementosDOM.btnTemaOscuro) elementosDOM.btnTemaOscuro.addEventListener("click", () => cambiarModoTema("dark"));
+  if (elementosDOM.btnTemaAuto) elementosDOM.btnTemaAuto.addEventListener("click", () => cambiarModoTema("auto"));
 
+  document.querySelectorAll(".btn-dot-paleta").forEach(btn => {
+    btn.addEventListener("click", () => cambiarAcentoColor(btn.dataset.color));
+  });
+
+  // Barra de herramientas de simulación (CRUD):
+  elementosDOM.btnAbrirConstructor.addEventListener("click", () => abrirModalConstructor(elementosModal, null, false));
+  if (elementosDOM.btnEditarModelo) {
+    elementosDOM.btnEditarModelo.addEventListener("click", () => {
+      if (modeloActual.esDinamico) abrirModalConstructor(elementosModal, modeloActual.definicionCruda, true);
+    });
+  }
+  if (elementosDOM.btnCopiarModelo) {
+    elementosDOM.btnCopiarModelo.addEventListener("click", () => procesarCopiarSimulacion());
+  }
+  if (elementosDOM.btnRenombrarModelo) {
+    elementosDOM.btnRenombrarModelo.addEventListener("click", () => {
+      if (modeloActual.esDinamico) abrirModalRenombrar(elementosRenombrar, modeloActual);
+    });
+  }
+  if (elementosDOM.btnGuardarPreset) {
+    elementosDOM.btnGuardarPreset.addEventListener("click", () => abrirModalGuardarPreset(elementosPreset, `Preset ${modeloActual.nombre}`));
+  }
+  if (elementosDOM.btnExportarModelo) {
+    elementosDOM.btnExportarModelo.addEventListener("click", procesarExportarSimulacionActual);
+  }
+  if (elementosDOM.btnImportarModelo) {
+    elementosDOM.btnImportarModelo.addEventListener("click", () => abrirModalImportar(elementosImportar));
+  }
+  if (elementosDOM.btnEliminarModelo) {
+    elementosDOM.btnEliminarModelo.addEventListener("click", procesarEliminacionModeloDinamico);
+  }
+  if (elementosDOM.btnAbrirBiblioteca) {
+    elementosDOM.btnAbrirBiblioteca.addEventListener("click", abrirBibliotecaSimulaciones);
+  }
+
+  // Modal Constructor:
   elementosModal.btnCerrar.addEventListener("click", () => cerrarModalConstructor(elementosModal));
   elementosModal.btnCancelar.addEventListener("click", () => cerrarModalConstructor(elementosModal));
   elementosModal.btnGuardar.addEventListener("click", procesarGuardadoModeloDinamico);
@@ -564,19 +971,66 @@ function registrarEventos() {
     });
   });
 
-  // Cerrar modal al presionar Escape o hacer clic fuera del diálogo
+  // Modal Renombrar:
+  if (elementosRenombrar.btnCerrar) elementosRenombrar.btnCerrar.addEventListener("click", () => cerrarModalRenombrar(elementosRenombrar));
+  if (elementosRenombrar.btnCancelar) elementosRenombrar.btnCancelar.addEventListener("click", () => cerrarModalRenombrar(elementosRenombrar));
+  if (elementosRenombrar.btnConfirmar) elementosRenombrar.btnConfirmar.addEventListener("click", procesarRenombrarConfirmacion);
+
+  // Modal Importar:
+  if (elementosImportar.btnCerrar) elementosImportar.btnCerrar.addEventListener("click", () => cerrarModalImportar(elementosImportar));
+  if (elementosImportar.btnCancelar) elementosImportar.btnCancelar.addEventListener("click", () => cerrarModalImportar(elementosImportar));
+  if (elementosImportar.btnConfirmar) elementosImportar.btnConfirmar.addEventListener("click", procesarImportarConfirmacion);
+
+  // Modal Guardar Preset:
+  if (elementosPreset.btnCerrar) elementosPreset.btnCerrar.addEventListener("click", () => cerrarModalGuardarPreset(elementosPreset));
+  if (elementosPreset.btnCancelar) elementosPreset.btnCancelar.addEventListener("click", () => cerrarModalGuardarPreset(elementosPreset));
+  if (elementosPreset.btnConfirmar) elementosPreset.btnConfirmar.addEventListener("click", procesarGuardarPresetConfirmacion);
+
+  // Modal Biblioteca:
+  if (elementosBiblioteca.btnCerrar) elementosBiblioteca.btnCerrar.addEventListener("click", () => cerrarModalBiblioteca(elementosBiblioteca));
+  if (elementosBiblioteca.btnCerrarPie) elementosBiblioteca.btnCerrarPie.addEventListener("click", () => cerrarModalBiblioteca(elementosBiblioteca));
+  if (elementosBiblioteca.btnNuevoDesdeBiblioteca) {
+    elementosBiblioteca.btnNuevoDesdeBiblioteca.addEventListener("click", () => {
+      cerrarModalBiblioteca(elementosBiblioteca);
+      abrirModalConstructor(elementosModal, null, false);
+    });
+  }
+  if (elementosBiblioteca.btnImportarDesdeBiblioteca) {
+    elementosBiblioteca.btnImportarDesdeBiblioteca.addEventListener("click", () => {
+      cerrarModalBiblioteca(elementosBiblioteca);
+      abrirModalImportar(elementosImportar);
+    });
+  }
+
+  // Cierre de modales con Escape y clic en el telón de fondo (backdrop)
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && elementosModal.modal.style.display !== "none") {
+    if (e.key === "Escape") {
       cerrarModalConstructor(elementosModal);
+      cerrarModalRenombrar(elementosRenombrar);
+      cerrarModalImportar(elementosImportar);
+      cerrarModalGuardarPreset(elementosPreset);
+      cerrarModalBiblioteca(elementosBiblioteca);
     }
   });
 
-  elementosModal.modal.addEventListener("click", (e) => {
-    if (e.target === elementosModal.modal) {
-      cerrarModalConstructor(elementosModal);
+  const modales = [
+    elementosModal.modal,
+    elementosRenombrar.modal,
+    elementosImportar.modal,
+    elementosPreset.modal,
+    elementosBiblioteca.modal
+  ];
+  modales.forEach(m => {
+    if (m) {
+      m.addEventListener("click", (e) => {
+        if (e.target === m) {
+          m.style.display = "none";
+        }
+      });
     }
   });
 
+  // Redibujado responsivo del gráfico Canvas ante cambios de tamaño de ventana:
   window.addEventListener("resize", () => {
     if (datosMultiobjetivoActuales && datosMultiobjetivoActuales.esMultiobjetivo) {
       dibujarGraficoFitness(
@@ -599,14 +1053,18 @@ function registrarEventos() {
 
 // Inicialización de la aplicación al cargar el script.
 function inicializarApp() {
-  // 1. Carga y registro de modelos dinámicos guardados en localStorage.
+  // 1. Carga de preferencias de tema y paleta Material 3
+  const temaPreferido = cargarPreferenciaTema();
+  aplicarTemaColor(temaPreferido.modo, temaPreferido.acento);
+
+  // 2. Carga y registro de modelos dinámicos guardados en localStorage.
   const modelosGuardados = cargarModelosDinamicos();
   cargarModelosDinamicosEnRegistro(modelosGuardados);
 
-  // 2. Inicialización del Web Worker y sincronización de modelos.
+  // 3. Inicialización del Web Worker y sincronización de modelos.
   inicializarWebWorker();
 
-  // 3. Inicialización de interfaz y restauración de estado.
+  // 4. Inicialización de interfaz y restauración de estado.
   inicializarSelectorModelos();
   restaurarEstadoApp();
   registrarEventos();

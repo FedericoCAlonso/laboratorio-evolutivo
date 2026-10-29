@@ -96,3 +96,86 @@ export function eliminarModeloDinamico(id) {
     return false;
   }
 }
+
+// Clave utilizada para almacenar la lista de escenarios o presets completos de simulación.
+export const CLAVE_PRESETS = "laboratorio_presets_simulacion_v1";
+
+// Guarda la lista de escenarios o presets guardados en localStorage con try/catch.
+export function guardarPresets(presets) {
+  try {
+    const serializado = JSON.stringify(presets);
+    localStorage.setItem(CLAVE_PRESETS, serializado);
+    return true;
+  } catch (error) {
+    console.warn("[Storage] No se pudieron guardar los presets:", error.message);
+    return false;
+  }
+}
+
+// Recupera y deserializa los presets de simulación guardados desde localStorage.
+export function cargarPresets() {
+  try {
+    const crudo = localStorage.getItem(CLAVE_PRESETS);
+    if (!crudo) return [];
+    const parseado = JSON.parse(crudo);
+    return Array.isArray(parseado) ? parseado : [];
+  } catch (error) {
+    console.warn("[Storage] No se pudieron leer los presets:", error.message);
+    return [];
+  }
+}
+
+// Guarda o actualiza un preset de simulación en localStorage.
+export function guardarUnPreset(preset) {
+  try {
+    const presets = cargarPresets();
+    const indice = presets.findIndex(p => p.id === preset.id);
+    if (indice >= 0) {
+      presets[indice] = preset;
+    } else {
+      presets.push(preset);
+    }
+    return guardarPresets(presets);
+  } catch (error) {
+    console.warn("[Storage] Error al guardar el preset:", error.message);
+    return false;
+  }
+}
+
+// Elimina un preset de simulación persistido a partir de su identificador.
+export function eliminarPreset(id) {
+  try {
+    const presets = cargarPresets();
+    const filtrados = presets.filter(p => p.id !== id);
+    return guardarPresets(filtrados);
+  } catch (error) {
+    console.warn("[Storage] Error al eliminar el preset:", error.message);
+    return false;
+  }
+}
+
+// Clave utilizada para almacenar las preferencias de tema y paleta de color Material 3.
+export const CLAVE_TEMA = "laboratorio_tema_preferencias_v1";
+
+// Guarda las preferencias del tema de usuario (modo: light/dark/auto y acento: ocean/emerald/amethyst/terracotta).
+export function guardarPreferenciaTema(tema) {
+  try {
+    localStorage.setItem(CLAVE_TEMA, JSON.stringify(tema));
+    return true;
+  } catch (error) {
+    console.warn("[Storage] No se pudieron guardar las preferencias de tema:", error.message);
+    return false;
+  }
+}
+
+// Recupera las preferencias del tema de usuario desde localStorage.
+export function cargarPreferenciaTema() {
+  try {
+    const crudo = localStorage.getItem(CLAVE_TEMA);
+    if (!crudo) return { modo: "auto", acento: "ocean" };
+    return JSON.parse(crudo);
+  } catch (error) {
+    console.warn("[Storage] No se pudieron leer las preferencias de tema:", error.message);
+    return { modo: "auto", acento: "ocean" };
+  }
+}
