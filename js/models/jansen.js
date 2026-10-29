@@ -196,9 +196,21 @@ export const ModeloPataJansen = {
   descripcion: "Optimiza los 12 parámetros de eslabonamiento de Theo Jansen con restricciones físicas de gálibo máximo y despeje para superar obstáculos.",
   usaWasm: true,
   usaRuido: false,
+  // Nombres descriptivos de los objetivos para optimización multiobjetivo Pareto.
+  nombresObjetivos: ["Suavidad (Aceleración f5)", "Zancada (Error f2)"],
 
   // Parámetros de entrada editables por el usuario incluyendo las restricciones duras de entorno.
   parametrosEntrada: [
+    {
+      clave: "modoOptimizacion",
+      etiqueta: "Modo de Optimización",
+      tipo: "selector",
+      opciones: [
+        { valor: "multiobjetivo", etiqueta: "Multiobjetivo Pareto (Suavidad vs Zancada)" },
+        { valor: "monobjetivo", etiqueta: "Monobjetivo (Suma ponderada con pesos)" }
+      ],
+      valorDefecto: "multiobjetivo"
+    },
     { clave: "amplitud", etiqueta: "Amplitud de búsqueda genética (±%)", tipo: "numero", min: 0.05, max: 0.80, paso: 0.05, valorDefecto: 0.30 },
     { clave: "zancadaObjetivo", etiqueta: "Zancada objetivo (múltiplos de manivela m=15)", tipo: "numero", min: 1.0, max: 8.0, paso: 0.5, valorDefecto: 4.0 },
     { clave: "maxAncho", etiqueta: "Ancho máximo permitido de la trayectoria", tipo: "numero", min: 30, max: 200, paso: 5, valorDefecto: 80 },
@@ -253,6 +265,9 @@ export const ModeloPataJansen = {
 
   // Evalúa la marcha aplicando las barreras físicas duras de entorno y luego la función multiobjetivo.
   evaluar(genoma, entrada) {
+    const modo = (entrada?.modoOptimizacion || "multiobjetivo").toString().toLowerCase().trim();
+    const esMultiobjetivo = modo === "multiobjetivo";
+
     const maxAncho = Number(entrada?.maxAncho !== undefined ? entrada.maxAncho : 80);
     const maxAlto = Number(entrada?.maxAlto !== undefined ? entrada.maxAlto : 40);
     const obstaculoAlto = Number(entrada?.obstaculoAlto !== undefined ? entrada.obstaculoAlto : 15);
@@ -280,7 +295,11 @@ export const ModeloPataJansen = {
       else pasos.push({ idx: s, ...res });
     }
 
-    if (pasosInvalidos > 0) return 1000 + 10 * pasosInvalidos;
+    if (pasosInvalidos > 0) {
+      return esMultiobjetivo
+        ? [1000 + 10 * pasosInvalidos, 1000 + 10 * pasosInvalidos]
+        : 1000 + 10 * pasosInvalidos;
+    }
 
     let minX = Infinity, maxX = -Infinity;
     let minY = Infinity, maxY = -Infinity;
@@ -299,10 +318,14 @@ export const ModeloPataJansen = {
     for (let s = 0; s < N; s++) {
       const hAct = pasos[s].H;
       const hSig = pasos[(s + 1) % N].H;
-      if (Math.hypot(hSig.x - hAct.x, hSig.y - hAct.y) > 0.25 * diagCaja) return 500;
+      if (Math.hypot(hSig.x - hAct.x, hSig.y - hAct.y) > 0.25 * diagCaja) {
+        return esMultiobjetivo ? [500, 500] : 500;
+      }
     }
 
-    if (alturaTotal <= 1e-6 || anchoTotal <= 1e-6) return 800;
+    if (alturaTotal <= 1e-6 || anchoTotal <= 1e-6) {
+      return esMultiobjetivo ? [800, 800] : 800;
+    }
 
     const numApoyo = Math.round(N * 0.35);
     const ordenadosPorY = [...pasos].sort((p1, p2) => p1.H.y - p2.H.y);
@@ -323,7 +346,9 @@ export const ModeloPataJansen = {
     }
 
     const anchoApoyo = maxXApoyo - minXApoyo;
-    if (anchoApoyo <= 1e-6) return 800;
+    if (anchoApoyo <= 1e-6) {
+      return esMultiobjetivo ? [800, 800] : 800;
+    }
 
     const mediaYApoyo = sumaYApoyo / numApoyo;
 
@@ -332,7 +357,7 @@ export const ModeloPataJansen = {
 
     // Filtros eliminatorios duros de entorno: descarta de inmediato con penalización 800 si viola las restricciones físicas.
     if (anchoTotal > maxAncho || alturaTotal > maxAlto || despeje_real < obstaculoAlto) {
-      return 800;
+      return esMultiobjetivo ? [800, 800] : 800;
     }
 
     const f1 = (maxYApoyo - minYApoyo) / alturaTotal;
@@ -392,6 +417,12 @@ export const ModeloPataJansen = {
     }
 
     const f9 = (anchoTotal - anchoApoyo) / (anchoTotal || 1);
+
+    // En optimización multiobjetivo Pareto retornamos el par [f5, f2] sin sumar con pesos w.
+    if (esMultiobjetivo) {
+      const penPlanitud = f1 > 0.25 ? (f1 - 0.25) * 2.0 : 0;
+      return [f5, f2 + penPlanitud];
+    }
 
     return w1 * f1 + w2 * f2 + w3 * f3 + w4 * f4 + w5 * f5 + w7 * f7 + w9 * f9;
   },
@@ -980,6 +1011,12 @@ export const ModeloPataJansen = {
     if (!m.valido) {
       texto += `  • Estado : Solución descartada por restricciones físicas o cinemáticas (Fitness: ${m.fitness.toFixed(1)})\n`;
     } else {
+      const modoDesc = (entrada?.modoOptimizacion || "multiobjetivo").toString().toLowerCase().trim();
+      if (modoDesc === "multiobjetivo") {
+        texto += `  • Modo de Optimización      : Multiobjetivo NSGA-II (Frente de Pareto)\n`;
+        texto += `  • Objetivo 1 - Suavidad f5  : ${m.f5.toFixed(4)} (Pico de aceleración: ${m.picoAceleracion.toFixed(2)} m·ω²)\n`;
+        texto += `  • Objetivo 2 - Zancada f2   : ${m.f2.toFixed(4)} (Ancho de apoyo: ${m.anchoApoyo.toFixed(2)} u)\n`;
+      }
       texto += `  • f1 (Planitud de apoyo)    : ${m.f1.toFixed(4)}  (Jansen: ${mRef.f1.toFixed(4)})\n`;
       texto += `  • f2 (Zancada horizontal)   : ${m.f2.toFixed(4)}  (Jansen: ${mRef.f2.toFixed(4)})\n`;
       texto += `  • f3 (Despeje de retorno)   : ${m.f3.toFixed(4)}  (Jansen: ${mRef.f3.toFixed(4)})\n`;

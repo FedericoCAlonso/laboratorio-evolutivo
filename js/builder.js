@@ -86,8 +86,10 @@ export function validarDefinicionModelo(definicion) {
 
   try {
     const resPrueba = compilacion.fn(varsPrueba, Math.random);
-    if (typeof resPrueba !== "number" || isNaN(resPrueba)) {
-      throw new Error("La función de evaluación debe retornar un número válido.");
+    const esNumeroValido = typeof resPrueba === "number" && !isNaN(resPrueba);
+    const esArregloValido = Array.isArray(resPrueba) && resPrueba.length >= 2 && resPrueba.every(v => typeof v === "number" && !isNaN(v));
+    if (!esNumeroValido && !esArregloValido) {
+      throw new Error("La función de evaluación debe retornar un número válido o un arreglo de números (para multiobjetivo).");
     }
   } catch (error) {
     throw new Error(`Error al ejecutar el código de prueba con valores iniciales: ${error.message}`);
@@ -142,6 +144,12 @@ export function compilarModeloDinamico(definicionCruda) {
 
       try {
         const puntaje = funcionEvaluacion(vars, rng || Math.random);
+        if (Array.isArray(puntaje)) {
+          if (puntaje.length >= 2 && puntaje.every(v => typeof v === "number" && !isNaN(v))) {
+            return puntaje;
+          }
+          return [999999, 999999];
+        }
         if (typeof puntaje !== "number" || isNaN(puntaje)) {
           return 999999;
         }

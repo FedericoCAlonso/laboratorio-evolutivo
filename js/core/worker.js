@@ -58,17 +58,18 @@ async function iniciarOptimizacion(datos) {
   const modelo = obtenerModeloPorId(modeloId);
   estadoSimulacion = "CORRIENDO";
 
-  // Verificamos si el modelo admite WASM y si el binario está compilado.
+  // Verificamos si el modelo admite WASM y si la optimización no es multiobjetivo.
   let instanciaWasm = null;
-  if (modelo.usaWasm) {
+  const esMulti = entrada?.modoOptimizacion === "multiobjetivo";
+  if (modelo.usaWasm && !esMulti) {
     instanciaWasm = await cargarWasmSiExiste();
   }
 
   if (instanciaWasm && instanciaWasm.exports && (instanciaWasm.exports.correr_tanda_jansen_c || instanciaWasm.exports._correr_tanda_jansen_c)) {
-    // Modo 1: Aceleración en WebAssembly (WASM).
+    // Modo 1: Aceleración en WebAssembly (WASM para monobjetivo).
     ejecutarConWasm(instanciaWasm, modelo, config, entrada);
   } else {
-    // Modo 2: Motor genético estándar en JavaScript (Fallback transparente).
+    // Modo 2: Motor genético estándar en JavaScript (con soporte multiobjetivo NSGA-II).
     ejecutarConJs(modelo, config, entrada);
   }
 }
@@ -89,7 +90,7 @@ function ejecutarConJs(modelo, config, entrada) {
   motorJsActivo.correr(modelo, entrada, (progreso) => {
     postMessage({
       tipo: "progreso",
-      motorTipo: "JavaScript (Fallback)",
+      motorTipo: progreso.esMultiobjetivo ? "NSGA-II Pareto" : "JavaScript (Fallback)",
       ...progreso
     });
 

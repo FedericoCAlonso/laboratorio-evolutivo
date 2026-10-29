@@ -22,6 +22,8 @@ import {
   obtenerDatosEntradaModelo,
   obtenerParametrosMotor,
   dibujarGraficoFitness,
+  obtenerPuntoParetoCercano,
+  actualizarLeyendaGrafico,
   actualizarBotonesControl,
   abrirModalConstructor,
   cerrarModalConstructor,
@@ -46,6 +48,10 @@ let datosGraficoActuales = {
   historiaPromedio: [],
   totalGeneraciones: 200
 };
+
+// Estado multiobjetivo activo para renderizado interactivo y selección de soluciones en el Frente de Pareto.
+let datosMultiobjetivoActuales = null;
+let individuoParetoSeleccionado = null;
 
 // Motor de respaldo en el hilo principal si el entorno bloquea Web Workers (p. ej. protocolo file://).
 let motorFallbackLocal = null;
@@ -75,6 +81,7 @@ const elementosDOM = {
   textoEstado: document.getElementById("texto-estado"),
   textoGeneracion: document.getElementById("texto-generacion"),
   etiquetaMejorFitness: document.getElementById("etiqueta-mejor-fitness"),
+  tituloGrafico: document.getElementById("titulo-grafico"),
   canvasFitness: document.getElementById("canvas-fitness")
 };
 
@@ -116,7 +123,7 @@ function inicializarWebWorker() {
   }
 }
 
-// Procesa las notificaciones de progreso y finalización emitidas por el Web Worker.
+// Procesa las notificaciones de progreso y finalización emitidas por el Web Worker o motor local.
 function procesarMensajeWorker(evento) {
   const datos = evento.data;
   if (!datos) return;
@@ -125,41 +132,111 @@ function procesarMensajeWorker(evento) {
     const porcentaje = Math.min(100, (datos.generacion / datos.totalGeneraciones) * 100);
     elementosDOM.barraProgreso.style.width = `${porcentaje}%`;
     elementosDOM.textoGeneracion.textContent = `Gen ${datos.generacion} / ${datos.totalGeneraciones}`;
-    elementosDOM.etiquetaMejorFitness.textContent = `Fitness: ${datos.mejorFitness.toFixed(4)} (${datos.motorTipo || "Auto"})`;
 
-    datosGraficoActuales = {
-      historiaMejor: datos.historiaMejor,
-      historiaPromedio: datos.historiaPromedio,
-      totalGeneraciones: datos.totalGeneraciones
-    };
+    if (datos.esMultiobjetivo) {
+      // Modo Multiobjetivo (Frente de Pareto NSGA-II).
+      if (elementosDOM.tituloGrafico) {
+        elementosDOM.tituloGrafico.textContent = "📈 Frente de Pareto Multiobjetivo (Haz clic en un punto para ver su mecanismo)";
+      }
+      const numSoluciones = datos.frentePareto ? datos.frentePareto.length : 0;
+      elementosDOM.etiquetaMejorFitness.textContent = `Frente Pareto: ${numSoluciones} sol. (${datos.motorTipo || "NSGA-II"})`;
 
-    dibujarGraficoFitness(
-      elementosDOM.canvasFitness,
-      datos.historiaMejor,
-      datos.historiaPromedio,
-      datos.totalGeneraciones
-    );
+      // Si aún no se fijó una selección manual, se toma por defecto la primera solución del frente.
+      if (!individuoParetoSeleccionado && datos.frentePareto && datos.frentePareto.length > 0) {
+        individuoParetoSeleccionado = datos.frentePareto[0];
+      }
 
-    // El dibujo del modelo se ejecuta de forma segura en el hilo principal.
-    if (datos.mejorGenoma && ultimaEntradaModelo !== null) {
-      modeloActual.dibujar(
-        datos.mejorGenoma,
-        ultimaEntradaModelo,
-        elementosDOM.contenedorDibujoModelo,
-        {
-          fitnessInicialAzar: datos.fitnessInicialAzar,
-          genomaInicialAzar: datos.genomaInicialAzar
-        }
+      datosMultiobjetivoActuales = {
+        esMultiobjetivo: true,
+        frentePareto: datos.frentePareto,
+        poblacion: datos.poblacion,
+        nombresObjetivos: datos.nombresObjetivos,
+        individuoSeleccionado: individuoParetoSeleccionado
+      };
+
+      datosGraficoActuales = {
+        historiaMejor: [],
+        historiaPromedio: [],
+        totalGeneraciones: datos.totalGeneraciones
+      };
+
+      actualizarLeyendaGrafico(true);
+
+      dibujarGraficoFitness(
+        elementosDOM.canvasFitness,
+        null,
+        null,
+        datos.totalGeneraciones,
+        datosMultiobjetivoActuales
       );
-      elementosDOM.textoDescribirModelo.textContent = modeloActual.describir(
-        datos.mejorGenoma,
-        ultimaEntradaModelo
-      );
-    }
 
-    if (datos.completado) {
-      actualizarBotonesControl("DETENIDO", elementosDOM, elementosDOM.textoEstado);
-      elementosDOM.textoEstado.textContent = `✓ Optimización finalizada con éxito (${datos.motorTipo || "Completado"})`;
+      // El dibujo del modelo se ejecuta de forma segura en el hilo principal.
+      const genomaADibujar = individuoParetoSeleccionado ? individuoParetoSeleccionado.genoma : datos.mejorGenoma;
+      if (genomaADibujar && ultimaEntradaModelo !== null) {
+        modeloActual.dibujar(
+          genomaADibujar,
+          ultimaEntradaModelo,
+          elementosDOM.contenedorDibujoModelo,
+          {
+            fitnessInicialAzar: datos.fitnessInicialAzar,
+            genomaInicialAzar: datos.genomaInicialAzar
+          }
+        );
+        elementosDOM.textoDescribirModelo.textContent = modeloActual.describir(
+          genomaADibujar,
+          ultimaEntradaModelo
+        );
+      }
+
+      if (datos.completado) {
+        actualizarBotonesControl("DETENIDO", elementosDOM, elementosDOM.textoEstado);
+        elementosDOM.textoEstado.textContent = `✓ Optimización finalizada con éxito (${numSoluciones} soluciones en el Frente de Pareto)`;
+      }
+    } else {
+      // Modo Monobjetivo tradicional con gráfico de convergencia escalar.
+      if (elementosDOM.tituloGrafico) {
+        elementosDOM.tituloGrafico.textContent = "📈 Curva de Convergencia del Fitness (Menor = Mejor)";
+      }
+      elementosDOM.etiquetaMejorFitness.textContent = `Fitness: ${typeof datos.mejorFitness === "number" ? datos.mejorFitness.toFixed(4) : datos.mejorFitness} (${datos.motorTipo || "Auto"})`;
+
+      datosMultiobjetivoActuales = null;
+      individuoParetoSeleccionado = null;
+      actualizarLeyendaGrafico(false);
+
+      datosGraficoActuales = {
+        historiaMejor: datos.historiaMejor,
+        historiaPromedio: datos.historiaPromedio,
+        totalGeneraciones: datos.totalGeneraciones
+      };
+
+      dibujarGraficoFitness(
+        elementosDOM.canvasFitness,
+        datos.historiaMejor,
+        datos.historiaPromedio,
+        datos.totalGeneraciones
+      );
+
+      // El dibujo del modelo se ejecuta de forma segura en el hilo principal.
+      if (datos.mejorGenoma && ultimaEntradaModelo !== null) {
+        modeloActual.dibujar(
+          datos.mejorGenoma,
+          ultimaEntradaModelo,
+          elementosDOM.contenedorDibujoModelo,
+          {
+            fitnessInicialAzar: datos.fitnessInicialAzar,
+            genomaInicialAzar: datos.genomaInicialAzar
+          }
+        );
+        elementosDOM.textoDescribirModelo.textContent = modeloActual.describir(
+          datos.mejorGenoma,
+          ultimaEntradaModelo
+        );
+      }
+
+      if (datos.completado) {
+        actualizarBotonesControl("DETENIDO", elementosDOM, elementosDOM.textoEstado);
+        elementosDOM.textoEstado.textContent = `✓ Optimización finalizada con éxito (${datos.motorTipo || "Completado"})`;
+      }
     }
   } else if (datos.tipo === "estado") {
     actualizarBotonesControl(datos.estado, elementosDOM, elementosDOM.textoEstado);
@@ -173,6 +250,10 @@ function iniciarCorrida() {
     const configMotor = obtenerParametrosMotor();
     const entradaModelo = obtenerDatosEntradaModelo(modeloActual);
     ultimaEntradaModelo = entradaModelo;
+
+    // Limpieza de selecciones e histórico multiobjetivo previo.
+    individuoParetoSeleccionado = null;
+    datosMultiobjetivoActuales = null;
 
     // Persistencia automática de la última configuración válida.
     guardarEstadoApp();
@@ -321,6 +402,13 @@ function actualizarSelectorModelos(idSeleccionar = null) {
   window.__modeloActualId = modeloActual.id;
   elementosDOM.descripcionModelo.textContent = modeloActual.descripcion;
   actualizarBotonEliminarModelo();
+  datosMultiobjetivoActuales = null;
+  individuoParetoSeleccionado = null;
+  if (elementosDOM.tituloGrafico) {
+    elementosDOM.tituloGrafico.textContent = "📈 Curva de Convergencia del Fitness (Menor = Mejor)";
+  }
+  actualizarLeyendaGrafico(false);
+  dibujarGraficoFitness(elementosDOM.canvasFitness, [], [], 200);
   construirFormularioModelo(modeloActual, elementosDOM.contenedorFormularioModelo, null, elementosDOM.contenedorAlerta);
   mostrarSolucionInicialModelo();
 }
@@ -407,12 +495,58 @@ function procesarEliminacionModeloDinamico() {
   actualizarSelectorModelos(MODELOS[0].id);
 }
 
+// Permite al usuario hacer clic en cualquier punto del Frente de Pareto para previsualizar instantáneamente ese mecanismo.
+function manejarClickCanvasFitness(e) {
+  if (!datosMultiobjetivoActuales || !datosMultiobjetivoActuales.esMultiobjetivo) return;
+
+  const seleccionado = obtenerPuntoParetoCercano(elementosDOM.canvasFitness, e.clientX, e.clientY);
+  if (seleccionado) {
+    individuoParetoSeleccionado = seleccionado;
+    datosMultiobjetivoActuales.individuoSeleccionado = seleccionado;
+
+    dibujarGraficoFitness(
+      elementosDOM.canvasFitness,
+      null,
+      null,
+      datosGraficoActuales.totalGeneraciones,
+      datosMultiobjetivoActuales
+    );
+
+    if (ultimaEntradaModelo !== null && modeloActual.dibujar) {
+      modeloActual.dibujar(
+        seleccionado.genoma,
+        ultimaEntradaModelo,
+        elementosDOM.contenedorDibujoModelo
+      );
+      elementosDOM.textoDescribirModelo.textContent = modeloActual.describir(
+        seleccionado.genoma,
+        ultimaEntradaModelo
+      );
+    }
+
+    const fit0 = Array.isArray(seleccionado.fitness) ? seleccionado.fitness[0].toFixed(3) : seleccionado.fitness;
+    const fit1 = Array.isArray(seleccionado.fitness) && seleccionado.fitness.length > 1 ? seleccionado.fitness[1].toFixed(3) : "";
+    elementosDOM.etiquetaMejorFitness.textContent = `★ Solución: [${fit0}, ${fit1}]`;
+  }
+}
+
+// Actualiza el puntero del mouse sobre el canvas de Pareto al aproximarse a una solución óptima.
+function manejarMouseMoveCanvasFitness(e) {
+  if (!datosMultiobjetivoActuales || !datosMultiobjetivoActuales.esMultiobjetivo) return;
+  const cercano = obtenerPuntoParetoCercano(elementosDOM.canvasFitness, e.clientX, e.clientY);
+  elementosDOM.canvasFitness.style.cursor = cercano ? "pointer" : "crosshair";
+}
+
 // Registra todos los escuchadores de eventos interactivos del DOM principal y modal.
 function registrarEventos() {
   elementosDOM.btnCorrer.addEventListener("click", iniciarCorrida);
   elementosDOM.btnPausar.addEventListener("click", alternarPausa);
   elementosDOM.btnDetener.addEventListener("click", detenerCorrida);
   elementosDOM.btnNuevaSemilla.addEventListener("click", generarNuevaSemilla);
+
+  // Interacción táctil y de clic sobre el Canvas de convergencia/Pareto:
+  elementosDOM.canvasFitness.addEventListener("click", manejarClickCanvasFitness);
+  elementosDOM.canvasFitness.addEventListener("mousemove", manejarMouseMoveCanvasFitness);
 
   // Eventos del constructor de modelos low-code:
   elementosDOM.btnAbrirConstructor.addEventListener("click", () => abrirModalConstructor(elementosModal));
@@ -444,12 +578,22 @@ function registrarEventos() {
   });
 
   window.addEventListener("resize", () => {
-    dibujarGraficoFitness(
-      elementosDOM.canvasFitness,
-      datosGraficoActuales.historiaMejor,
-      datosGraficoActuales.historiaPromedio,
-      datosGraficoActuales.totalGeneraciones
-    );
+    if (datosMultiobjetivoActuales && datosMultiobjetivoActuales.esMultiobjetivo) {
+      dibujarGraficoFitness(
+        elementosDOM.canvasFitness,
+        null,
+        null,
+        datosGraficoActuales.totalGeneraciones,
+        datosMultiobjetivoActuales
+      );
+    } else {
+      dibujarGraficoFitness(
+        elementosDOM.canvasFitness,
+        datosGraficoActuales.historiaMejor,
+        datosGraficoActuales.historiaPromedio,
+        datosGraficoActuales.totalGeneraciones
+      );
+    }
   });
 }
 
