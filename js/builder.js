@@ -159,69 +159,6 @@ export function compilarModeloDinamico(definicionCruda) {
       }
     },
 
-    // Detiene animaciones si las hubiera en este modelo dinámico.
-    detenerAnimacion() {},
-
-    // Dibuja en el DOM una representación visual por defecto con barras horizontales para cada variable y tarjetas de estado.
-    dibujar(genoma, entrada, contenedor) {
-      if (!contenedor) return;
-
-      const vars = {};
-      for (let i = 0; i < varsDef.length; i++) {
-        vars[varsDef[i].nombre] = genoma[i];
-      }
-
-      let fitnessActual = 0;
-      try {
-        fitnessActual = funcionEvaluacion(vars, Math.random);
-      } catch (e) {
-        fitnessActual = 999999;
-      }
-
-      let htmlBarras = "";
-      varsDef.forEach((v, idx) => {
-        const val = genoma[idx];
-        const pct = Math.max(0, Math.min(100, ((val - v.min) / (v.max - v.min || 1)) * 100));
-        const valFormateado = v.tipo === "entero" ? Math.round(val) : val.toFixed(3);
-
-        htmlBarras += `
-          <div style="margin-bottom: 0.9rem;">
-            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.25rem;">
-              <span style="font-weight: 600;">${v.nombre} <span style="font-weight: 400; color: var(--texto-secundario);">(${v.tipo})</span></span>
-              <span style="font-family: monospace; font-weight: 600; color: var(--primario);">${valFormateado}</span>
-            </div>
-            <div style="position: relative; height: 18px; background: var(--bg-input); border-radius: 9px; overflow: hidden; border: 1px solid var(--borde);">
-              <div style="width: ${pct}%; height: 100%; background: linear-gradient(90deg, var(--primario), var(--exito)); border-radius: 9px; transition: width 0.15s ease;"></div>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--texto-secundario); margin-top: 2px;">
-              <span>Mín: ${v.min}</span>
-              <span>${pct.toFixed(1)}% del rango</span>
-              <span>Máx: ${v.max}</span>
-            </div>
-          </div>
-        `;
-      });
-
-      contenedor.innerHTML = `
-        <div class="comparativa-azar" style="margin-bottom: 1rem;">
-          <div class="tarjeta-stat">
-            <div class="stat-etiqueta">Fitness Obtenido</div>
-            <div class="stat-valor" style="color: var(--exito);">${fitnessActual.toFixed(4)}</div>
-            <div class="stat-sub">Función de evaluación matemática</div>
-          </div>
-          <div class="tarjeta-stat">
-            <div class="stat-etiqueta">Variables Optimizadas</div>
-            <div class="stat-valor" style="color: var(--primario);">${varsDef.length}</div>
-            <div class="stat-sub">Genes continuos / enteros</div>
-          </div>
-        </div>
-        <div style="padding: 1.25rem; background: var(--bg-tarjeta); border: 1px solid var(--borde); border-radius: var(--radio-sm);">
-          <h4 style="font-size: 0.9rem; margin-bottom: 1rem; color: var(--texto-principal);">Distribución y Magnitud de Variables en su Rango</h4>
-          ${htmlBarras}
-        </div>
-      `;
-    },
-
     // Genera un informe textual detallado con las variables encontradas, sus rangos y el fitness resultante.
     describir(genoma) {
       const vars = {};
@@ -265,6 +202,27 @@ export function clonarModeloDinamico(definicionOriginal, nuevoNombre = null) {
   copia.nombre = (nuevoNombre || `${copia.nombre} (Copia)`).trim();
   copia.id = `${generarIdModelo(copia.nombre)}-${Math.floor(Math.random() * 9000 + 1000)}`;
   return copia;
+}
+
+// Clona un modelo (sea dinámico o nativo) generando una definición cruda dinámica editable.
+export function clonarModeloExistente(modeloOriginal, nuevoNombre = null) {
+  if (modeloOriginal.esDinamico && modeloOriginal.definicionCruda) {
+    return clonarModeloDinamico(modeloOriginal.definicionCruda, nuevoNombre);
+  }
+  const genes = modeloOriginal.crearGenoma ? modeloOriginal.crearGenoma() : [];
+  const nombreCopia = (nuevoNombre || `${modeloOriginal.nombre} (Copia)`).trim();
+  return {
+    id: `dinamico-${modeloOriginal.id}-${Math.floor(Math.random() * 9000 + 1000)}`,
+    nombre: nombreCopia,
+    descripcion: `Variante personalizada basada en ${modeloOriginal.nombre}. Modifique las variables y función de evaluación.`,
+    variables: genes.map((g, i) => ({
+      nombre: g.nombre || `var${i + 1}`,
+      tipo: g.tipo || "continuo",
+      min: g.min !== undefined ? g.min : 0,
+      max: g.max !== undefined ? g.max : 100
+    })),
+    codigoEvaluacion: `// Definición basada en ${modeloOriginal.nombre}\n// Variables disponibles en 'vars':\nlet coste = 0;\nfor (const k in vars) {\n  coste += Math.pow(vars[k], 2);\n}\nreturn Math.sqrt(coste);`
+  };
 }
 
 // Renombra un modelo dinámico actualizando su título, descripción e identificador seguro.

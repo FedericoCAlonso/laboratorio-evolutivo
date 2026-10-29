@@ -1,0 +1,147 @@
+// =========================================================================
+// CAPA VISTA: CONTROLADOR DE DIÁLOGOS MODALES Y ALERTAS DE USUARIO
+// ARQUITECTURA MVVM - GESTIÓN MODAL DE BIBLIOTECA, CONFIGURACIÓN Y CONSTRUCTOR
+// =========================================================================
+
+import {
+  mostrarAlerta,
+  mostrarToast,
+  abrirModalConstructor,
+  cerrarModalConstructor,
+  agregarFilaVariableConstructor,
+  extraerDefinicionModeloDesdeUI,
+  abrirModalBiblioteca,
+  cerrarModalBiblioteca,
+  abrirModalRenombrar,
+  cerrarModalRenombrar,
+  abrirModalImportar,
+  cerrarModalImportar,
+  abrirModalGuardarPreset,
+  cerrarModalGuardarPreset,
+  aplicarTemaColor
+} from "../ui.js";
+
+// Reexporta las funciones atómicas para consumo directo o desacoplado.
+export {
+  mostrarAlerta,
+  mostrarToast,
+  abrirModalConstructor,
+  cerrarModalConstructor,
+  agregarFilaVariableConstructor,
+  extraerDefinicionModeloDesdeUI,
+  abrirModalBiblioteca,
+  cerrarModalBiblioteca,
+  abrirModalRenombrar,
+  cerrarModalRenombrar,
+  abrirModalImportar,
+  cerrarModalImportar,
+  abrirModalGuardarPreset,
+  cerrarModalGuardarPreset,
+  aplicarTemaColor
+};
+
+// Controlador centralizado de ventanas modales y notificaciones en la interfaz de usuario.
+export class ModalesView {
+  // Inicializa el controlador asociando los grupos de elementos DOM de cada modal.
+  constructor(elementos = {}) {
+    this.elementosConstructor = elementos.constructor || {};
+    this.elementosBiblioteca = elementos.biblioteca || {};
+    this.elementosRenombrar = elementos.renombrar || {};
+    this.elementosImportar = elementos.importar || {};
+    this.elementosPreset = elementos.preset || {};
+    this.elementosConfiguracion = elementos.configuracion || {};
+  }
+
+  // Muestra una notificación flotante estilo Snackbar de Material 3.
+  notificar(mensaje, duracion = 3200) {
+    mostrarToast(mensaje, duracion);
+  }
+
+  // Muestra u oculta un banner de advertencia o error en un contenedor de alerta.
+  alerta(mensaje, elementoAlerta) {
+    mostrarAlerta(mensaje, elementoAlerta);
+  }
+
+  // Abre el modal de configuración de tema y color.
+  abrirConfiguracion() {
+    if (this.elementosConfiguracion.modal) {
+      this.elementosConfiguracion.modal.style.display = "flex";
+    }
+  }
+
+  // Cierra el modal de configuración.
+  cerrarConfiguracion() {
+    if (this.elementosConfiguracion.modal) {
+      this.elementosConfiguracion.modal.style.display = "none";
+    }
+  }
+
+  // Abre el constructor de simulaciones en modo creación o edición.
+  abrirConstructor(datosIniciales = null, esEdicion = false) {
+    abrirModalConstructor(this.elementosConstructor, datosIniciales, esEdicion);
+  }
+
+  // Cierra el constructor de simulaciones.
+  cerrarConstructor() {
+    cerrarModalConstructor(this.elementosConstructor);
+  }
+
+  // Extrae los datos ingresados en el formulario del constructor low-code.
+  extraerDatosConstructor() {
+    return extraerDefinicionModeloDesdeUI(this.elementosConstructor);
+  }
+
+  // Agrega una fila de variable al formulario del constructor.
+  agregarVariableConstructor(datosVariable = {}) {
+    if (this.elementosConstructor.tbody) {
+      agregarFilaVariableConstructor(this.elementosConstructor.tbody, datosVariable);
+    }
+  }
+
+  // Abre la biblioteca completa con simulaciones nativas, dinámicas y presets.
+  abrirBiblioteca(modelos, presets, onAccion) {
+    abrirModalBiblioteca(this.elementosBiblioteca, modelos, presets, onAccion);
+  }
+
+  // Cierra la biblioteca modal.
+  cerrarBiblioteca() {
+    cerrarModalBiblioteca(this.elementosBiblioteca);
+  }
+
+  // Abre el diálogo para renombrar una simulación.
+  abrirRenombrar(modelo) {
+    abrirModalRenombrar(this.elementosRenombrar, modelo);
+  }
+
+  // Cierra el diálogo de renombrado.
+  cerrarRenombrar() {
+    cerrarModalRenombrar(this.elementosRenombrar);
+  }
+
+  // Abre el modal para importar archivos JSON.
+  abrirImportar() {
+    abrirModalImportar(this.elementosImportar);
+  }
+
+  // Cierra el modal de importación JSON.
+  cerrarImportar() {
+    cerrarModalImportar(this.elementosImportar);
+  }
+
+  // Abre el diálogo para guardar un preset.
+  abrirGuardarPreset(sugerenciaNombre = "") {
+    abrirModalGuardarPreset(this.elementosPreset, sugerenciaNombre);
+  }
+
+  // Cierra el diálogo de guardar preset.
+  cerrarGuardarPreset() {
+    cerrarModalGuardarPreset(this.elementosPreset);
+  }
+
+  // Aplica el modo y la paleta tonal activa al documento.
+  aplicarTema(modo, acento) {
+    aplicarTemaColor(modo, acento);
+  }
+}
+
+export default ModalesView;
