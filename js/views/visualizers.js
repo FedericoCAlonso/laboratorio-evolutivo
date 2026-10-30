@@ -15,6 +15,9 @@ import { simularCampoTermico } from "../models/termico.js";
 import { simularArregloAcustico } from "../models/acustica.js";
 import { simularTrayectoriaLorentz, calcularCampoMagneticoBz } from "../models/electromagnetismo.js";
 import { simularAbsorbenteAcustico } from "../models/fonoabsorbente.js";
+import { simularLineaTransmisionRF } from "../models/linea-rf.js";
+import { simularCorteChapaNesting } from "../models/nesting.js";
+import { LienzoFuncionalRenderer, LienzoTopologicoRenderer } from "./renderers/index.js";
 
 // Estado checkbox para superponer la curva original de Theo Jansen en el lienzo Canvas.
 let mostrarReferenciaJansen = true;
@@ -3384,7 +3387,75 @@ export class VisualizadorFonoabsorbente {
 }
 
 // -------------------------------------------------------------------------
-// 15. VISUALIZADOR DE MODELOS DINÁMICOS LOW-CODE MULTI-NATURALEZA
+// 15. VISUALIZADOR DE LÍNEA DE TRANSMISIÓN RF Y CARTA DE SMITH
+// -------------------------------------------------------------------------
+export class VisualizadorLineaRF {
+  constructor() {
+    this.renderer = new LienzoFuncionalRenderer();
+  }
+
+  detener() {
+    this.renderer.detener();
+  }
+
+  render(contenedor, genoma, entrada, contexto = {}) {
+    if (!contenedor) return;
+    this.detener();
+
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 380;
+      canvas.style.width = "100%";
+      canvas.style.height = "380px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const sim = simularLineaTransmisionRF(genoma, entrada);
+    this.renderer.render(canvas, sim);
+  }
+}
+
+// -------------------------------------------------------------------------
+// 16. VISUALIZADOR DE CORTE DE CHAPA Y ANIDADO 2D (NESTING)
+// -------------------------------------------------------------------------
+export class VisualizadorNesting {
+  constructor() {
+    this.renderer = new LienzoTopologicoRenderer();
+  }
+
+  detener() {
+    this.renderer.detener();
+  }
+
+  render(contenedor, genoma, entrada, contexto = {}) {
+    if (!contenedor) return;
+    this.detener();
+
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 380;
+      canvas.style.width = "100%";
+      canvas.style.height = "380px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const sim = simularCorteChapaNesting(genoma, entrada);
+    this.renderer.render(canvas, sim);
+  }
+}
+
+// -------------------------------------------------------------------------
+// 17. VISUALIZADOR DE MODELOS DINÁMICOS LOW-CODE MULTI-NATURALEZA
 // -------------------------------------------------------------------------
 export class VisualizadorDinamico {
   constructor() {
@@ -3454,13 +3525,25 @@ export class VisualizadorDinamico {
       return;
     }
 
-    // 9. Representación de Distribución de Recursos / Cargas
+    // 9. Representación de Línea de Transmisión RF y Carta de Smith
+    if (tipo === "linea_transmision_smith" || tipo === "carta_smith") {
+      new VisualizadorLineaRF().render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+
+    // 10. Representación de Corte de Chapa y Anidado 2D (Nesting)
+    if (tipo === "corte_chapa_nesting" || tipo === "nesting_2d") {
+      new VisualizadorNesting().render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+
+    // 11. Representación de Distribución de Recursos / Cargas
     if (tipo === "distribucion_recursos") {
       this._renderizarDistribucionRecursos(contenedor, genoma, varsDef, contexto);
       return;
     }
 
-    // 10. Representación por defecto: Calibración y medidores de variables
+    // 12. Representación por defecto: Calibración y medidores de variables
     this._renderizarCalibracionVariables(contenedor, genoma, varsDef, contexto);
   }
 
@@ -3904,6 +3987,8 @@ const visualizadoresRegistrados = {
   "acustica-beamforming": new VisualizadorAcustica(),
   "confinamiento-em": new VisualizadorElectromagnetismo(),
   "superficie-fonoabsorbente": new VisualizadorFonoabsorbente(),
+  "linea-transmision-rf": new VisualizadorLineaRF(),
+  "corte-chapa-nesting": new VisualizadorNesting(),
   "pata-caminante": new VisualizadorCaminante(),
   "balanceo-fases-trifasico": new VisualizadorFases()
 };

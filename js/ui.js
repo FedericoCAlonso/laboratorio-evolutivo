@@ -15,7 +15,9 @@ const HINTS_VISUALIZACION = {
   "distribucion_recursos": "Presenta barras apiladas e indicadores de balanceo de cargas y capacidad de servidores.",
   "acustica_ondas_2d": "Simula la interferencia constructiva de ondas de presión acústica propagándose y el patrón polar de directividad.",
   "electromagnetismo_lorentz": "Muestra el flujo magnético Bz, bobinas de electroimanes y la trayectoria del haz de iones bajo la fuerza de Lorentz.",
-  "fonoabsorbente_acustico": "Ilustra el corte transversal de cuñas o capas estratificadas con atenuación espectral dBA y rebotes acústicos."
+  "fonoabsorbente_acustico": "Ilustra el corte transversal de cuñas o capas estratificadas con atenuación espectral dBA y rebotes acústicos.",
+  "linea_transmision_smith": "Traza el coeficiente de reflexión Gamma sobre la Carta de Smith polar y calcula la Relación de Onda Estacionaria (ROE).",
+  "corte_chapa_nesting": "Visualiza el plano de corte 2D con aprovechamiento de chapa matriz y minimización de retazos residuales."
 };
 
 // Muestra u oculta la barra superior de alerta con mensajes de error o validación.

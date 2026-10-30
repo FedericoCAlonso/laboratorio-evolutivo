@@ -289,6 +289,12 @@ export class AppViewModel {
     if (modelo.id === "superficie-fonoabsorbente") {
       return [85.0, 35.0, 50.0, 1.2, 22.0, 15.0];
     }
+    if (modelo.id === "linea-transmision-rf") {
+      return [0.05, 50.0, 0.02, 50.0];
+    }
+    if (modelo.id === "corte-chapa-nesting") {
+      return [8.0, 6.0, 4.0, 7.0, 3.0, 2.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0];
+    }
     return null;
   }
 

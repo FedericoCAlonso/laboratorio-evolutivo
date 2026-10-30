@@ -17,6 +17,8 @@ import { ModeloDistribucionTermica } from "./termico.js";
 import { ModeloArregloAcustico } from "./acustica.js";
 import { ModeloConfinamientoEM } from "./electromagnetismo.js";
 import { ModeloSuperficieFonoabsorbente } from "./fonoabsorbente.js";
+import { ModeloLineaTransmisionRF } from "./linea-rf.js";
+import { ModeloCorteChapaNesting } from "./nesting.js";
 import { compilarModeloDinamico } from "../builder.js";
 
 // Reexporta los modelos individuales para facilitar su importación directa.
@@ -34,7 +36,9 @@ export {
   ModeloDistribucionTermica,
   ModeloArregloAcustico,
   ModeloConfinamientoEM,
-  ModeloSuperficieFonoabsorbente
+  ModeloSuperficieFonoabsorbente,
+  ModeloLineaTransmisionRF,
+  ModeloCorteChapaNesting
 };
 
 // Lista global de todos los modelos de optimización disponibles en la aplicación (estáticos y dinámicos).
@@ -51,6 +55,8 @@ export const MODELOS = [
   ModeloArregloAcustico,
   ModeloConfinamientoEM,
   ModeloSuperficieFonoabsorbente,
+  ModeloLineaTransmisionRF,
+  ModeloCorteChapaNesting,
   ModeloBalanceoFases,
   ModeloPataCaminante
 ];

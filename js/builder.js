@@ -128,6 +128,32 @@ export const PLANTILLAS_SIMULACION = {
       { nombre: "camaraAire", tipo: "continuo", min: 0, max: 40 }
     ],
     codigoEvaluacion: `// Minimizar déficit respecto a 18 dBA de atenuación y volumen de material\\nconst espesor = vars.hCuna + vars.hBase + vars.camaraAire;\\nconst atenuacionEstimada = 8.0 + (espesor * 0.08) * (vars.sigma / (vars.sigma + 15));\\nconst deficit = Math.max(0, 18.0 - atenuacionEstimada);\\nreturn [deficit * 15.0, espesor * 0.6];`
+  },
+  "linea_rf": {
+    nombre: "Adaptación RF y Carta de Smith",
+    descripcion: "Sintonización de longitud e impedancia característica para adaptar una antena de 85+j40 ohms a 50 ohms.",
+    tipoVisualizacion: "linea_transmision_smith",
+    variables: [
+      { nombre: "longitudLinea", tipo: "continuo", min: 0.01, max: 0.12 },
+      { nombre: "z0Linea", tipo: "continuo", min: 30.0, max: 110.0 },
+      { nombre: "longitudStub", tipo: "continuo", min: 0.005, max: 0.06 },
+      { nombre: "z0Stub", tipo: "continuo", min: 35.0, max: 90.0 }
+    ],
+    codigoEvaluacion: `// Minimizar desadaptación en ROE (SWR) a 1 GHz y longitud física total\\nconst roeEstimada = 1.0 + Math.abs(vars.z0Linea - 65.0)*0.015 + Math.abs(vars.longitudLinea - 0.04)*10.0;\\nreturn [roeEstimada - 1.0, (vars.longitudLinea + vars.longitudStub) * 1000.0];`
+  },
+  "corte_chapa": {
+    nombre: "Corte y Anidado 2D de Chapa",
+    descripcion: "Prioridades de empaquetamiento y rotaciones de 6 piezas para maximizar el aprovechamiento de la chapa matriz.",
+    tipoVisualizacion: "corte_chapa_nesting",
+    variables: [
+      { nombre: "p1", tipo: "continuo", min: 0.0, max: 10.0 },
+      { nombre: "p2", tipo: "continuo", min: 0.0, max: 10.0 },
+      { nombre: "p3", tipo: "continuo", min: 0.0, max: 10.0 },
+      { nombre: "rot1", tipo: "continuo", min: 0.0, max: 1.0 },
+      { nombre: "rot2", tipo: "continuo", min: 0.0, max: 1.0 },
+      { nombre: "rot3", tipo: "continuo", min: 0.0, max: 1.0 }
+    ],
+    codigoEvaluacion: `// Minimizar desperdicio de material porcentual y longitud de corte\\nconst ordenDesc = vars.p1 >= vars.p2 && vars.p2 >= vars.p3 ? 0 : 15;\\nconst rotadas = (vars.rot1 > 0.5 ? 1 : 0) + (vars.rot2 > 0.5 ? 1 : 0);\\nreturn [25.0 + ordenDesc - rotadas * 2.0, 320.0 - rotadas * 15.0];`
   }
 };
 
