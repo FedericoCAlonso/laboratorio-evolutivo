@@ -114,6 +114,20 @@ export const PLANTILLAS_SIMULACION = {
       { nombre: "vInf", tipo: "continuo", min: -200, max: 200 }
     ],
     codigoEvaluacion: `// Desvío objetivo hacia detector en y = 6 con mínima potencia\\nconst potElectrica = (vars.i1*vars.i1 + vars.i2*vars.i2 + vars.i3*vars.i3 + vars.i4*vars.i4)*0.8;\\nconst balance = Math.abs((vars.vInf - vars.vSup) - 120);\\nreturn [balance, potElectrica];`
+  },
+  "fonoabsorbente": {
+    nombre: "Diseño de Superficie Fonoabsorbente",
+    descripcion: "Optimiza la profundidad de cuña o capas para cumplir una atenuación en dBA con material mínimo.",
+    tipoVisualizacion: "fonoabsorbente_acustico",
+    variables: [
+      { nombre: "hCuna", tipo: "continuo", min: 30, max: 150 },
+      { nombre: "hBase", tipo: "continuo", min: 15, max: 60 },
+      { nombre: "wPeriodo", tipo: "continuo", min: 30, max: 90 },
+      { nombre: "curvatura", tipo: "continuo", min: 0.8, max: 2.0 },
+      { nombre: "sigma", tipo: "continuo", min: 10, max: 50 },
+      { nombre: "camaraAire", tipo: "continuo", min: 0, max: 40 }
+    ],
+    codigoEvaluacion: `// Minimizar déficit respecto a 18 dBA de atenuación y volumen de material\\nconst espesor = vars.hCuna + vars.hBase + vars.camaraAire;\\nconst atenuacionEstimada = 8.0 + (espesor * 0.08) * (vars.sigma / (vars.sigma + 15));\\nconst deficit = Math.max(0, 18.0 - atenuacionEstimada);\\nreturn [deficit * 15.0, espesor * 0.6];`
   }
 };
 

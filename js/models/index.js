@@ -16,6 +16,7 @@ import { ModeloArmaduraPuente } from "./armadura.js";
 import { ModeloDistribucionTermica } from "./termico.js";
 import { ModeloArregloAcustico } from "./acustica.js";
 import { ModeloConfinamientoEM } from "./electromagnetismo.js";
+import { ModeloSuperficieFonoabsorbente } from "./fonoabsorbente.js";
 import { compilarModeloDinamico } from "../builder.js";
 
 // Reexporta los modelos individuales para facilitar su importación directa.
@@ -32,7 +33,8 @@ export {
   ModeloArmaduraPuente,
   ModeloDistribucionTermica,
   ModeloArregloAcustico,
-  ModeloConfinamientoEM
+  ModeloConfinamientoEM,
+  ModeloSuperficieFonoabsorbente
 };
 
 // Lista global de todos los modelos de optimización disponibles en la aplicación (estáticos y dinámicos).
@@ -48,6 +50,7 @@ export const MODELOS = [
   ModeloDistribucionTermica,
   ModeloArregloAcustico,
   ModeloConfinamientoEM,
+  ModeloSuperficieFonoabsorbente,
   ModeloBalanceoFases,
   ModeloPataCaminante
 ];

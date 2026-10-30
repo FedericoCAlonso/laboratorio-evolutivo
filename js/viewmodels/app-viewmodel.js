@@ -286,6 +286,9 @@ export class AppViewModel {
     if (modelo.id === "confinamiento-em") {
       return [4.5, -3.2, -4.5, 3.2, -80.0, 60.0];
     }
+    if (modelo.id === "superficie-fonoabsorbente") {
+      return [85.0, 35.0, 50.0, 1.2, 22.0, 15.0];
+    }
     return null;
   }
 

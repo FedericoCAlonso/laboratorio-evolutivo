@@ -14,7 +14,8 @@ const HINTS_VISUALIZACION = {
   "mecanismo_barras_2d": "Dibuja articulaciones cinemáticas y eslabones mecánicos conectados en el plano 2D.",
   "distribucion_recursos": "Presenta barras apiladas e indicadores de balanceo de cargas y capacidad de servidores.",
   "acustica_ondas_2d": "Simula la interferencia constructiva de ondas de presión acústica propagándose y el patrón polar de directividad.",
-  "electromagnetismo_lorentz": "Muestra el flujo magnético Bz, bobinas de electroimanes y la trayectoria del haz de iones bajo la fuerza de Lorentz."
+  "electromagnetismo_lorentz": "Muestra el flujo magnético Bz, bobinas de electroimanes y la trayectoria del haz de iones bajo la fuerza de Lorentz.",
+  "fonoabsorbente_acustico": "Ilustra el corte transversal de cuñas o capas estratificadas con atenuación espectral dBA y rebotes acústicos."
 };
 
 // Muestra u oculta la barra superior de alerta con mensajes de error o validación.

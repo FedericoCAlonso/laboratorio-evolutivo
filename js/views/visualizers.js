@@ -14,6 +14,7 @@ import { resolverEstaticaArmadura } from "../models/armadura.js";
 import { simularCampoTermico } from "../models/termico.js";
 import { simularArregloAcustico } from "../models/acustica.js";
 import { simularTrayectoriaLorentz, calcularCampoMagneticoBz } from "../models/electromagnetismo.js";
+import { simularAbsorbenteAcustico } from "../models/fonoabsorbente.js";
 
 // Estado checkbox para superponer la curva original de Theo Jansen en el lienzo Canvas.
 let mostrarReferenciaJansen = true;
@@ -3017,7 +3018,373 @@ export class VisualizadorElectromagnetismo {
 }
 
 // -------------------------------------------------------------------------
-// 14. VISUALIZADOR DE MODELOS DINÁMICOS LOW-CODE MULTI-NATURALEZA
+// 14. VISUALIZADOR DE SUPERFICIE FONOABSORBENTE (CUÑAS Y MULTIMATERIAL dBA)
+// -------------------------------------------------------------------------
+export class VisualizadorFonoabsorbente {
+  constructor() {
+    this.animId = null;
+  }
+
+  detener() {
+    if (this.animId !== null) {
+      cancelAnimationFrame(this.animId);
+      this.animId = null;
+    }
+  }
+
+  render(contenedor, genoma, entrada, contexto = {}) {
+    if (!contenedor) return;
+    this.detener();
+
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 380;
+      canvas.style.width = "100%";
+      canvas.style.height = "380px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    const sim = simularAbsorbenteAcustico(genoma, entrada);
+    let tiempoAnimacion = 0;
+
+    const animar = () => {
+      if (!canvas.isConnected) {
+        this.detener();
+        return;
+      }
+
+      const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+      const anchoCSS = canvas.clientWidth || 800;
+      const altoCSS = canvas.clientHeight || 380;
+
+      if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
+        canvas.width = anchoCSS * dpr;
+        canvas.height = altoCSS * dpr;
+      }
+
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, anchoCSS, altoCSS);
+
+      ctx.fillStyle = "#0c101d";
+      ctx.fillRect(0, 0, anchoCSS, altoCSS);
+
+      const mitadW = anchoCSS * 0.52;
+      const inicioGraficoX = mitadW + 15;
+
+      // 1. DIBUJO DEL CORTE TRANSVERSAL ACÚSTICO
+      const margenX = 24;
+      const anchoSeccion = mitadW - margenX * 2;
+      const paredY = altoCSS - 45;
+
+      ctx.fillStyle = "#334155";
+      ctx.fillRect(margenX, paredY, anchoSeccion, 16);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+      ctx.strokeRect(margenX, paredY, anchoSeccion, 16);
+
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+      ctx.lineWidth = 1;
+      for (let rx = margenX; rx < margenX + anchoSeccion; rx += 14) {
+        ctx.beginPath();
+        ctx.moveTo(rx, paredY + 16);
+        ctx.lineTo(rx + 10, paredY);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "9px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("PARED RÍGIDA DE SOPORTE", margenX + anchoSeccion / 2, paredY + 28);
+
+      const escalaY = Math.min(1.15, (paredY - 50) / Math.max(120, sim.espesorTotalMm));
+
+      if (sim.tipoEstructura === "superficie_lisa") {
+        let yActual = paredY;
+
+        for (let i = sim.datosCapas.length - 1; i >= 0; i--) {
+          const capa = sim.datosCapas[i];
+          const altoCapaPx = capa.espesorMm * escalaY;
+          const yInicioCapa = yActual - altoCapaPx;
+
+          ctx.fillStyle = capa.color;
+          ctx.fillRect(margenX, yInicioCapa, anchoSeccion, altoCapaPx);
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+          ctx.strokeRect(margenX, yInicioCapa, anchoSeccion, altoCapaPx);
+
+          ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+          const densidadPuntos = Math.min(8, Math.max(3, Math.round(capa.sigma / 6)));
+          for (let py = yInicioCapa + 5; py < yActual - 5; py += 8) {
+            for (let px = margenX + 8; px < margenX + anchoSeccion - 8; px += 24 / densidadPuntos) {
+              ctx.beginPath();
+              ctx.arc(px, py, 1.2, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "bold 9px Inter, system-ui, sans-serif";
+          ctx.textAlign = "left";
+          ctx.fillText(`${capa.nombre} (${capa.espesorMm.toFixed(0)} mm | σ = ${capa.sigma.toFixed(0)} kPa·s/m²)`, margenX + 8, yInicioCapa + altoCapaPx / 2 + 3);
+
+          yActual = yInicioCapa;
+        }
+
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(margenX, yActual);
+        ctx.lineTo(margenX + anchoSeccion, yActual);
+        ctx.stroke();
+
+        ctx.fillStyle = "#38bdf8";
+        ctx.font = "bold 10px Inter, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("SUPERFICIE EXTERIOR LISA (ACABADO PLANO)", margenX + anchoSeccion / 2, yActual - 8);
+
+        for (let w = 0; w < 4; w++) {
+          const offsetW = ((tiempoAnimacion * 45 + w * 25) % (paredY - yActual + 40));
+          const yOnda = yActual - 30 + offsetW;
+          if (yOnda > yActual - 35 && yOnda < paredY) {
+            const penetracion = Math.max(0, (yOnda - yActual) / (paredY - yActual || 1));
+            const alfaOnda = Math.max(0.05, 0.8 * (1.0 - penetracion * 0.85));
+
+            ctx.strokeStyle = `rgba(56, 189, 248, ${alfaOnda})`;
+            ctx.lineWidth = Math.max(1, 3 * (1.0 - penetracion * 0.7));
+            ctx.beginPath();
+            ctx.moveTo(margenX + 15, yOnda);
+            ctx.lineTo(margenX + anchoSeccion - 15, yOnda);
+            ctx.stroke();
+          }
+        }
+
+      } else {
+        const pGeom = sim.perfilGeometria;
+        const hCunaPx = pGeom.hCuñaMm * escalaY;
+        const hBasePx = pGeom.hBaseMm * escalaY;
+        const hAirePx = (pGeom.camaraAireMm || 0) * escalaY;
+
+        const yBaseFondo = paredY - hAirePx;
+        if (hAirePx > 0) {
+          ctx.fillStyle = "rgba(148, 163, 184, 0.08)";
+          ctx.fillRect(margenX, yBaseFondo, anchoSeccion, hAirePx);
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+          ctx.setLineDash([4, 4]);
+          ctx.strokeRect(margenX, yBaseFondo, anchoSeccion, hAirePx);
+          ctx.setLineDash([]);
+
+          ctx.fillStyle = "#94a3b8";
+          ctx.font = "8px Inter, system-ui, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(`Cámara de aire (${pGeom.camaraAireMm.toFixed(0)} mm)`, margenX + anchoSeccion / 2, yBaseFondo + hAirePx / 2 + 3);
+        }
+
+        const yPuntasBase = yBaseFondo - hBasePx;
+        ctx.fillStyle = "#4338ca";
+        ctx.fillRect(margenX, yPuntasBase, anchoSeccion, hBasePx);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+        ctx.strokeRect(margenX, yPuntasBase, anchoSeccion, hBasePx);
+
+        const numCunas = Math.max(3, Math.min(6, Math.round(anchoSeccion / (pGeom.wPeriodoMm * 0.85))));
+        const anchoCunaPx = anchoSeccion / numCunas;
+        const yPunta = yPuntasBase - hCunaPx;
+
+        ctx.fillStyle = "#6366f1";
+        ctx.strokeStyle = "#a5b4fc";
+        ctx.lineWidth = 1.5;
+
+        for (let c = 0; c < numCunas; c++) {
+          const x0 = margenX + c * anchoCunaPx;
+          const x1 = x0 + anchoCunaPx / 2;
+          const x2 = x0 + anchoCunaPx;
+
+          ctx.beginPath();
+          ctx.moveTo(x0, yPuntasBase);
+          ctx.lineTo(x1, yPunta);
+          ctx.lineTo(x2, yPuntasBase);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+          ctx.beginPath();
+          ctx.arc(x1, yPuntasBase - hCunaPx * 0.4, 3, 0, Math.PI * 2);
+          ctx.arc(x1, yPuntasBase - hCunaPx * 0.7, 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#6366f1";
+        }
+
+        ctx.fillStyle = "#a5b4fc";
+        ctx.font = "9px Inter, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        const txtModo = pGeom.modo3D === "piramidal_3d" ? "▲ Mosaico Piramidal 3D (Corte Central)" : "▬ Extrusión Longitudinal 2.5D (Bafles)";
+        ctx.fillText(txtModo, margenX + anchoSeccion / 2, yPunta - 10);
+
+        const xCentroRayos = margenX + anchoCunaPx * 1.5;
+        const offsetRayo = (tiempoAnimacion * 40) % (paredY - yPunta + 30);
+        const yRayo = yPunta - 25 + offsetRayo;
+
+        if (yRayo < paredY) {
+          ctx.strokeStyle = "rgba(251, 191, 36, 0.85)";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(xCentroRayos - 10, yPunta - 20);
+          ctx.lineTo(xCentroRayos, yPunta + hCunaPx * 0.45);
+          ctx.lineTo(xCentroRayos + 12, yPunta + hCunaPx * 0.75);
+          ctx.lineTo(xCentroRayos, yBaseFondo);
+          ctx.stroke();
+
+          ctx.fillStyle = "#fbbf24";
+          ctx.beginPath();
+          ctx.arc(xCentroRayos, yPunta + hCunaPx * 0.45, 2.5, 0, Math.PI * 2);
+          ctx.arc(xCentroRayos + 12, yPunta + hCunaPx * 0.75, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+      ctx.lineWidth = 1;
+      const cotaX = margenX - 10;
+      ctx.beginPath();
+      ctx.moveTo(cotaX, paredY);
+      ctx.lineTo(cotaX, paredY - sim.espesorTotalMm * escalaY);
+      ctx.moveTo(cotaX - 4, paredY);
+      ctx.lineTo(cotaX + 4, paredY);
+      ctx.moveTo(cotaX - 4, paredY - sim.espesorTotalMm * escalaY);
+      ctx.lineTo(cotaX + 4, paredY - sim.espesorTotalMm * escalaY);
+      ctx.stroke();
+
+      ctx.save();
+      ctx.translate(cotaX - 8, paredY - (sim.espesorTotalMm * escalaY) / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "9px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(`${sim.espesorTotalMm.toFixed(0)} mm`, 0, 0);
+      ctx.restore();
+
+      // 2. GRÁFICO ESPECTRAL POR BANDAS DE OCTAVA
+      const anchoGrafico = anchoCSS - inicioGraficoX - 20;
+      const altoGrafico = 145;
+      const baseGraficoY = 175;
+
+      ctx.fillStyle = "rgba(15, 23, 42, 0.75)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+      ctx.fillRect(inicioGraficoX, baseGraficoY - altoGrafico, anchoGrafico, altoGrafico);
+      ctx.strokeRect(inicioGraficoX, baseGraficoY - altoGrafico, anchoGrafico, altoGrafico);
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "bold 9px Inter, system-ui, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText("ABSORCIÓN ESPECTRAL α(f) Y PONDERACIÓN dBA", inicioGraficoX + 8, baseGraficoY - altoGrafico + 13);
+
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.lineWidth = 1;
+      for (let n = 1; n <= 4; n++) {
+        const yL = baseGraficoY - (altoGrafico - 24) * (n / 4);
+        ctx.beginPath();
+        ctx.moveTo(inicioGraficoX, yL);
+        ctx.lineTo(inicioGraficoX + anchoGrafico, yL);
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+        ctx.font = "8px Inter, system-ui, sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText((n * 0.25).toFixed(2), inicioGraficoX + anchoGrafico - 4, yL - 2);
+      }
+
+      const numBandas = sim.bandasHz.length;
+      const anchoBarraEsp = (anchoGrafico - 20) / numBandas;
+
+      sim.coeficientesAbsorcion.forEach((alpha, idx) => {
+        const xB = inicioGraficoX + 10 + idx * anchoBarraEsp;
+        const hBarra = Math.max(3, (altoGrafico - 24) * alpha);
+        const yB = baseGraficoY - hBarra;
+
+        const bGrad = ctx.createLinearGradient(0, yB, 0, baseGraficoY);
+        if (alpha >= 0.8) {
+          bGrad.addColorStop(0, "#00e676");
+          bGrad.addColorStop(1, "#059669");
+        } else if (alpha >= 0.5) {
+          bGrad.addColorStop(0, "#38bdf8");
+          bGrad.addColorStop(1, "#0284c7");
+        } else {
+          bGrad.addColorStop(0, "#f59e0b");
+          bGrad.addColorStop(1, "#d97706");
+        }
+
+        ctx.fillStyle = bGrad;
+        ctx.fillRect(xB + 4, yB, anchoBarraEsp - 8, hBarra);
+
+        ctx.fillStyle = "#94a3b8";
+        ctx.font = "8px Inter, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        const fLabel = sim.bandasHz[idx] >= 1000 ? `${sim.bandasHz[idx] / 1000}k` : `${sim.bandasHz[idx]}`;
+        ctx.fillText(fLabel, xB + anchoBarraEsp / 2, baseGraficoY + 11);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 8px Inter, system-ui, sans-serif";
+        ctx.fillText(alpha.toFixed(2), xB + anchoBarraEsp / 2, yB - 3);
+      });
+
+      ctx.strokeStyle = "#fb923c";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      sim.ponderacionAdB.forEach((pA, idx) => {
+        const xP = inicioGraficoX + 10 + idx * anchoBarraEsp + anchoBarraEsp / 2;
+        const yNorm = 1.0 - (pA + 20.0) / 24.0;
+        const yP = (baseGraficoY - altoGrafico + 24) + yNorm * (altoGrafico - 30);
+        if (idx === 0) ctx.moveTo(xP, yP);
+        else ctx.lineTo(xP, yP);
+      });
+      ctx.stroke();
+
+      ctx.fillStyle = "#fb923c";
+      ctx.fillRect(inicioGraficoX + 10, baseGraficoY + 18, 8, 8);
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "8px Inter, system-ui, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText("Curva Ponderación dBA (Sensibilidad auditiva)", inicioGraficoX + 22, baseGraficoY + 25);
+
+      // 3. PANEL HUD DE EVALUACIÓN
+      const hudY = baseGraficoY + 36;
+      const hudH = altoCSS - hudY - 14;
+
+      ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+      ctx.strokeStyle = sim.cumpleObjetivo ? "#00e676" : "#ef4444";
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(inicioGraficoX, hudY, anchoGrafico, hudH);
+      ctx.strokeRect(inicioGraficoX, hudY, anchoGrafico, hudH);
+
+      ctx.font = "bold 12px Inter, system-ui, sans-serif";
+      ctx.fillStyle = sim.cumpleObjetivo ? "#00e676" : "#f87171";
+      ctx.textAlign = "left";
+      const estadoBadge = sim.cumpleObjetivo ? "✓ CUMPLE ATENUACIÓN OBJETIVO" : `✕ DÉFICIT: -${sim.deficitAtenuacion.toFixed(1)} dBA`;
+      ctx.fillText(estadoBadge, inicioGraficoX + 10, hudY + 18);
+
+      ctx.font = "11px Inter, system-ui, sans-serif";
+      ctx.fillStyle = "#f8fafc";
+      ctx.fillText(`Atenuación: ${sim.atenuacionLogradaDba.toFixed(1)} dBA (Req: ${sim.atenuacionObjetivoDba} dBA)`, inicioGraficoX + 10, hudY + 36);
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.fillText(`Ruido Incidente: ${sim.nivelTotalIncidenteDba.toFixed(1)} dBA → Residual: ${sim.nivelTotalReflejadoDba.toFixed(1)} dBA`, inicioGraficoX + 10, hudY + 52);
+      ctx.fillText(`Espesor: ${sim.espesorTotalMm.toFixed(0)} mm | Ahorro Material: ${sim.ahorroMaterialPorcentaje.toFixed(0)}% | NRC: ${sim.nrcMedio.toFixed(2)}`, inicioGraficoX + 10, hudY + 68);
+
+      tiempoAnimacion += 0.035;
+      this.animId = requestAnimationFrame(animar);
+    };
+
+    this.animId = requestAnimationFrame(animar);
+  }
+}
+
+// -------------------------------------------------------------------------
+// 15. VISUALIZADOR DE MODELOS DINÁMICOS LOW-CODE MULTI-NATURALEZA
 // -------------------------------------------------------------------------
 export class VisualizadorDinamico {
   constructor() {
@@ -3081,13 +3448,19 @@ export class VisualizadorDinamico {
       return;
     }
 
-    // 8. Representación de Distribución de Recursos / Cargas
+    // 8. Representación de Perfil Fonoabsorbente y Multimaterial
+    if (tipo === "fonoabsorbente_acustico") {
+      new VisualizadorFonoabsorbente().render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+
+    // 9. Representación de Distribución de Recursos / Cargas
     if (tipo === "distribucion_recursos") {
       this._renderizarDistribucionRecursos(contenedor, genoma, varsDef, contexto);
       return;
     }
 
-    // 9. Representación por defecto: Calibración y medidores de variables
+    // 10. Representación por defecto: Calibración y medidores de variables
     this._renderizarCalibracionVariables(contenedor, genoma, varsDef, contexto);
   }
 
@@ -3530,6 +3903,7 @@ const visualizadoresRegistrados = {
   "distribucion-termica": new VisualizadorTermico(),
   "acustica-beamforming": new VisualizadorAcustica(),
   "confinamiento-em": new VisualizadorElectromagnetismo(),
+  "superficie-fonoabsorbente": new VisualizadorFonoabsorbente(),
   "pata-caminante": new VisualizadorCaminante(),
   "balanceo-fases-trifasico": new VisualizadorFases()
 };

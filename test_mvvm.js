@@ -18,6 +18,7 @@ import {
   VisualizadorTermico,
   VisualizadorAcustica,
   VisualizadorElectromagnetismo,
+  VisualizadorFonoabsorbente,
   VisualizadorDinamico,
   obtenerVisualizador
 } from "./js/views/visualizers.js";
@@ -95,6 +96,7 @@ const visualizadores = [
   new VisualizadorTermico(),
   new VisualizadorAcustica(),
   new VisualizadorElectromagnetismo(),
+  new VisualizadorFonoabsorbente(),
   new VisualizadorDinamico()
 ];
 
