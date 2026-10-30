@@ -265,16 +265,12 @@ export class AppView {
       this.dom.barraProgreso.style.width = `${porcentaje}%`;
       this.dom.textoGeneracion.textContent = `Gen ${datos.generacion} / ${datos.totalGeneraciones}`;
 
-      if (this.dom.badgeMotorActivo && datos.motorTipo) {
-        this.dom.badgeMotorActivo.textContent = `⚡ ${datos.motorTipo}`;
-      }
-
       if (datos.esMultiobjetivo) {
         if (this.dom.tituloGrafico) {
-          this.dom.tituloGrafico.textContent = "📈 Frente de Pareto Multiobjetivo (Haz clic en un punto para ver su mecanismo)";
+          this.dom.tituloGrafico.textContent = "📈 Frente de Pareto (Toque un punto para inspeccionar)";
         }
         const numSol = datos.frentePareto ? datos.frentePareto.length : 0;
-        this.dom.etiquetaMejorFitness.textContent = `Frente Pareto: ${numSol} sol. (${datos.motorTipo})`;
+        this.dom.etiquetaMejorFitness.textContent = `Frente Pareto: ${numSol} sol.`;
         if (this.dom.kpiMejorFitness) {
           const fitSel = datos.solucionParetoSeleccionada?.fitness;
           this.dom.kpiMejorFitness.textContent = Array.isArray(fitSel)
@@ -300,12 +296,12 @@ export class AppView {
         });
       } else {
         if (this.dom.tituloGrafico) {
-          this.dom.tituloGrafico.textContent = "📈 Curva de Convergencia del Fitness (Menor = Mejor)";
+          this.dom.tituloGrafico.textContent = "📈 Convergencia del Fitness";
         }
         const fitTexto = typeof datos.mejorSolucion?.fitness === "number"
           ? datos.mejorSolucion.fitness.toFixed(4)
           : datos.mejorSolucion?.fitness;
-        this.dom.etiquetaMejorFitness.textContent = `Fitness: ${fitTexto} (${datos.motorTipo})`;
+        this.dom.etiquetaMejorFitness.textContent = `Fitness: ${fitTexto}`;
         if (this.dom.kpiMejorFitness) {
           this.dom.kpiMejorFitness.textContent = fitTexto ?? "--";
         }
@@ -362,11 +358,11 @@ export class AppView {
     });
 
     // 5. Finalización con éxito de la corrida
-    this.vm.on("finalizado", ({ esMultiobjetivo, frentePareto, motorTipo }) => {
+    this.vm.on("finalizado", ({ esMultiobjetivo, frentePareto }) => {
       if (esMultiobjetivo) {
-        this.dom.textoEstado.textContent = `✓ Optimización finalizada (${frentePareto.length} soluciones en Frente de Pareto)`;
+        this.dom.textoEstado.textContent = `✓ Optimización completada (${frentePareto.length} soluciones)`;
       } else {
-        this.dom.textoEstado.textContent = `✓ Optimización finalizada con éxito (${motorTipo})`;
+        this.dom.textoEstado.textContent = "✓ Optimización completada";
       }
     });
 
@@ -376,7 +372,7 @@ export class AppView {
       modelos.forEach((mod) => {
         const opcion = document.createElement("option");
         opcion.value = mod.id;
-        opcion.textContent = mod.esDinamico ? `✨ ${mod.nombre} (Dinámico)` : mod.nombre;
+        opcion.textContent = mod.esDinamico ? `✨ ${mod.nombre}` : mod.nombre;
         this.dom.selectorModelo.appendChild(opcion);
       });
       this.dom.selectorModelo.value = this.vm.modeloActual.id;
@@ -492,7 +488,7 @@ export class AppView {
       }
     });
 
-    // Tooltip interactivo M3 y guía crosshair en el gráfico (Monobjetivo y Pareto)
+    // Tooltip interactivo M3 y guía crosshair en el gráfico (Monobjetivo y Pareto) + soporte táctil móvil
     this.dom.canvasFitness.addEventListener("mousemove", (e) => {
       this.graficoView.actualizarHover(e.clientX, e.clientY);
     });
@@ -500,6 +496,24 @@ export class AppView {
     this.dom.canvasFitness.addEventListener("mouseleave", () => {
       this.graficoView.ocultarHover();
     });
+
+    this.dom.canvasFitness.addEventListener("touchstart", (e) => {
+      if (e.touches && e.touches.length === 1) {
+        const t = e.touches[0];
+        this.graficoView.actualizarHover(t.clientX, t.clientY);
+        if (this.vm.esMultiobjetivo) {
+          const punto = this.graficoView.obtenerPuntoParetoCercano(t.clientX, t.clientY);
+          if (punto) this.vm.seleccionarSolucionPareto(punto);
+        }
+      }
+    }, { passive: true });
+
+    this.dom.canvasFitness.addEventListener("touchmove", (e) => {
+      if (e.touches && e.touches.length === 1) {
+        const t = e.touches[0];
+        this.graficoView.actualizarHover(t.clientX, t.clientY);
+      }
+    }, { passive: true });
 
     // Acciones de Toolbar
     this.dom.btnAbrirConstructor.addEventListener("click", () => {

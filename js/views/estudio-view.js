@@ -335,13 +335,8 @@ export class EstudioView {
       // 2. Ajusta títulos de cabecera
       if (this.dom.tituloEstudio) {
         this.dom.tituloEstudio.textContent = esEdicion
-          ? `✏️ Editando: ${datosIniciales?.nombre || "Simulación"}`
-          : "🛠️ Estudio de Modelado de Simulaciones";
-      }
-      if (this.dom.subtituloEstudio) {
-        this.dom.subtituloEstudio.textContent = esEdicion
-          ? "Modo Edición Low-Code (Tiempo Real)"
-          : "Nuevo Modelo Matemático";
+          ? `🛠️ ${datosIniciales?.nombre || "Simulación"}`
+          : "🛠️ Nueva Simulación";
       }
 
       // 3. Montar editor CAD en su contenedor si está disponible

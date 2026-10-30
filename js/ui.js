@@ -43,15 +43,6 @@ export function construirFormularioModelo(modelo, contenedor, valoresGuardados =
 
   const params = modelo.parametrosEntrada || [];
   if (params.length === 0) {
-    const nota = document.createElement("div");
-    nota.style.padding = "0.75rem";
-    nota.style.fontSize = "0.85rem";
-    nota.style.color = "var(--texto-secundario)";
-    nota.style.background = "var(--bg-input)";
-    nota.style.borderRadius = "var(--radio-sm)";
-    nota.style.border = "1px solid var(--borde)";
-    nota.textContent = "ℹ️ Este modelo dinámico optimiza directamente las variables matemáticas de su definición.";
-    contenedor.appendChild(nota);
     return;
   }
 
@@ -953,7 +944,7 @@ export function abrirModalBiblioteca(elementosBiblioteca, modelos, presets, onAc
         card.className = "tarjeta-simulacion-biblioteca";
 
         const badgeClase = mod.esDinamico ? "badge-dinamico" : "badge-nativo";
-        const badgeTexto = mod.esDinamico ? "✨ Dinámico Low-Code" : "📦 Modelo Nativo";
+        const badgeTexto = mod.esDinamico ? "✨ Personalizado" : "📦 Estándar";
 
         card.innerHTML = `
           <div>

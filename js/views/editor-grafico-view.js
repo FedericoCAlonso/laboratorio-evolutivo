@@ -234,27 +234,27 @@ export class EditorGraficoView {
         </div>
 
         <!-- Área de trabajo central: Viewport Canvas y Panel Inspector + Variables en Vivo -->
-        <div style="display: flex; flex: 1; position: relative; overflow: hidden; min-height: 520px;">
+        <div class="cad-main-split">
           
           <!-- Viewport del Canvas CAD interactivo -->
-          <div style="flex: 1; position: relative; width: 100%; height: 100%; overflow: hidden; background: #0b0f19;">
-            <canvas id="canvas-editor-cad" width="1000" height="540" style="display: block; width: 100%; height: 100%; cursor: default;"></canvas>
+          <div class="cad-canvas-viewport" style="flex: 1; position: relative; width: 100%; height: 100%; overflow: hidden; background: #0b0f19;">
+            <canvas id="canvas-editor-cad" width="1000" height="540" style="display: block; width: 100%; height: 100%; cursor: default; touch-action: none;"></canvas>
 
-            <!-- Overlay de información de coordenadas del cursor y ayuda contextual -->
-            <div id="cad-overlay-coords" style="position: absolute; bottom: 8px; left: 12px; font-size: 0.73rem; color: #94a3b8; font-family: monospace; background: rgba(15,23,42,0.85); padding: 0.25rem 0.6rem; border-radius: 4px; pointer-events: none; border: 1px solid rgba(148,163,184,0.15);">
-              X: 0.0 mm | Y: 0.0 mm | Zoom: 100% | Arrastre cualquier nodo para ajustar las longitudes vinculadas
+            <!-- Overlay de información de coordenadas del cursor -->
+            <div id="cad-overlay-coords" style="position: absolute; bottom: 8px; left: 12px; font-size: 0.72rem; color: #94a3b8; font-family: monospace; background: rgba(15,23,42,0.85); padding: 0.2rem 0.5rem; border-radius: 4px; pointer-events: none; border: 1px solid rgba(148,163,184,0.15);">
+              X: 0.0 | Y: 0.0 | 100%
             </div>
 
             <!-- Botones de zoom flotantes -->
             <div style="position: absolute; bottom: 10px; right: 12px; display: flex; flex-direction: column; gap: 4px;">
-              <button type="button" id="cad-btn-zoom-in" style="width: 28px; height: 28px; border-radius: 6px; background: rgba(30,41,59,0.85); color: #fff; border: 1px solid #475569; font-weight: bold; cursor: pointer;">+</button>
-              <button type="button" id="cad-btn-zoom-out" style="width: 28px; height: 28px; border-radius: 6px; background: rgba(30,41,59,0.85); color: #fff; border: 1px solid #475569; font-weight: bold; cursor: pointer;">-</button>
-              <button type="button" id="cad-btn-zoom-reset" style="width: 28px; height: 28px; border-radius: 6px; background: rgba(30,41,59,0.85); color: #fff; border: 1px solid #475569; font-size: 0.7rem; cursor: pointer;" title="Centrar mecanismo">⌖</button>
+              <button type="button" id="cad-btn-zoom-in" style="width: 32px; height: 32px; border-radius: 6px; background: rgba(30,41,59,0.88); color: #fff; border: 1px solid #475569; font-weight: bold; cursor: pointer;">+</button>
+              <button type="button" id="cad-btn-zoom-out" style="width: 32px; height: 32px; border-radius: 6px; background: rgba(30,41,59,0.88); color: #fff; border: 1px solid #475569; font-weight: bold; cursor: pointer;">-</button>
+              <button type="button" id="cad-btn-zoom-reset" style="width: 32px; height: 32px; border-radius: 6px; background: rgba(30,41,59,0.88); color: #fff; border: 1px solid #475569; font-size: 0.75rem; cursor: pointer;" title="Centrar mecanismo">⌖</button>
             </div>
           </div>
 
           <!-- Sidebar lateral: Inspector de Propiedades, Variables Vinculadas en Vivo y Telemetría de Sensores -->
-          <div id="cad-sidebar-inspector" style="width: 320px; border-left: 1px solid var(--borde, rgba(148,163,184,0.2)); background: var(--bg-card, #111827); padding: 0.75rem; display: flex; flex-direction: column; gap: 0.65rem; overflow-y: auto;">
+          <div id="cad-sidebar-inspector" style="width: 310px; border-left: 1px solid var(--borde, rgba(148,163,184,0.2)); background: var(--bg-card, #111827); padding: 0.75rem; display: flex; flex-direction: column; gap: 0.65rem; overflow-y: auto;">
             <div style="display: flex; align-items: center; justify-content: space-between;">
               <h4 style="margin: 0; font-size: 0.82rem; font-weight: 700; color: var(--texto-principal, #f8fafc); text-transform: uppercase; letter-spacing: 0.05em;">
                 🔍 Inspector CAD
@@ -403,20 +403,21 @@ export class EditorGraficoView {
       this.redibujar();
     });
 
-    // 5. Interacción con el Canvas (Clics, Arrastre de Nodos y Paneo)
+    // 5. Interacción con el Canvas (Clics, Arrastre de Nodos, Paneo y Soporte Táctil Móvil)
     const canvas = this.dom.canvas;
     if (!canvas) return;
 
     let arrastrandoNodo = null;
 
-    canvas.addEventListener("mousedown", (e) => {
+    const iniciarInteraccion = (clientX, clientY, button = 0, esTouch = false) => {
       const rect = canvas.getBoundingClientRect();
-      const px = e.clientX - rect.left;
-      const py = e.clientY - rect.top;
+      const px = clientX - rect.left;
+      const py = clientY - rect.top;
       const mundo = this.pantallaAMundo(px, py);
+      const radioHitNodo = (esTouch ? 22 : 14) / this.viewport.zoom;
 
       // Botón secundario o espacio: paneo
-      if (e.button === 1 || e.button === 2) {
+      if (button === 1 || button === 2) {
         this.viewport.arrastrandoPan = true;
         this.viewport.panInicioX = px;
         this.viewport.panInicioY = py;
@@ -425,7 +426,7 @@ export class EditorGraficoView {
 
       // Herramienta 'select'
       if (this.herramientaActiva === "select") {
-        const nodo = this._encontrarNodoCercano(mundo.x, mundo.y, 14 / this.viewport.zoom);
+        const nodo = this._encontrarNodoCercano(mundo.x, mundo.y, radioHitNodo);
         if (nodo) {
           arrastrandoNodo = nodo;
           // Comprobar si hay un sensor o motor asociado cuando se hace doble clic o selección directa
@@ -434,21 +435,21 @@ export class EditorGraficoView {
           return;
         }
 
-        const barra = this._encontrarBarraCercana(mundo.x, mundo.y, 8 / this.viewport.zoom);
+        const barra = this._encontrarBarraCercana(mundo.x, mundo.y, (esTouch ? 14 : 8) / this.viewport.zoom);
         if (barra) {
           this.seleccionarElemento("barra", barra.id);
           this.redibujar();
           return;
         }
 
-        const motor = this._encontrarMotorCercano(mundo.x, mundo.y, 10 / this.viewport.zoom);
+        const motor = this._encontrarMotorCercano(mundo.x, mundo.y, (esTouch ? 16 : 10) / this.viewport.zoom);
         if (motor) {
           this.seleccionarElemento("motor", motor.id);
           this.redibujar();
           return;
         }
 
-        const transmision = this._encontrarTransmisionCercana(mundo.x, mundo.y, 10 / this.viewport.zoom);
+        const transmision = this._encontrarTransmisionCercana(mundo.x, mundo.y, (esTouch ? 16 : 10) / this.viewport.zoom);
         if (transmision) {
           this.seleccionarElemento("transmision", transmision.id);
           this.redibujar();
@@ -663,7 +664,7 @@ export class EditorGraficoView {
 
       // Herramienta 'multiefecto' (Asignar carga eléctrica, imán o fuente térmica a un nodo)
       else if (this.herramientaActiva === "multiefecto") {
-        const nodo = this._encontrarNodoCercano(mundo.x, mundo.y, 14 / this.viewport.zoom);
+        const nodo = this._encontrarNodoCercano(mundo.x, mundo.y, radioHitNodo);
         if (nodo) {
           nodo.imanDipolo = (nodo.imanDipolo || 0) + 10.0;
           nodo.cargaElectrica = (nodo.cargaElectrica || 0) + 5.0;
@@ -673,16 +674,16 @@ export class EditorGraficoView {
           this.seleccionarHerramienta("select");
         }
       }
-    });
+    };
 
-    canvas.addEventListener("mousemove", (e) => {
+    const moverInteraccion = (clientX, clientY) => {
       const rect = canvas.getBoundingClientRect();
-      const px = e.clientX - rect.left;
-      const py = e.clientY - rect.top;
+      const px = clientX - rect.left;
+      const py = clientY - rect.top;
       const mundo = this.pantallaAMundo(px, py);
 
       if (this.dom.overlayCoords) {
-        this.dom.overlayCoords.textContent = `X: ${mundo.x.toFixed(1)} mm | Y: ${mundo.y.toFixed(1)} mm | Zoom: ${Math.round(this.viewport.zoom * 31.25)}%`;
+        this.dom.overlayCoords.textContent = `X: ${mundo.x.toFixed(1)} | Y: ${mundo.y.toFixed(1)} | ${Math.round(this.viewport.zoom * 31.25)}%`;
       }
 
       if (this.viewport.arrastrandoPan) {
@@ -761,7 +762,7 @@ export class EditorGraficoView {
         this._ejecutarSimulacionEnLienzo();
         this.redibujar();
       }
-    });
+    };
 
     const finInteraccion = () => {
       if (arrastrandoNodo) {
@@ -772,8 +773,34 @@ export class EditorGraficoView {
       this.viewport.arrastrandoPan = false;
     };
 
+    canvas.addEventListener("mousedown", (e) => iniciarInteraccion(e.clientX, e.clientY, e.button, false));
+    canvas.addEventListener("mousemove", (e) => moverInteraccion(e.clientX, e.clientY));
     canvas.addEventListener("mouseup", finInteraccion);
     canvas.addEventListener("mouseleave", finInteraccion);
+
+    // Eventos táctiles para pantallas móviles y tablets
+    canvas.addEventListener("touchstart", (e) => {
+      if (e.touches && e.touches.length === 1) {
+        const t = e.touches[0];
+        iniciarInteraccion(t.clientX, t.clientY, 0, true);
+        if (arrastrandoNodo || this.herramientaActiva !== "select") {
+          e.preventDefault();
+        }
+      }
+    }, { passive: false });
+
+    canvas.addEventListener("touchmove", (e) => {
+      if (e.touches && e.touches.length === 1) {
+        if (arrastrandoNodo || this.viewport.arrastrandoPan) {
+          e.preventDefault();
+        }
+        const t = e.touches[0];
+        moverInteraccion(t.clientX, t.clientY);
+      }
+    }, { passive: false });
+
+    canvas.addEventListener("touchend", finInteraccion);
+    canvas.addEventListener("touchcancel", finInteraccion);
 
     // Zoom con rueda del ratón centrado
     canvas.addEventListener("wheel", (e) => {
