@@ -36,6 +36,10 @@
 
       <!-- Acciones Globales Rápidas -->
       <div class="m3-top-actions">
+        <button type="button" id="btn-abrir-sensores-movil" class="btn-m3-tonal m3-icon-btn" title="Controlar mecanismo y evolución con el giroscopio y acelerómetro del celular">
+          <span>📡</span>
+          <span class="m3-btn-label-movil">Sensores</span>
+        </button>
         <button type="button" id="btn-abrir-biblioteca" class="btn-m3-tonal m3-icon-btn" title="Explorar simulaciones y presets">
           <span>📚</span>
           <span class="m3-btn-label-movil">Biblioteca</span>
@@ -46,6 +50,44 @@
         </button>
       </div>
     </header>
+
+    <!-- =====================================================================
+         BARRA INTERACTIVA DE SENSORES MÓVILES (GIROSCOPIO, INCLINACIÓN Y SHAKE)
+         ===================================================================== -->
+    <section id="panel-sensores-movil" class="panel-sensores-movil" style="display: none;" aria-label="Control por sensores del dispositivo móvil">
+      <div class="sensores-movil-fila-top">
+        <div class="sensores-movil-titulo">
+          <span>📡 Control con Sensores del Celular</span>
+          <span id="badge-estado-sensores" class="badge-sensor-off">Inactivo</span>
+        </div>
+        <div class="sensores-movil-botones">
+          <button type="button" id="btn-activar-giroscopio" class="btn-m3-filled">
+            🧭 Activar Giroscopio / Acelerómetro
+          </button>
+          <button type="button" id="btn-shake-mutar" class="btn-m3-tonal" title="Simular agitación del teléfono para generar nueva semilla y evolucionar">
+            📳 Agitar = Mutar
+          </button>
+        </div>
+      </div>
+
+      <div class="sensores-movil-controles">
+        <div class="grupo-campo" style="margin-bottom: 0; flex: 1; min-width: 210px;">
+          <label for="select-modo-sensor-movil">Efecto de la Inclinación del Celular</label>
+          <select id="select-modo-sensor-movil">
+            <option value="angulo_mecanismo" selected>🔄 Inclinar celular rota la manivela / mecanismo (θ)</option>
+            <option value="variables_modelo">🎯 Inclinar celular ajusta variables / objetivo en vivo</option>
+          </select>
+        </div>
+
+        <div class="grupo-campo" style="margin-bottom: 0; flex: 1; min-width: 210px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label for="slider-inclinacion-movil">Ángulo / Inclinación Activa</label>
+            <span id="lectura-sensores-movil" class="lectura-sensores-pill">γ: 0° · β: 0° · θ: 0°</span>
+          </div>
+          <input type="range" id="slider-inclinacion-movil" class="slider-tactil-grande" min="0" max="359" value="0">
+        </div>
+      </div>
+    </section>
 
     <!-- =====================================================================
          VISTA 1: LABORATORIO EVOLUTIVO (PANEL PRINCIPAL DE SIMULACIÓN Y PARETO)
@@ -642,7 +684,27 @@
   <!-- Contenedor alias para retrocompatibilidad de scripts anteriores -->
   <div id="modal-constructor-modelo" style="display: none;" aria-hidden="true"></div>
 
+  <!-- Barra de Navegación Inferior Material 3 para Celulares (Ergonomía de Pulgar) -->
+  <nav id="nav-inferior-movil" class="m3-bottom-nav-movil" aria-label="Navegación móvil">
+    <button type="button" id="btn-bnav-laboratorio" class="m3-bnav-item activo">
+      <span class="m3-bnav-icon">🔬</span>
+      <span class="m3-bnav-label">Simular</span>
+    </button>
+    <button type="button" id="btn-bnav-estudio" class="m3-bnav-item">
+      <span class="m3-bnav-icon">🛠️</span>
+      <span class="m3-bnav-label">Diseño CAD</span>
+    </button>
+    <button type="button" id="btn-bnav-sensores" class="m3-bnav-item">
+      <span class="m3-bnav-icon">📡</span>
+      <span class="m3-bnav-label">Sensores</span>
+    </button>
+    <button type="button" id="btn-bnav-biblioteca" class="m3-bnav-item">
+      <span class="m3-bnav-icon">📚</span>
+      <span class="m3-bnav-label">Modelos</span>
+    </button>
+  </nav>
+
   <!-- Carga del punto de entrada modular con ES Modules nativos -->
-  <script type="module" src="./js/main.js?v=2.4"></script>
+  <script type="module" src="./js/main.js?v=2.5"></script>
 </body>
 </html>

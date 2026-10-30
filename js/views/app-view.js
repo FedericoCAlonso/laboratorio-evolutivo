@@ -88,8 +88,26 @@ export class AppView {
       badgeMotorActivo: document.getElementById("badge-motor-activo"),
       btnNavLaboratorio: document.getElementById("btn-nav-laboratorio"),
       btnNavEstudio: document.getElementById("btn-nav-estudio"),
-      btnQuickTheme: document.getElementById("btn-quick-theme")
+      btnQuickTheme: document.getElementById("btn-quick-theme"),
+
+      // Sensores móviles (Giroscopio / Inclinación / Shake) y Navegación Inferior Móvil
+      btnAbrirSensoresMovil: document.getElementById("btn-abrir-sensores-movil"),
+      panelSensoresMovil: document.getElementById("panel-sensores-movil"),
+      badgeEstadoSensores: document.getElementById("badge-estado-sensores"),
+      btnActivarGiroscopio: document.getElementById("btn-activar-giroscopio"),
+      btnShakeMutar: document.getElementById("btn-shake-mutar"),
+      selectModoSensorMovil: document.getElementById("select-modo-sensor-movil"),
+      sliderInclinacionMovil: document.getElementById("slider-inclinacion-movil"),
+      lecturaSensoresMovil: document.getElementById("lectura-sensores-movil"),
+      btnBnavLaboratorio: document.getElementById("btn-bnav-laboratorio"),
+      btnBnavEstudio: document.getElementById("btn-bnav-estudio"),
+      btnBnavSensores: document.getElementById("btn-bnav-sensores"),
+      btnBnavBiblioteca: document.getElementById("btn-bnav-biblioteca")
     };
+
+    // Estado de sensores físicos del dispositivo móvil
+    this.sensoresMovilActivos = false;
+    this.ultimoShakeMs = 0;
 
     // Subvista de gráficos (Canvas 2D para convergencia y Pareto con Crosshair Tooltip).
     this.graficoView = new GraficoView(this.dom.canvasFitness, this.dom.leyendaGrafico, this.dom.tooltipGrafico);
@@ -168,10 +186,134 @@ export class AppView {
     this.vm.restaurarEstadoInicial();
   }
 
-  // Sincroniza el estado activo del conmutador de navegación segmentado Material 3.
+  // Sincroniza el estado activo del conmutador de navegación segmentado Material 3 y la barra inferior móvil.
   _sincronizarNavSegmentada(vistaActiva = "laboratorio") {
     this.dom.btnNavLaboratorio?.classList.toggle("activo", vistaActiva === "laboratorio");
     this.dom.btnNavEstudio?.classList.toggle("activo", vistaActiva === "estudio");
+    this.dom.btnBnavLaboratorio?.classList.toggle("activo", vistaActiva === "laboratorio");
+    this.dom.btnBnavEstudio?.classList.toggle("activo", vistaActiva === "estudio");
+  }
+
+  // Alterna la visibilidad del panel de control por sensores físicos del celular y activa el giroscopio si se abre.
+  _alternarPanelSensoresMovil() {
+    if (!this.dom.panelSensoresMovil) return;
+    const oculto = this.dom.panelSensoresMovil.style.display === "none";
+    this.dom.panelSensoresMovil.style.display = oculto ? "flex" : "none";
+    this.dom.btnBnavSensores?.classList.toggle("activo", oculto);
+    if (oculto && !this.sensoresMovilActivos) {
+      this._activarSensoresHardwareMovil();
+    }
+  }
+
+  // Solicita permisos (iOS 13+) y enlaza DeviceOrientationEvent y DeviceMotionEvent del celular.
+  async _activarSensoresHardwareMovil() {
+    if (this.sensoresMovilActivos) {
+      this.sensoresMovilActivos = false;
+      if (this.dom.badgeEstadoSensores) {
+        this.dom.badgeEstadoSensores.textContent = "Pausado";
+        this.dom.badgeEstadoSensores.className = "badge-sensor-off";
+      }
+      if (this.dom.btnActivarGiroscopio) {
+        this.dom.btnActivarGiroscopio.textContent = "🧭 Activar Giroscopio / Acelerómetro";
+      }
+      return;
+    }
+
+    try {
+      if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+        const perm = await DeviceOrientationEvent.requestPermission();
+        if (perm !== "granted") {
+          this.modalesView.notificar("⚠️ Permiso de giroscopio denegado en el navegador");
+          return;
+        }
+      }
+      if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+        try { await DeviceMotionEvent.requestPermission(); } catch (_) {}
+      }
+    } catch (_) {}
+
+    this.sensoresMovilActivos = true;
+    try { if (navigator.vibrate) navigator.vibrate(18); } catch (_) {}
+
+    if (this.dom.badgeEstadoSensores) {
+      this.dom.badgeEstadoSensores.textContent = "En Vivo (Giroscopio + Shake)";
+      this.dom.badgeEstadoSensores.className = "badge-sensor-on";
+    }
+    if (this.dom.btnActivarGiroscopio) {
+      this.dom.btnActivarGiroscopio.textContent = "⏸ Pausar Giroscopio";
+    }
+
+    if (!this._listenersSensoresRegistrados && typeof window !== "undefined") {
+      this._listenersSensoresRegistrados = true;
+
+      window.addEventListener("deviceorientation", (e) => {
+        if (!this.sensoresMovilActivos) return;
+        const gamma = typeof e.gamma === "number" ? e.gamma : 0; // Inclinación Izq/Der (-90 a 90)
+        const beta = typeof e.beta === "number" ? e.beta : 0;   // Inclinación Adelante/Atrás (-180 a 180)
+        // Mapea la inclinación del teléfono a un ángulo continuo de 0° a 359°
+        const normGamma = Math.max(-60, Math.min(60, gamma));
+        const angGrados = Math.round(((normGamma + 60) / 120) * 359) % 360;
+        this._aplicarAnguloInclinacion(angGrados, Math.round(gamma), Math.round(beta));
+      }, { passive: true });
+
+      window.addEventListener("devicemotion", (e) => {
+        if (!this.sensoresMovilActivos) return;
+        const acc = e.accelerationIncludingGravity || e.acceleration;
+        if (!acc) return;
+        const mag = Math.hypot(acc.x || 0, acc.y || 0, acc.z || 0);
+        if (mag > 21.5) {
+          const ahora = Date.now();
+          if (ahora - this.ultimoShakeMs > 1200) {
+            this.ultimoShakeMs = ahora;
+            this._ejecutarAccionShake();
+          }
+        }
+      }, { passive: true });
+    }
+
+    this.modalesView.notificar("📡 Giroscopio activo: inclina el celular para mover el mecanismo o agítalo para mutar");
+  }
+
+  // Aplica el ángulo proveniente del giroscopio o del control deslizante táctil al mecanismo activo y a las variables.
+  _aplicarAnguloInclinacion(angGrados, gamma = 0, beta = 0) {
+    if (this.dom.sliderInclinacionMovil) {
+      this.dom.sliderInclinacionMovil.value = String(angGrados);
+    }
+    if (this.dom.lecturaSensoresMovil) {
+      this.dom.lecturaSensoresMovil.textContent = `γ: ${gamma}° · β: ${beta}° · θ: ${angGrados}°`;
+    }
+
+    const modo = this.dom.selectModoSensorMovil?.value || "angulo_mecanismo";
+
+    if (modo === "angulo_mecanismo") {
+      // 1. Actualiza la manivela en el visualizador del Laboratorio si está presente
+      const sliderJansen = document.getElementById("slider-jansen-theta");
+      if (sliderJansen) {
+        sliderJansen.value = String(angGrados);
+        sliderJansen.dispatchEvent(new Event("input"));
+      }
+      // 2. Actualiza en vivo el ángulo del motor en el Editor CAD 2D del Estudio
+      const thetaRad = (angGrados * Math.PI) / 180;
+      this.estudioView?.editorGrafico?.establecerAnguloExterno(thetaRad);
+    } else if (modo === "variables_modelo") {
+      // Ajusta interactivamente los sliders de genes del Estudio o re-renderiza la solución con variación por inclinación
+      const slidersEstudio = document.querySelectorAll("#estudio-contenedor-sliders input.slider-m3");
+      if (slidersEstudio.length > 0) {
+        const s0 = slidersEstudio[0];
+        const min = parseFloat(s0.min) || 0;
+        const max = parseFloat(s0.max) || 100;
+        const val = min + (angGrados / 359) * (max - min);
+        s0.value = String(val);
+        s0.dispatchEvent(new Event("input"));
+      }
+    }
+  }
+
+  // Ejecuta la acción de agitar el dispositivo (Shake): vibración háptica, nueva semilla y mutación/evolución.
+  _ejecutarAccionShake() {
+    try { if (navigator.vibrate) navigator.vibrate([25, 40, 25]); } catch (_) {}
+    this.vm.generarNuevaSemilla();
+    this.modalesView.notificar("📳 ¡Agitación detectada! Nueva semilla generada y lista para evolucionar");
   }
 
   // Renderiza la tira de chips M3 con los valores actuales de las variables del genoma activo.
@@ -412,16 +554,36 @@ export class AppView {
 
   // Registra los eventos del DOM (botones, inputs, clics del Canvas y modales) conectándolos con comandos del ViewModel.
   _registrarEventosDOM() {
-    // Conmutador de Espacio de Trabajo en la Barra Superior M3
-    this.dom.btnNavLaboratorio?.addEventListener("click", () => {
+    // Conmutador de Espacio de Trabajo en la Barra Superior M3 y Barra Inferior Móvil
+    const irALaboratorio = () => {
       if (this.estudioView) this.estudioView.cerrar();
       this._sincronizarNavSegmentada("laboratorio");
-    });
-
-    this.dom.btnNavEstudio?.addEventListener("click", () => {
+    };
+    const irAEstudio = () => {
       const { def, esEdicion } = this._obtenerDefinicionEditable(this.vm.modeloActual);
       this._sincronizarNavSegmentada("estudio");
       this.estudioView.abrir(def, esEdicion);
+    };
+
+    this.dom.btnNavLaboratorio?.addEventListener("click", irALaboratorio);
+    this.dom.btnBnavLaboratorio?.addEventListener("click", irALaboratorio);
+
+    this.dom.btnNavEstudio?.addEventListener("click", irAEstudio);
+    this.dom.btnBnavEstudio?.addEventListener("click", irAEstudio);
+
+    // Controles de Sensores Móviles (Giroscopio, Inclinación y Agitar/Shake)
+    this.dom.btnAbrirSensoresMovil?.addEventListener("click", () => this._alternarPanelSensoresMovil());
+    this.dom.btnBnavSensores?.addEventListener("click", () => this._alternarPanelSensoresMovil());
+    this.dom.btnActivarGiroscopio?.addEventListener("click", () => this._activarSensoresHardwareMovil());
+    this.dom.btnShakeMutar?.addEventListener("click", () => this._ejecutarAccionShake());
+    this.dom.sliderInclinacionMovil?.addEventListener("input", (e) => {
+      const ang = parseInt(e.target.value, 10) || 0;
+      const gammaSim = Math.round(((ang / 359) * 120) - 60);
+      this._aplicarAnguloInclinacion(ang, gammaSim, 0);
+    });
+
+    this.dom.btnBnavBiblioteca?.addEventListener("click", () => {
+      this._abrirBiblioteca();
     });
 
     // Conmutador rápido de Tema (Claro -> Oscuro -> Auto)

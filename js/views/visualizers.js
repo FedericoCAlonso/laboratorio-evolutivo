@@ -256,14 +256,18 @@ export class VisualizadorJansen {
       y: centroMundoY - (cy - altoCSS / 2) / escala
     });
 
-    // Control de arrastre interactivo en el lienzo (Manipulación Directa de Manivela y Pivote X)
+    // Control de arrastre interactivo y multitáctil en el lienzo (Manipulación Directa de Manivela K, Pivote X y Pinch-Zoom)
     let nodoArrastrado = null;
     let escalaActual = 1;
+    let zoomManual = 1.0;
+    let pinchInicialDist = null;
+    let pinchInicialZoom = 1.0;
+    let touchInicioX = null;
 
-    canvas.addEventListener("mousedown", (e) => {
+    const iniciarToqueJansen = (clientX, clientY, esTouch = false) => {
       const rect = canvas.getBoundingClientRect();
-      const cx = e.clientX - rect.left;
-      const cy = e.clientY - rect.top;
+      const cx = clientX - rect.left;
+      const cy = clientY - rect.top;
       const pasoAct = pasosParaDibujar[indicePasoAnimacion % pasosParaDibujar.length];
       if (!pasoAct) return;
 
@@ -271,20 +275,28 @@ export class VisualizadorJansen {
       const altoCSS = canvas.clientHeight || 380;
       const ptKCanv = pasoAct.K ? aCanvas(pasoAct.K.x, pasoAct.K.y, anchoCSS, altoCSS, escalaActual) : null;
       const ptXCanv = pasoAct.X ? aCanvas(pasoAct.X.x, pasoAct.X.y, anchoCSS, altoCSS, escalaActual) : null;
+      const radioHit = esTouch ? 28 : 15;
 
-      if (ptKCanv && Math.hypot(cx - ptKCanv.x, cy - ptKCanv.y) <= 15) {
+      if (ptKCanv && Math.hypot(cx - ptKCanv.x, cy - ptKCanv.y) <= radioHit) {
         nodoArrastrado = "K";
         jansenPausado = true;
         if (btnPlay) btnPlay.textContent = "▶ Reanudar";
-      } else if (ptXCanv && Math.hypot(cx - ptXCanv.x, cy - ptXCanv.y) <= 15) {
+        try { if (esTouch && navigator.vibrate) navigator.vibrate(10); } catch (_) {}
+      } else if (ptXCanv && Math.hypot(cx - ptXCanv.x, cy - ptXCanv.y) <= radioHit) {
         nodoArrastrado = "X";
+        try { if (esTouch && navigator.vibrate) navigator.vibrate(10); } catch (_) {}
+      } else if (esTouch) {
+        nodoArrastrado = "SWIPE_THETA";
+        touchInicioX = cx;
+        jansenPausado = true;
+        if (btnPlay) btnPlay.textContent = "▶ Reanudar";
       }
-    });
+    };
 
-    canvas.addEventListener("mousemove", (e) => {
+    const moverToqueJansen = (clientX, clientY) => {
       const rect = canvas.getBoundingClientRect();
-      const cx = e.clientX - rect.left;
-      const cy = e.clientY - rect.top;
+      const cx = clientX - rect.left;
+      const cy = clientY - rect.top;
       const pasoAct = pasosParaDibujar[indicePasoAnimacion % pasosParaDibujar.length];
       const anchoCSS = canvas.clientWidth || 850;
       const altoCSS = canvas.clientHeight || 380;
@@ -313,6 +325,15 @@ export class VisualizadorJansen {
         indicePasoAnimacion = Math.floor((angGrados / 360) * totalP) % totalP;
         if (sliderTheta) sliderTheta.value = angGrados;
         if (labelTheta) labelTheta.textContent = `${angGrados}°`;
+      } else if (nodoArrastrado === "SWIPE_THETA" && touchInicioX !== null) {
+        const deltaX = cx - touchInicioX;
+        touchInicioX = cx;
+        const totalP = pasosParaDibujar.length || 180;
+        const deltaPasos = Math.round((deltaX / Math.max(180, anchoCSS)) * totalP);
+        indicePasoAnimacion = ((indicePasoAnimacion + deltaPasos) % totalP + totalP) % totalP;
+        const angGrados = Math.round((indicePasoAnimacion / totalP) * 360) % 360;
+        if (sliderTheta) sliderTheta.value = angGrados;
+        if (labelTheta) labelTheta.textContent = `${angGrados}°`;
       } else if (nodoArrastrado === "X") {
         const posMundo = aMundo(cx, cy, anchoCSS, altoCSS, escalaActual);
         const nuevoA = Math.max(10.0, Math.min(80.0, -posMundo.x));
@@ -324,14 +345,52 @@ export class VisualizadorJansen {
           });
         }
       }
-    });
+    };
 
     const finArrastre = () => {
       nodoArrastrado = null;
+      touchInicioX = null;
+      pinchInicialDist = null;
       canvas.style.cursor = "default";
     };
+
+    canvas.addEventListener("mousedown", (e) => iniciarToqueJansen(e.clientX, e.clientY, false));
+    canvas.addEventListener("mousemove", (e) => moverToqueJansen(e.clientX, e.clientY));
     canvas.addEventListener("mouseup", finArrastre);
     canvas.addEventListener("mouseleave", finArrastre);
+
+    canvas.addEventListener("touchstart", (e) => {
+      if (!e.touches) return;
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const t1 = e.touches[0], t2 = e.touches[1];
+        pinchInicialDist = Math.max(10, Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY));
+        pinchInicialZoom = zoomManual;
+        return;
+      }
+      if (e.touches.length === 1) {
+        iniciarToqueJansen(e.touches[0].clientX, e.touches[0].clientY, true);
+        if (nodoArrastrado === "K" || nodoArrastrado === "X") e.preventDefault();
+      }
+    }, { passive: false });
+
+    canvas.addEventListener("touchmove", (e) => {
+      if (!e.touches) return;
+      if (e.touches.length === 2 && pinchInicialDist) {
+        e.preventDefault();
+        const t1 = e.touches[0], t2 = e.touches[1];
+        const dist = Math.max(10, Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY));
+        zoomManual = Math.max(0.7, Math.min(2.6, pinchInicialZoom * (dist / pinchInicialDist)));
+        return;
+      }
+      if (e.touches.length === 1) {
+        if (nodoArrastrado) e.preventDefault();
+        moverToqueJansen(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: false });
+
+    canvas.addEventListener("touchend", finArrastre);
+    canvas.addEventListener("touchcancel", finArrastre);
 
     const animar = () => {
       if (!canvas.isConnected) {
@@ -352,7 +411,8 @@ export class VisualizadorJansen {
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, anchoCSS, altoCSS);
 
-      escalaActual = Math.min((anchoCSS - 60) / rangoX, (altoCSS - 60) / rangoY);
+      const margenLateral = anchoCSS < 600 ? 18 : 60;
+      escalaActual = Math.min((anchoCSS - margenLateral) / rangoX, (altoCSS - margenLateral) / rangoY) * zoomManual;
       const escala = escalaActual;
 
       // Línea de suelo
@@ -480,11 +540,12 @@ export class VisualizadorJansen {
         { pA: ptF, pB: ptH, color: "#d97706", ancho: 2.6, id: "i", cota: i }
       ];
 
+      const factorMovil = anchoCSS < 600 ? 1.35 : 1.0;
       barrasConInfo.forEach(({ pA, pB, color, ancho, punteado }) => {
         if (!pA || !pB) return;
         ctx.beginPath();
         ctx.strokeStyle = color;
-        ctx.lineWidth = ancho;
+        ctx.lineWidth = ancho * factorMovil;
         if (punteado) ctx.setLineDash([4, 4]);
         ctx.moveTo(pA.x, pA.y);
         ctx.lineTo(pB.x, pB.y);
@@ -494,18 +555,19 @@ export class VisualizadorJansen {
 
       // Dibujo de cotas y etiquetas de barras sobre el mecanismo
       if (mostrarCotasJansen) {
-        ctx.font = "bold 9px system-ui";
+        ctx.font = anchoCSS < 600 ? "bold 11px system-ui" : "bold 9px system-ui";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
+        const altoBadge = anchoCSS < 600 ? 17 : 14;
         barrasConInfo.forEach(bInfo => {
           if (!bInfo.pA || !bInfo.pB || bInfo.id === "X") return;
           const mx = (bInfo.pA.x + bInfo.pB.x) / 2;
           const my = (bInfo.pA.y + bInfo.pB.y) / 2;
           const texto = `${bInfo.id}: ${typeof bInfo.cota === "number" ? bInfo.cota.toFixed(1) : bInfo.cota}`;
-          const w = ctx.measureText(texto).width + 6;
-          ctx.fillStyle = "rgba(15, 23, 42, 0.78)";
+          const w = ctx.measureText(texto).width + (anchoCSS < 600 ? 10 : 6);
+          ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
           ctx.beginPath();
-          ctx.roundRect(mx - w / 2, my - 7, w, 14, 3);
+          ctx.roundRect(mx - w / 2, my - altoBadge / 2, w, altoBadge, 4);
           ctx.fill();
           ctx.fillStyle = "#ffffff";
           ctx.fillText(texto, mx, my);
@@ -528,20 +590,20 @@ export class VisualizadorJansen {
         // Halo interactivo en nodos manipulables K y X
         if (n.interactiva) {
           ctx.beginPath();
-          ctx.arc(n.pt.x, n.pt.y, 9, 0, 2 * Math.PI);
-          ctx.strokeStyle = n.pt === ptK ? "rgba(239, 68, 68, 0.55)" : "rgba(59, 130, 246, 0.55)";
-          ctx.lineWidth = 1.8;
+          ctx.arc(n.pt.x, n.pt.y, anchoCSS < 600 ? 13 : 9, 0, 2 * Math.PI);
+          ctx.strokeStyle = n.pt === ptK ? "rgba(239, 68, 68, 0.65)" : "rgba(59, 130, 246, 0.65)";
+          ctx.lineWidth = 2.0;
           ctx.setLineDash([2, 2]);
           ctx.stroke();
           ctx.setLineDash([]);
         }
 
         ctx.beginPath();
-        ctx.arc(n.pt.x, n.pt.y, n.fija ? 5.5 : 4, 0, 2 * Math.PI);
+        ctx.arc(n.pt.x, n.pt.y, (n.fija ? 5.5 : 4) * factorMovil, 0, 2 * Math.PI);
         ctx.fillStyle = n.fija ? "#1e293b" : "#ffffff";
         ctx.fill();
         ctx.strokeStyle = n.fija ? "#f8fafc" : "#0f172a";
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1.8;
         ctx.stroke();
       });
 

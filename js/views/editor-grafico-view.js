@@ -85,9 +85,67 @@ export class EditorGraficoView {
     }
     this._actualizarIndicadorDOF();
     this._ejecutarSimulacionEnLienzo();
+    this.autoEncuadrar();
     this._actualizarInspector();
     this._actualizarPanelVariablesVinculadas();
     this.redibujar();
+  }
+
+  // Ajusta automáticamente el centro y el zoom del lienzo para que el mecanismo ocupe de forma óptima la pantalla (especialmente en móviles).
+  autoEncuadrar() {
+    const nodos = this.grafo?.nodos || [];
+    if (nodos.length === 0) {
+      this.viewport.centroX = 0.0;
+      this.viewport.centroY = -20.0;
+      this.viewport.zoom = 2.6;
+      return;
+    }
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    nodos.forEach(n => {
+      if (typeof n.x === "number" && typeof n.y === "number") {
+        minX = Math.min(minX, n.x);
+        maxX = Math.max(maxX, n.x);
+        minY = Math.min(minY, n.y);
+        maxY = Math.max(maxY, n.y);
+      }
+    });
+
+    for (const sNom in this.telemetriaSensores) {
+      const tr = this.telemetriaSensores[sNom]?.trayectoria;
+      if (Array.isArray(tr)) {
+        tr.forEach(pt => {
+          minX = Math.min(minX, pt.x);
+          maxX = Math.max(maxX, pt.x);
+          minY = Math.min(minY, pt.y);
+          maxY = Math.max(maxY, pt.y);
+        });
+      }
+    }
+
+    if (!isFinite(minX) || !isFinite(maxX)) return;
+    const rangoX = Math.max(35, maxX - minX);
+    const rangoY = Math.max(35, maxY - minY);
+    this.viewport.centroX = (minX + maxX) / 2;
+    this.viewport.centroY = (minY + maxY) / 2;
+
+    const canvas = this.dom?.canvas;
+    const wCSS = (canvas && canvas.clientWidth > 60) ? canvas.clientWidth : (typeof window !== "undefined" && window.innerWidth < 768 ? Math.max(300, window.innerWidth - 36) : 820);
+    const hCSS = (canvas && canvas.clientHeight > 60) ? canvas.clientHeight : (typeof window !== "undefined" && window.innerWidth < 768 ? 380 : 500);
+
+    const factorMargen = wCSS < 600 ? 0.80 : 0.74;
+    const zoomOptimo = Math.min((wCSS * factorMargen) / rangoX, (hCSS * factorMargen) / rangoY);
+    this.viewport.zoom = Math.max(0.6, Math.min(8.5, zoomOptimo));
+  }
+
+  // Permite que sensores físicos del móvil (giroscopio / inclinación) o sliders externos roten el mecanismo en vivo.
+  establecerAnguloExterno(thetaRad) {
+    if (typeof thetaRad !== "number" || !isFinite(thetaRad)) return;
+    this.thetaActual = ((thetaRad % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    if (this.grafo && this.grafo.nodos.length > 0) {
+      sincronizarPosicionesNodosGrafo(this.grafo, this.valoresVariables, this.thetaActual);
+      this.redibujar();
+    }
   }
 
   // Actualiza los valores de las variables de optimización y recalcula la cinemática
@@ -387,7 +445,7 @@ export class EditorGraficoView {
       e.target.value = "";
     });
 
-    // 4. Zoom
+    // 4. Zoom y auto-encuadre
     this.dom.btnZoomIn?.addEventListener("click", () => {
       this.viewport.zoom = Math.min(10.0, this.viewport.zoom * 1.25);
       this.redibujar();
@@ -397,26 +455,34 @@ export class EditorGraficoView {
       this.redibujar();
     });
     this.dom.btnZoomReset?.addEventListener("click", () => {
-      this.viewport.zoom = 3.2;
-      this.viewport.centroX = 0;
-      this.viewport.centroY = -35;
+      this.autoEncuadrar();
       this.redibujar();
     });
 
-    // 5. Interacción con el Canvas (Clics, Arrastre de Nodos, Paneo y Soporte Táctil Móvil)
+    // 5. Interacción con el Canvas (Clics, Arrastre de Nodos, Paneo, Pinch-to-Zoom y Soporte Táctil Móvil)
     const canvas = this.dom.canvas;
     if (!canvas) return;
 
     let arrastrandoNodo = null;
+    let pinchEstado = null;
+    let ultimoTapMs = 0;
+
+    const vibrarTactil = (ms = 10) => {
+      try {
+        if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+          navigator.vibrate(ms);
+        }
+      } catch (_) {}
+    };
 
     const iniciarInteraccion = (clientX, clientY, button = 0, esTouch = false) => {
       const rect = canvas.getBoundingClientRect();
       const px = clientX - rect.left;
       const py = clientY - rect.top;
       const mundo = this.pantallaAMundo(px, py);
-      const radioHitNodo = (esTouch ? 22 : 14) / this.viewport.zoom;
+      const radioHitNodo = (esTouch ? 28 : 14) / this.viewport.zoom;
 
-      // Botón secundario o espacio: paneo
+      // Botón secundario o rueda central: paneo directo
       if (button === 1 || button === 2) {
         this.viewport.arrastrandoPan = true;
         this.viewport.panInicioX = px;
@@ -429,34 +495,41 @@ export class EditorGraficoView {
         const nodo = this._encontrarNodoCercano(mundo.x, mundo.y, radioHitNodo);
         if (nodo) {
           arrastrandoNodo = nodo;
-          // Comprobar si hay un sensor o motor asociado cuando se hace doble clic o selección directa
+          if (esTouch) vibrarTactil(12);
           this.seleccionarElemento("nodo", nodo.id);
           this.redibujar();
           return;
         }
 
-        const barra = this._encontrarBarraCercana(mundo.x, mundo.y, (esTouch ? 14 : 8) / this.viewport.zoom);
+        const barra = this._encontrarBarraCercana(mundo.x, mundo.y, (esTouch ? 18 : 8) / this.viewport.zoom);
         if (barra) {
+          if (esTouch) vibrarTactil(8);
           this.seleccionarElemento("barra", barra.id);
           this.redibujar();
           return;
         }
 
-        const motor = this._encontrarMotorCercano(mundo.x, mundo.y, (esTouch ? 16 : 10) / this.viewport.zoom);
+        const motor = this._encontrarMotorCercano(mundo.x, mundo.y, (esTouch ? 20 : 10) / this.viewport.zoom);
         if (motor) {
+          if (esTouch) vibrarTactil(8);
           this.seleccionarElemento("motor", motor.id);
           this.redibujar();
           return;
         }
 
-        const transmision = this._encontrarTransmisionCercana(mundo.x, mundo.y, (esTouch ? 16 : 10) / this.viewport.zoom);
+        const transmision = this._encontrarTransmisionCercana(mundo.x, mundo.y, (esTouch ? 20 : 10) / this.viewport.zoom);
         if (transmision) {
+          if (esTouch) vibrarTactil(8);
           this.seleccionarElemento("transmision", transmision.id);
           this.redibujar();
           return;
         }
 
+        // Si toca o arrastra sobre el fondo vacío en modo 'select', activa paneo suave de cámara
         this.seleccionarElemento(null, null);
+        this.viewport.arrastrandoPan = true;
+        this.viewport.panInicioX = px;
+        this.viewport.panInicioY = py;
         this.redibujar();
       }
 
@@ -771,26 +844,84 @@ export class EditorGraficoView {
         this._notificarCambioGrafo();
       }
       this.viewport.arrastrandoPan = false;
+      pinchEstado = null;
     };
 
     canvas.addEventListener("mousedown", (e) => iniciarInteraccion(e.clientX, e.clientY, e.button, false));
     canvas.addEventListener("mousemove", (e) => moverInteraccion(e.clientX, e.clientY));
     canvas.addEventListener("mouseup", finInteraccion);
     canvas.addEventListener("mouseleave", finInteraccion);
+    canvas.addEventListener("dblclick", () => {
+      this.autoEncuadrar();
+      this.redibujar();
+    });
 
-    // Eventos táctiles para pantallas móviles y tablets
+    // Eventos multitáctiles (1 dedo = arrastrar nodo o panear, 2 dedos = Pinch-to-Zoom + Pan, Doble Tap = Auto-encuadrar)
     canvas.addEventListener("touchstart", (e) => {
-      if (e.touches && e.touches.length === 1) {
+      if (!e.touches) return;
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        arrastrandoNodo = null;
+        this._nodoArrastradoActivo = null;
+        this.viewport.arrastrandoPan = false;
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const rect = canvas.getBoundingClientRect();
+        pinchEstado = {
+          distInicial: Math.max(10, Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY)),
+          zoomInicial: this.viewport.zoom,
+          midX: ((t1.clientX + t2.clientX) / 2) - rect.left,
+          midY: ((t1.clientY + t2.clientY) / 2) - rect.top
+        };
+        return;
+      }
+
+      if (e.touches.length === 1) {
+        const ahora = Date.now();
         const t = e.touches[0];
+        if (ahora - ultimoTapMs < 280 && this.herramientaActiva === "select") {
+          e.preventDefault();
+          vibrarTactil(15);
+          this.autoEncuadrar();
+          this.redibujar();
+          ultimoTapMs = 0;
+          return;
+        }
+        ultimoTapMs = ahora;
         iniciarInteraccion(t.clientX, t.clientY, 0, true);
-        if (arrastrandoNodo || this.herramientaActiva !== "select") {
+        if (arrastrandoNodo || this.viewport.arrastrandoPan || this.herramientaActiva !== "select") {
           e.preventDefault();
         }
       }
     }, { passive: false });
 
     canvas.addEventListener("touchmove", (e) => {
-      if (e.touches && e.touches.length === 1) {
+      if (!e.touches) return;
+      if (e.touches.length === 2 && pinchEstado) {
+        e.preventDefault();
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const rect = canvas.getBoundingClientRect();
+        const distActual = Math.max(10, Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY));
+        const midXActual = ((t1.clientX + t2.clientX) / 2) - rect.left;
+        const midYActual = ((t1.clientY + t2.clientY) / 2) - rect.top;
+
+        const nuevoZoom = Math.max(0.5, Math.min(12.0, pinchEstado.zoomInicial * (distActual / pinchEstado.distInicial)));
+        const dx = (midXActual - pinchEstado.midX) / nuevoZoom;
+        const dy = (midYActual - pinchEstado.midY) / nuevoZoom;
+        this.viewport.centroX -= dx;
+        this.viewport.centroY += dy;
+        this.viewport.zoom = nuevoZoom;
+        pinchEstado.midX = midXActual;
+        pinchEstado.midY = midYActual;
+        if (this.dom.overlayCoords) {
+          this.dom.overlayCoords.textContent = `Zoom: ${Math.round(this.viewport.zoom * 31.25)}% (Pinch 2 dedos)`;
+        }
+        this.redibujar();
+        return;
+      }
+
+      if (e.touches.length === 1 && !pinchEstado) {
         if (arrastrandoNodo || this.viewport.arrastrandoPan) {
           e.preventDefault();
         }
@@ -1630,24 +1761,28 @@ export class EditorGraficoView {
       const esSel = this.elementoSeleccionado?.tipo === "barra" && this.elementoSeleccionado?.id === b.id;
       const estaConectadaAArrastre = this._nodoArrastradoActivo && (b.nodoA === this._nodoArrastradoActivo.id || b.nodoB === this._nodoArrastradoActivo.id);
 
-      // Barra con aspecto de ingeniería / viga
+      // Barra con aspecto de ingeniería / viga (escalado adaptable para nitidez en móvil)
+      const esMovilCanvas = wCSS < 640;
       ctx.beginPath();
       ctx.strokeStyle = estaConectadaAArrastre ? "#06b6d4" : (esSel ? "#38bdf8" : (b.color || "#3b82f6"));
-      ctx.lineWidth = estaConectadaAArrastre ? 4.0 : (esSel ? 4.5 : (b.grosor || 2.5));
+      ctx.lineWidth = estaConectadaAArrastre ? (esMovilCanvas ? 5.2 : 4.0) : (esSel ? (esMovilCanvas ? 5.5 : 4.5) : (esMovilCanvas ? 3.4 : (b.grosor || 2.5)));
       ctx.lineCap = "round";
       ctx.moveTo(pA.x, pA.y);
       ctx.lineTo(pB.x, pB.y);
       ctx.stroke();
 
-      // Cotas y etiqueta sobre la barra
+      // Cotas y etiqueta sobre la barra (legibles en pantallas móviles)
       const mx = (pA.x + pB.x) / 2;
       const my = (pA.y + pB.y) / 2;
       const texto = b.variableAsociada ? `${b.variableAsociada}: ${b.longitud.toFixed(1)}` : `${b.longitud.toFixed(1)}`;
-      ctx.font = estaConectadaAArrastre ? "bold 10px monospace" : "bold 9px system-ui";
-      const tw = ctx.measureText(texto).width + (estaConectadaAArrastre ? 12 : 8);
-      ctx.fillStyle = estaConectadaAArrastre ? "rgba(6, 182, 212, 0.95)" : "rgba(15, 23, 42, 0.85)";
+      ctx.font = estaConectadaAArrastre
+        ? (esMovilCanvas ? "bold 12px monospace" : "bold 10px monospace")
+        : (esMovilCanvas ? "bold 11px system-ui" : "bold 9px system-ui");
+      const tw = ctx.measureText(texto).width + (esMovilCanvas ? 12 : (estaConectadaAArrastre ? 12 : 8));
+      const th = esMovilCanvas ? 20 : 16;
+      ctx.fillStyle = estaConectadaAArrastre ? "rgba(6, 182, 212, 0.95)" : "rgba(15, 23, 42, 0.88)";
       ctx.beginPath();
-      ctx.roundRect(mx - tw / 2, my - 8, tw, 16, 4);
+      ctx.roundRect(mx - tw / 2, my - th / 2, tw, th, 5);
       ctx.fill();
       ctx.fillStyle = "#ffffff";
       ctx.textAlign = "center";
@@ -1804,30 +1939,31 @@ export class EditorGraficoView {
         ctx.stroke();
       }
 
-      // Pin central
+      // Pin central (ampliado en móviles para mejor visibilidad e interacción táctil)
+      const radioPin = wCSS < 640 ? (esFijo ? 7.5 : 6.5) : (esFijo ? 5 : 4);
       ctx.beginPath();
-      ctx.arc(sc.x, sc.y, esFijo ? 5 : 4, 0, 2 * Math.PI);
+      ctx.arc(sc.x, sc.y, radioPin, 0, 2 * Math.PI);
       ctx.fillStyle = esFijo ? "#1e293b" : "#ffffff";
       ctx.fill();
       ctx.strokeStyle = esFijo ? "#f8fafc" : "#0f172a";
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = wCSS < 640 ? 2.4 : 1.8;
       ctx.stroke();
 
       // Indicador de sensor si el nodo es punto de medida
       const esSensor = this.grafo.sensores.some(s => s.nodoId === n.id);
       if (esSensor) {
         ctx.beginPath();
-        ctx.arc(sc.x, sc.y, 8, 0, 2 * Math.PI);
+        ctx.arc(sc.x, sc.y, wCSS < 640 ? 11 : 8, 0, 2 * Math.PI);
         ctx.strokeStyle = "#f59e0b";
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2.2;
         ctx.stroke();
       }
 
       // Etiqueta del nodo
-      ctx.font = "10px system-ui";
-      ctx.fillStyle = "#cbd5e1";
+      ctx.font = wCSS < 640 ? "bold 12px system-ui" : "10px system-ui";
+      ctx.fillStyle = "#e2e8f0";
       ctx.textAlign = "left";
-      ctx.fillText(n.nombre, sc.x + 8, sc.y - 4);
+      ctx.fillText(n.nombre, sc.x + (wCSS < 640 ? 10 : 8), sc.y - 4);
     });
 
     // 8. Tooltip HUD dinámico para el nodo en arrastre con sus cotas de posición
