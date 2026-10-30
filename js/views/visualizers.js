@@ -3753,7 +3753,11 @@ export class VisualizadorDinamico {
       `;
     });
 
-    const fitVal = contexto.fitness !== undefined ? (Array.isArray(contexto.fitness) ? `[${contexto.fitness.map(f => f.toFixed(2)).join(", ")}]` : contexto.fitness.toFixed(4)) : "--";
+    const fitVal = (contexto.fitness !== undefined && contexto.fitness !== null)
+      ? (Array.isArray(contexto.fitness)
+          ? `[${contexto.fitness.map(f => typeof f === "number" ? f.toFixed(2) : f).join(", ")}]`
+          : (typeof contexto.fitness === "number" ? contexto.fitness.toFixed(4) : String(contexto.fitness)))
+      : "--";
 
     contenedor.innerHTML = `
       <div class="comparativa-azar" style="margin-bottom: 1rem;">

@@ -13,7 +13,7 @@ import {
   crearGrafoPataCaminante,
   crearGrafoTrenEngranajes,
   crearGrafoPorModelo
-} from "../engines/mecanismos.js?v=2.8";
+} from "../engines/mecanismos.js?v=2.9";
 
 // Vista de diseño y construcción gráfica de mecanismos articulados y acoplamientos multifísica
 export class EditorGraficoView {

@@ -7,7 +7,7 @@
   <meta name="description" content="Laboratorio Evolutivo: Optimizador genético con modelos intercambiables, evolución multiobjetivo Pareto, diseño Google Material 3 y modos de color">
   <title>Laboratorio Evolutivo</title>
   <!-- Estilos visuales desacoplados Google Material 3 con soporte para modos de color y temas -->
-  <link rel="stylesheet" href="./styles.css?v=2.8">
+  <link rel="stylesheet" href="./styles.css?v=2.9">
 </head>
 <body>
   <div class="app-contenedor" id="contenedor-principal">
@@ -104,7 +104,23 @@
           <section class="tarjeta">
             <div class="grupo-campo" style="margin-bottom: 0.55rem;">
               <label for="selector-modelo">Modelo o Simulación Activa</label>
-              <select id="selector-modelo" aria-label="Seleccionar Modelo"></select>
+              <select id="selector-modelo" aria-label="Seleccionar Modelo">
+                <option value="brazo-robotico">Brazo Robótico (Cinemática Inversa)</option>
+                <option value="cohete-landing">Aterrizaje de Cohete (Falcon Landing)</option>
+                <option value="controlador-pid">Sintonizador PID (Control Automático)</option>
+                <option value="campo-potencial">Campo de Potencial y Deflexión 2D</option>
+                <option value="orbita-transferencia">Transferencia Orbital (Hohmann / Kepler)</option>
+                <option value="filtro-rlc">Síntesis de Filtro Analógico RLC</option>
+                <option value="armadura-puente">Armadura de Puente (Estructuras 2D)</option>
+                <option value="distribucion-termica">Disipación Térmica en Placa 2D</option>
+                <option value="acustica-beamforming">Arreglo Acústico y Beamforming (Ondas 2D)</option>
+                <option value="confinamiento-em">Trampa Electromagnética (Fuerza de Lorentz)</option>
+                <option value="superficie-fonoabsorbente">Superficie Fonoabsorbente (Cuñas y Multimaterial dBA)</option>
+                <option value="linea-transmision-rf">Línea de Transmisión RF (Carta de Smith)</option>
+                <option value="corte-chapa-nesting">Corte de Chapa y Anidado 2D (Nesting)</option>
+                <option value="balanceo-fases-trifasico">Balanceo de Fases Trifásico (R, S, T)</option>
+                <option value="pata-caminante">Pata caminante (cuatro barras)</option>
+              </select>
               <span id="descripcion-modelo" class="descripcion-campo"></span>
             </div>
 
@@ -695,6 +711,6 @@
   </nav>
 
   <!-- Carga del punto de entrada modular con ES Modules nativos -->
-  <script type="module" src="./js/main.js?v=2.8"></script>
+  <script type="module" src="./js/main.js?v=2.9"></script>
 </body>
 </html>

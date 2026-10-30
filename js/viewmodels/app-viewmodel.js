@@ -716,6 +716,7 @@ export class AppViewModel {
 
     this.emit("temaCambiado", { modo: this.temaModo, acento: this.temaAcento });
     this.emit("configMotorActualizada", this.configMotor);
+    this.emit("modelosActualizados", this.obtenerModelos());
     this.emit("estado:inicializado", {
       configMotor: this.configMotor,
       modelo: this.modeloActual,

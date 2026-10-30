@@ -592,6 +592,12 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 3px rgba(0, 97, 164, 0.15);
 }
 
+select option {
+  background-color: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  padding: 0.5rem;
+}
+
 .grid-2 {
   display: grid;
   grid-template-columns: 1fr;

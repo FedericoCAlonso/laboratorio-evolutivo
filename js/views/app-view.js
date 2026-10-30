@@ -3,11 +3,11 @@
 // ARQUITECTURA MVVM - ENLACE BIDIRECCIONAL ENTRE EL VIEWMODEL Y EL DOM
 // =========================================================================
 
-import { GraficoView } from "./grafico-view.js?v=2.8";
-import { ModalesView } from "./modales-view.js?v=2.8";
-import { EstudioView } from "./estudio-view.js?v=2.8";
-import { obtenerVisualizador, detenerTodosLosVisualizadores } from "./visualizers.js?v=2.8";
-import { obtenerPlantillaSimulacion } from "../builder.js?v=2.8";
+import { GraficoView } from "./grafico-view.js?v=2.9";
+import { ModalesView } from "./modales-view.js?v=2.9";
+import { EstudioView } from "./estudio-view.js?v=2.9";
+import { obtenerVisualizador, detenerTodosLosVisualizadores } from "./visualizers.js?v=2.9";
+import { obtenerPlantillaSimulacion } from "../builder.js?v=2.9";
 import {
   construirFormularioModelo,
   obtenerDatosEntradaModelo,
@@ -179,8 +179,24 @@ export class AppView {
     this.ultimoDatosMulti = null;
   }
 
+  // Puebla las opciones del menú selector desplegable de modelos
+  _poblarSelectorModelos(modelos) {
+    if (!this.dom.selectorModelo || !Array.isArray(modelos)) return;
+    this.dom.selectorModelo.innerHTML = "";
+    modelos.forEach((mod) => {
+      const opcion = document.createElement("option");
+      opcion.value = mod.id;
+      opcion.textContent = mod.esDinamico ? `✨ ${mod.nombre}` : mod.nombre;
+      this.dom.selectorModelo.appendChild(opcion);
+    });
+    if (this.vm?.modeloActual?.id) {
+      this.dom.selectorModelo.value = this.vm.modeloActual.id;
+    }
+  }
+
   // Inicializa la vista enlazando suscripciones del ViewModel y escuchadores del DOM.
   inicializar() {
+    this._poblarSelectorModelos(this.vm.obtenerModelos());
     this._suscribirEventosViewModel();
     this._registrarEventosDOM();
     this.vm.restaurarEstadoInicial();
@@ -350,7 +366,12 @@ export class AppView {
     // 1. Cambio de modelo activo
     this.vm.on("modeloCambiado", ({ modelo, genomaInicial }) => {
       detenerTodosLosVisualizadores();
-      this.dom.selectorModelo.value = modelo.id;
+      if (this.dom.selectorModelo) {
+        if (!this.dom.selectorModelo.options || this.dom.selectorModelo.options.length === 0) {
+          this._poblarSelectorModelos(this.vm.obtenerModelos());
+        }
+        this.dom.selectorModelo.value = modelo.id;
+      }
       this.dom.descripcionModelo.textContent = modelo.descripcion;
 
       // Actualiza visibilidad de botones del toolbar.
@@ -510,14 +531,7 @@ export class AppView {
 
     // 6. Actualización de modelos en el registro (por clonación, importación o eliminación)
     this.vm.on("modelosActualizados", (modelos) => {
-      this.dom.selectorModelo.innerHTML = "";
-      modelos.forEach((mod) => {
-        const opcion = document.createElement("option");
-        opcion.value = mod.id;
-        opcion.textContent = mod.esDinamico ? `✨ ${mod.nombre}` : mod.nombre;
-        this.dom.selectorModelo.appendChild(opcion);
-      });
-      this.dom.selectorModelo.value = this.vm.modeloActual.id;
+      this._poblarSelectorModelos(modelos);
     });
 
     // 7. Generación de nueva semilla reproducible

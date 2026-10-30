@@ -3,19 +3,19 @@
 // ARQUITECTURA MVVM - VISTA DEDICADA DE EDICIÓN LOW-CODE CON PREVIEW EN VIVO
 // =========================================================================
 
-import { VisualizadorDinamico } from "./visualizers.js?v=2.8";
-import { obtenerPlantillaSimulacion } from "../builder.js?v=2.8";
-import { PLANTILLAS_FIELES } from "../plantillas/index.js?v=2.8";
-import { HINTS_VISUALIZACION, mostrarAlerta } from "../ui.js?v=2.8";
-import { MotorCamposUnificados } from "../engines/campos.js?v=2.8";
-import { MotorEstructurasCinematica } from "../engines/estructuras.js?v=2.8";
-import { MotorOndasAcustica } from "../engines/ondas.js?v=2.8";
-import { MotorFuncionalTopologico } from "../engines/topologia.js?v=2.8";
-import { EditorGraficoView } from "./editor-grafico-view.js?v=2.8";
+import { VisualizadorDinamico } from "./visualizers.js?v=2.9";
+import { obtenerPlantillaSimulacion } from "../builder.js?v=2.9";
+import { PLANTILLAS_FIELES } from "../plantillas/index.js?v=2.9";
+import { HINTS_VISUALIZACION, mostrarAlerta } from "../ui.js?v=2.9";
+import { MotorCamposUnificados } from "../engines/campos.js?v=2.9";
+import { MotorEstructurasCinematica } from "../engines/estructuras.js?v=2.9";
+import { MotorOndasAcustica } from "../engines/ondas.js?v=2.9";
+import { MotorFuncionalTopologico } from "../engines/topologia.js?v=2.9";
+import { EditorGraficoView } from "./editor-grafico-view.js?v=2.9";
 import {
   GrafoMecanismoMultifisica,
   crearGrafoPorModelo
-} from "../engines/mecanismos.js?v=2.8";
+} from "../engines/mecanismos.js?v=2.9";
 
 // Vista de pantalla completa para el diseño, edición y prueba interactiva de simulaciones evolutivas.
 export class EstudioView {
