@@ -7,6 +7,7 @@ import { GraficoView } from "./grafico-view.js";
 import { ModalesView } from "./modales-view.js";
 import { EstudioView } from "./estudio-view.js";
 import { obtenerVisualizador, detenerTodosLosVisualizadores } from "./visualizers.js";
+import { obtenerPlantillaSimulacion } from "../builder.js";
 import {
   construirFormularioModelo,
   obtenerDatosEntradaModelo,
@@ -381,8 +382,13 @@ export class AppView {
     });
 
     this.dom.btnEditarModelo.addEventListener("click", () => {
-      if (!this.vm.modeloActual.esDinamico) return;
-      this.estudioView.abrir(this.vm.modeloActual.definicionCruda, true);
+      const { def, esEdicion } = this._obtenerDefinicionEditable(this.vm.modeloActual);
+      this.estudioView.abrir(def, esEdicion);
+    });
+
+    document.getElementById("btn-header-estudio")?.addEventListener("click", () => {
+      const { def, esEdicion } = this._obtenerDefinicionEditable(this.vm.modeloActual);
+      this.estudioView.abrir(def, esEdicion);
     });
 
     this.dom.btnCopiarModelo.addEventListener("click", () => {
@@ -564,7 +570,10 @@ export class AppView {
           } else if (accion === "editar") {
             const mod = this.vm.obtenerModelos().find(m => m.id === id);
             this.modalesView.cerrarBiblioteca();
-            if (mod?.esDinamico) this.estudioView.abrir(mod.definicionCruda, true);
+            if (mod) {
+              const { def, esEdicion } = this._obtenerDefinicionEditable(mod);
+              this.estudioView.abrir(def, esEdicion);
+            }
           } else if (accion === "renombrar") {
             const mod = this.vm.obtenerModelos().find(m => m.id === id);
             this.modalesView.cerrarBiblioteca();
@@ -598,6 +607,35 @@ export class AppView {
         }
       }
     );
+  }
+
+  // Convierte cualquier modelo nativo o dinámico a una definición lista para ser editada o adaptada en el Estudio.
+  _obtenerDefinicionEditable(modelo) {
+    if (!modelo) return { def: null, esEdicion: false };
+    if (modelo.esDinamico && modelo.definicionCruda) {
+      return { def: modelo.definicionCruda, esEdicion: true };
+    }
+
+    const plantilla = obtenerPlantillaSimulacion(modelo.id) || {};
+    const varsLista = (modelo.variables || (modelo.crearGenoma ? modelo.crearGenoma() : [])).map(v => ({
+      nombre: v.nombre,
+      tipo: v.tipo || "continuo",
+      min: v.min !== undefined ? v.min : 0,
+      max: v.max !== undefined ? v.max : 100
+    }));
+
+    const def = {
+      id: modelo.id,
+      nombre: `${modelo.nombre} (Copia Editable)`,
+      descripcion: modelo.descripcion,
+      tipoVisualizacion: modelo.tipoVisualizacion || plantilla.tipoVisualizacion || "calibracion",
+      variables: varsLista.length > 0 ? varsLista : (plantilla.variables || [
+        { nombre: "var1", tipo: "continuo", min: 0, max: 100 }
+      ]),
+      codigoEvaluacion: plantilla.codigoEvaluacion || `// Función de aptitud para ${modelo.nombre}\n// Variables: ${varsLista.map(v => 'vars.' + v.nombre).join(', ')}\nreturn Math.abs(vars.${varsLista[0]?.nombre || 'var1'} - 50);`
+    };
+
+    return { def, esEdicion: false };
   }
 }
 

@@ -17,8 +17,8 @@ export class EstudioView {
       contenedorPrincipal: document.getElementById("contenedor-principal") || document.querySelector(".app-contenedor"),
 
       // Acciones del encabezado
-      btnVolver: document.getElementById("btn-estudio-volver"),
-      btnGuardar: document.getElementById("btn-estudio-guardar"),
+      btnVolver: document.getElementById("btn-estudio-volver") || document.getElementById("btn-cancelar-modelo"),
+      btnGuardar: document.getElementById("btn-guardar-modelo") || document.getElementById("btn-estudio-guardar"),
       btnProbar: document.getElementById("btn-estudio-probar"),
       tituloEstudio: document.getElementById("estudio-titulo"),
       subtituloEstudio: document.getElementById("estudio-subtitulo"),
@@ -174,48 +174,62 @@ export class EstudioView {
 
   // Abre el Estudio de Modelado a pantalla completa inicializando o precargando los datos del modelo.
   abrir(datosIniciales = null, esEdicion = false) {
-    this.modo = esEdicion ? "edicion" : "creacion";
-    this.modeloIdActual = datosIniciales?.id || null;
+    try {
+      this.modo = esEdicion ? "edicion" : "creacion";
+      this.modeloIdActual = datosIniciales?.id || null;
 
-    if (this.dom.alerta) mostrarAlerta(null, this.dom.alerta);
-
-    // Ajusta títulos de cabecera
-    if (this.dom.tituloEstudio) {
-      this.dom.tituloEstudio.textContent = esEdicion
-        ? `✏️ Editando: ${datosIniciales?.nombre || "Simulación"}`
-        : "🛠️ Estudio de Modelado de Simulaciones";
-    }
-    if (this.dom.subtituloEstudio) {
-      this.dom.subtituloEstudio.textContent = esEdicion
-        ? "Modo Edición Low-Code (Tiempo Real)"
-        : "Nuevo Modelo Matemático";
-    }
-
-    // Transición de vistas en el DOM
-    if (this.dom.vistaLaboratorio) this.dom.vistaLaboratorio.style.display = "none";
-    if (this.dom.vistaEstudio) {
-      this.dom.vistaEstudio.style.display = "flex";
-      this.dom.vistaEstudio.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-    if (this.dom.contenedorPrincipal) {
-      this.dom.contenedorPrincipal.classList.add("modo-estudio");
-    }
-
-    // Carga los datos iniciales o una plantilla por omisión
-    if (datosIniciales) {
-      this.cargarDesdeDefinicion(datosIniciales, esEdicion);
-    } else {
-      const plantillaBase = obtenerPlantillaSimulacion("campo_potencial");
-      if (plantillaBase) {
-        this.cargarDesdeDefinicion(plantillaBase, false);
-      } else {
-        this._cargarPorDefecto();
+      // 1. Transición de vistas en el DOM: garantiza que el editor sea visible inmediatamente
+      if (this.dom.vistaLaboratorio) this.dom.vistaLaboratorio.style.display = "none";
+      if (this.dom.vistaEstudio) {
+        this.dom.vistaEstudio.style.display = "flex";
+        try { this.dom.vistaEstudio.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (_) {}
       }
-    }
+      if (this.dom.contenedorPrincipal) {
+        this.dom.contenedorPrincipal.classList.add("modo-estudio");
+      }
 
-    this.cambiarTab("vars");
-    this.sincronizarSlidersGenes();
-    this.ejecutarPruebaEnVivo();
+      if (this.dom.alerta) mostrarAlerta(null, this.dom.alerta);
+
+      // 2. Ajusta títulos de cabecera
+      if (this.dom.tituloEstudio) {
+        this.dom.tituloEstudio.textContent = esEdicion
+          ? `✏️ Editando: ${datosIniciales?.nombre || "Simulación"}`
+          : "🛠️ Estudio de Modelado de Simulaciones";
+      }
+      if (this.dom.subtituloEstudio) {
+        this.dom.subtituloEstudio.textContent = esEdicion
+          ? "Modo Edición Low-Code (Tiempo Real)"
+          : "Nuevo Modelo Matemático";
+      }
+
+      // 3. Carga los datos iniciales o una plantilla por omisión
+      if (datosIniciales) {
+        this.cargarDesdeDefinicion(datosIniciales, esEdicion);
+      } else {
+        const plantillaBase = obtenerPlantillaSimulacion("campo_potencial");
+        if (plantillaBase) {
+          this.cargarDesdeDefinicion(plantillaBase, false);
+        } else {
+          this._cargarPorDefecto();
+        }
+      }
+
+      this.cambiarTab("vars");
+      this.sincronizarSlidersGenes();
+
+      // 4. Intenta ejecutar la prueba en vivo sin bloquear si ocurre alguna excepción
+      try {
+        this.ejecutarPruebaEnVivo();
+      } catch (errPrueba) {
+        console.warn("[EstudioView] Advertencia en evaluación inicial:", errPrueba);
+      }
+    } catch (errGlobal) {
+      console.error("[EstudioView] Error en apertura:", errGlobal);
+      // Asegurar que las vistas queden en estado de estudio aunque haya habido error de datos
+      if (this.dom.vistaEstudio) this.dom.vistaEstudio.style.display = "flex";
+      if (this.dom.vistaLaboratorio) this.dom.vistaLaboratorio.style.display = "none";
+      if (this.dom.alerta) mostrarAlerta(`Error al abrir editor: ${errGlobal.message}`, this.dom.alerta);
+    }
   }
 
   // Cierra el Estudio de Modelado y retorna a la vista principal del Laboratorio.

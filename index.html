@@ -7,7 +7,7 @@
   <meta name="description" content="Laboratorio Evolutivo: Optimizador genético con modelos intercambiables, evolución multiobjetivo Pareto, diseño Google Material 3 y modos de color">
   <title>Laboratorio Evolutivo</title>
   <!-- Estilos visuales desacoplados Google Material 3 con soporte para modos de color y temas -->
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=2.2">
 </head>
 <body>
   <div class="app-contenedor" id="contenedor-principal">
@@ -46,7 +46,10 @@
             <h2 class="tarjeta-titulo" style="margin-bottom: 0;">
               <span>📦 Simulación Activa</span>
             </h2>
-            <button type="button" id="btn-abrir-biblioteca" class="btn-secundario" style="padding: 0.4rem 0.8rem; font-size: 0.82rem;" title="Ver todas las simulaciones y presets guardados">📚 Biblioteca</button>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <button type="button" id="btn-header-estudio" class="btn-m3-filled" style="padding: 0.4rem 0.85rem; font-size: 0.82rem;" title="Abrir la simulación en el Estudio de Modelado a pantalla completa">🛠️ Estudio de Modelado</button>
+              <button type="button" id="btn-abrir-biblioteca" class="btn-secundario" style="padding: 0.4rem 0.8rem; font-size: 0.82rem;" title="Ver todas las simulaciones y presets guardados">📚 Biblioteca</button>
+            </div>
           </div>
 
           <div class="grupo-campo">
@@ -58,7 +61,7 @@
           <!-- Barra de herramientas para gestión CRUD de simulaciones (Editar, Copiar, Renombrar, Borrar, Exportar) -->
           <div class="barra-acciones-simulacion">
             <button type="button" id="btn-abrir-constructor" class="btn-m3-filled" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" title="Diseñar o crear una nueva simulación en el Estudio de Modelado">➕ Nuevo</button>
-            <button type="button" id="btn-editar-modelo" class="btn-m3-tonal" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; display: none;" title="Abrir esta simulación en el Estudio de Modelado a pantalla completa">✏️ Editar en Estudio</button>
+            <button type="button" id="btn-editar-modelo" class="btn-m3-tonal" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" title="Abrir y editar esta simulación en el Estudio de Modelado a pantalla completa">✏️ Editar en Estudio</button>
             <button type="button" id="btn-copiar-modelo" class="btn-m3-tonal" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" title="Duplicar esta simulación para crear una variante">📑 Copiar</button>
             <button type="button" id="btn-renombrar-modelo" class="btn-m3-tonal" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; display: none;" title="Renombrar título y descripción">🏷️ Renombrar</button>
             <button type="button" id="btn-guardar-preset" class="btn-m3-tonal" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" title="Guardar la configuración completa actual como Preset">⭐ Guardar Preset</button>
@@ -513,7 +516,10 @@
     </div>
   </div>
 
+  <!-- Contenedor alias para retrocompatibilidad de scripts anteriores -->
+  <div id="modal-constructor-modelo" style="display: none;" aria-hidden="true"></div>
+
   <!-- Carga del punto de entrada modular con ES Modules nativos -->
-  <script type="module" src="./js/main.js"></script>
+  <script type="module" src="./js/main.js?v=2.2"></script>
 </body>
 </html>

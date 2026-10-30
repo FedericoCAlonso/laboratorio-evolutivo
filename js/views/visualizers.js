@@ -2,6 +2,25 @@
 // CAPA VISTA: VISUALIZADORES Y ANIMACIONES DE RESULTADOS (CANVAS 2D Y DOM)
 // =========================================================================
 
+// Polyfill seguro de roundRect para compatibilidad total con navegadores en entornos Linux y WebKit
+if (typeof CanvasRenderingContext2D !== "undefined" && !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r = 0) {
+    const radio = typeof r === "number" ? r : (Array.isArray(r) ? r[0] : 0);
+    const rad = Math.min(radio, Math.min(w / 2, h / 2));
+    this.moveTo(x + rad, y);
+    this.lineTo(x + w - rad, y);
+    this.quadraticCurveTo(x + w, y, x + w, y + rad);
+    this.lineTo(x + w, y + h - rad);
+    this.quadraticCurveTo(x + w, y + h, x + w - rad, y + h);
+    this.lineTo(x + rad, y + h);
+    this.quadraticCurveTo(x, y + h, x, y + h - rad);
+    this.lineTo(x, y + rad);
+    this.quadraticCurveTo(x, y, x + rad, y);
+    this.closePath();
+    return this;
+  };
+}
+
 import { JANSEN_VALORES_REFERENCIA, TRAYECTORIA_JANSEN_ORIGINAL, ModeloPataJansen } from "../models/jansen.js";
 import { resolverCinematicaBrazo, distanciaPuntoASegmento } from "../models/brazo.js";
 import { simularDescensoCohete } from "../models/cohete.js";

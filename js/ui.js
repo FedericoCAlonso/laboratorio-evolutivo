@@ -678,8 +678,15 @@ export function actualizarBotonesControl(estado, btns, textoEstado) {
 
 // Abre el modal del constructor low-code reiniciando sus campos o precargando los datos existentes para edición.
 export function abrirModalConstructor(elementosModal, datosIniciales = null, esEdicion = false) {
+  const vistaEstudio = document.getElementById("vista-estudio");
+  const vistaLaboratorio = document.getElementById("vista-laboratorio");
+  if (vistaEstudio && vistaLaboratorio) {
+    vistaLaboratorio.style.display = "none";
+    vistaEstudio.style.display = "flex";
+  }
+
   const { modal, alerta, inputNombre, inputDesc, tbody, textareaCodigo, selectTipoVisualizacion, selectPlantilla, hintTipoVisualizacion } = elementosModal;
-  if (!modal) return;
+  if (!modal && !vistaEstudio) return;
 
   mostrarAlerta(null, alerta);
   tbody.innerHTML = "";
@@ -804,7 +811,7 @@ export function actualizarToolbarAcciones(modeloActual, elementosToolbar) {
   const { btnEditar, btnRenombrar, btnEliminar, btnCopiar, btnExportar, btnGuardarPreset } = elementosToolbar;
   const esDinamico = Boolean(modeloActual && modeloActual.esDinamico);
 
-  if (btnEditar) btnEditar.style.display = esDinamico ? "inline-flex" : "none";
+  if (btnEditar) btnEditar.style.display = "inline-flex";
   if (btnRenombrar) btnRenombrar.style.display = esDinamico ? "inline-flex" : "none";
   if (btnEliminar) btnEliminar.style.display = esDinamico ? "inline-flex" : "none";
 
@@ -897,8 +904,8 @@ export function abrirModalBiblioteca(elementosBiblioteca, modelos, presets, onAc
         <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem;">
           <button type="button" class="btn-m3-filled btn-cargar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">▶ Cargar</button>
           <button type="button" class="btn-m3-tonal btn-copiar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">📑 Copiar</button>
+          <button type="button" class="btn-m3-tonal btn-editar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">✏️ Editar en Estudio</button>
           ${mod.esDinamico ? `
-            <button type="button" class="btn-m3-tonal btn-editar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">✏️ Editar</button>
             <button type="button" class="btn-m3-tonal btn-renombrar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">🏷️ Renombrar</button>
             <button type="button" class="btn-m3-outlined btn-exportar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">📤 Exportar</button>
             <button type="button" class="btn-peligro btn-eliminar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">🗑️ Borrar</button>
