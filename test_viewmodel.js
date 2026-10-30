@@ -19,7 +19,7 @@ const vm = new AppViewModel();
 
 // 1. Verificación de inicialización y modelo inicial
 console.log("\n[1] Verificando inicialización de estado...");
-if (!vm.modeloActual || vm.modeloActual.id !== "pata-jansen") {
+if (!vm.modeloActual || vm.modeloActual.id !== "brazo-robotico") {
   throw new Error(`Modelo inicial inesperado: ${vm.modeloActual?.id}`);
 }
 if (vm.estadoSimulacion !== "DETENIDO") {
@@ -121,10 +121,10 @@ console.log(`    ✓ Exportación e importación completada: tipo '${resultadoIm
 
 // 6. Verificación de Resumen de Genoma para M3 Chips y Sincronización Bidireccional
 console.log("\n[6] Verificando resumen de genoma M3 y sincronización de configMotor...");
-vm.seleccionarModelo("pata-jansen");
+vm.seleccionarModelo("brazo-robotico");
 const resumenChips = vm.obtenerResumenGenomaActual();
-if (!Array.isArray(resumenChips) || resumenChips.length !== 12 || resumenChips[0].nombre !== "a") {
-  throw new Error("obtenerResumenGenomaActual() no devolvió los 12 genes estructurados de Theo Jansen.");
+if (!Array.isArray(resumenChips) || resumenChips.length !== 3 || resumenChips[0].nombre !== "theta1") {
+  throw new Error("obtenerResumenGenomaActual() no devolvió los 3 genes estructurados del Brazo Robótico.");
 }
 vm.actualizarConfigMotor({ tamPoblacion: 120, probMutacion: 0.08, torneoK: 5, replicasRuido: 4 });
 if (vm.configMotor.tamanoPoblacion !== 120 || vm.configMotor.tasaMutacion !== 0.08 || vm.configMotor.tamanoTorneo !== 5 || vm.configMotor.nReplicasRuido !== 4) {

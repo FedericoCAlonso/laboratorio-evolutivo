@@ -12,7 +12,8 @@ import {
   analizarGradosLibertad,
   resolverPasoMecanismo,
   simularCicloMecanismo,
-  crearGrafoPataJansen,
+  crearGrafoPataCaminante,
+  crearGrafoTrenEngranajes,
   crearGrafoBrazoRobotico
 } from "./mecanismos.js";
 
@@ -28,7 +29,8 @@ export {
   analizarGradosLibertad,
   resolverPasoMecanismo,
   simularCicloMecanismo,
-  crearGrafoPataJansen,
+  crearGrafoPataCaminante,
+  crearGrafoTrenEngranajes,
   crearGrafoBrazoRobotico
 };
 

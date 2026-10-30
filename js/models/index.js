@@ -5,7 +5,6 @@
 
 import { ModeloBalanceoFases } from "./fases.js";
 import { ModeloPataCaminante } from "./caminante.js";
-import { ModeloPataJansen } from "./jansen.js";
 import { ModeloBrazoRobotico } from "./brazo.js";
 import { ModeloCoheteLanding } from "./cohete.js";
 import { ModeloControladorPID } from "./pid.js";
@@ -26,7 +25,6 @@ import { PLANTILLAS_FIELES } from "../plantillas/index.js";
 export {
   ModeloBalanceoFases,
   ModeloPataCaminante,
-  ModeloPataJansen,
   ModeloBrazoRobotico,
   ModeloCoheteLanding,
   ModeloControladorPID,
@@ -44,7 +42,6 @@ export {
 
 // Lista global de todos los modelos de optimización disponibles en la aplicación (estáticos y dinámicos).
 export const MODELOS = [
-  ModeloPataJansen,
   ModeloBrazoRobotico,
   ModeloCoheteLanding,
   ModeloControladorPID,
@@ -62,20 +59,31 @@ export const MODELOS = [
   ModeloPataCaminante
 ];
 
-// Dota de nombre y etiqueta reales a los genes anónimos de cada modelo nativo, tomándolos de su plantilla fiel.
+// Dota de nombre, etiqueta, grafo y código editable a cada modelo nativo, tomándolos de su plantilla fiel.
 MODELOS.forEach(modelo => {
   const plantilla = PLANTILLAS_FIELES[modelo.id];
-  if (!plantilla || typeof modelo.crearGenoma !== "function") return;
-  const crearOriginal = modelo.crearGenoma.bind(modelo);
-  modelo.crearGenoma = () => crearOriginal().map((gen, i) => {
-    const v = plantilla.variables[i] || {};
-    return {
-      ...gen,
-      nombre: gen.nombre || v.nombre || `var${i + 1}`,
-      etiqueta: gen.etiqueta || v.etiqueta || v.nombre,
-      valorNominal: gen.valorNominal !== undefined ? gen.valorNominal : v.valorNominal
-    };
-  });
+  if (!plantilla) return;
+  if (!modelo.grafo && plantilla.grafo) {
+    modelo.grafo = plantilla.grafo;
+  }
+  if (!modelo.codigoEvaluacion && plantilla.codigoEvaluacion) {
+    modelo.codigoEvaluacion = plantilla.codigoEvaluacion;
+  }
+  if (!modelo.tipoVisualizacion && plantilla.tipoVisualizacion) {
+    modelo.tipoVisualizacion = plantilla.tipoVisualizacion;
+  }
+  if (typeof modelo.crearGenoma === "function") {
+    const crearOriginal = modelo.crearGenoma.bind(modelo);
+    modelo.crearGenoma = (...args) => crearOriginal(...args).map((gen, i) => {
+      const v = plantilla.variables?.[i] || {};
+      return {
+        ...gen,
+        nombre: gen.nombre || v.nombre || `var${i + 1}`,
+        etiqueta: gen.etiqueta || v.etiqueta || v.nombre,
+        valorNominal: gen.valorNominal !== undefined ? gen.valorNominal : v.valorNominal
+      };
+    });
+  }
 });
 
 // Registra un nuevo modelo dinámico compilado en la lista global evitando duplicados por identificador.

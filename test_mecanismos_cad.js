@@ -9,7 +9,7 @@ import {
   analizarGradosLibertad,
   resolverPasoMecanismo,
   simularCicloMecanismo,
-  crearGrafoPataJansen,
+  crearGrafoPataCaminante,
   crearGrafoBrazoRobotico
 } from "./js/engines/mecanismos.js";
 import {
@@ -50,12 +50,12 @@ assert.strictEqual(dofBrazo.M, 3, `Brazo robotico debe tener M=3 GDL, obtenido: 
 assert.strictEqual(dofBrazo.esDeterminado, true, "Con 3 motores independientes y M=3, debe ser cinemáticamente determinado");
 console.log(`    ✓ Brazo robótico (3 eslabones): M = ${dofBrazo.M} GDL, Motores: ${dofBrazo.numMotores} | Determinado | OK`);
 
-// 1.3 Pata caminante Theo Jansen (13 barras, 1 motor central)
-const grafoJansen = crearGrafoPataJansen();
-const dofJansen = analizarGradosLibertad(grafoJansen);
-assert.strictEqual(dofJansen.M, 1, `Pata Jansen debe tener exactamente M=1 GDL según Grübler-Kutzbach, obtenido: ${dofJansen.M}`);
-assert.strictEqual(dofJansen.esDeterminado, true, "Con 1 motor de manivela, Jansen es estrictamente determinado");
-console.log(`    ✓ Theo Jansen (13 barras): M = ${dofJansen.M} GDL | Determinado con motor central | OK`);
+// 1.3 Mecanismo Caminante 4 Barras (Manivela-Balancín, 1 motor central)
+const grafoCaminante = crearGrafoPataCaminante();
+const dofCaminante = analizarGradosLibertad(grafoCaminante);
+assert.strictEqual(dofCaminante.M, 1, `Mecanismo caminante debe tener exactamente M=1 GDL según Grübler-Kutzbach, obtenido: ${dofCaminante.M}`);
+assert.strictEqual(dofCaminante.esDeterminado, true, "Con 1 motor de manivela, el caminante es estrictamente determinado");
+console.log(`    ✓ Mecanismo Caminante (4 barras): M = ${dofCaminante.M} GDL | Determinado con motor central | OK`);
 
 // -------------------------------------------------------------------------
 // PRUEBA 2: ACOPLAMIENTO MULTIFÍSICA (IMANES / CAMPOS EM COUPLING)
@@ -97,18 +97,20 @@ console.log("\n[3] Probando telemetría de sensores en evaluación de aptitud (F
 
 // Definición de modelo que consume el sensor 'pie' del editor CAD
 const definicionConSensores = {
-  nombre: "Caminante Jansen con Telemetría CAD",
+  nombre: "Caminante 4 Barras con Telemetría CAD",
   descripcion: "Evalúa fitness consumiendo directamente el sensor 'pie' del editor",
-  tipoVisualizacion: "mecanismo_jansen",
-  grafo: grafoJansen.exportarJSON(),
+  tipoVisualizacion: "caminante_4barras",
+  grafo: grafoCaminante.exportarJSON(),
   variables: [
-    { nombre: "a", tipo: "continuo", min: 30, max: 45, valorNominal: 38.0 },
-    { nombre: "l", tipo: "continuo", min: 5, max: 12, valorNominal: 7.8 }
+    { nombre: "l1_manivela", tipo: "continuo", min: 10, max: 25, valorNominal: 18.0 },
+    { nombre: "l2_biela", tipo: "continuo", min: 35, max: 60, valorNominal: 48.0 },
+    { nombre: "l3_balancin", tipo: "continuo", min: 30, max: 55, valorNominal: 42.0 },
+    { nombre: "l4_chasis", tipo: "continuo", min: 35, max: 55, valorNominal: 45.0 }
   ],
   codigoEvaluacion: `
     // Acceso directo a la telemetría del sensor CAD 'pie'
     const pie = sensores.pie;
-    const errorZancada = Math.abs(pie.zancada - 60);
+    const errorZancada = Math.abs(pie.zancada - 30);
     const suavidadInercial = pie.aceleracionPico;
     return [suavidadInercial, errorZancada];
   `
@@ -118,7 +120,7 @@ validarDefinicionModelo(definicionConSensores);
 const modeloCompiladoConSensores = compilarModeloDinamico(definicionConSensores);
 assert.ok(modeloCompiladoConSensores, "Debe compilar modelo que accede a 'sensores'");
 
-const puntajeEvaluado = modeloCompiladoConSensores.evaluar([38.0, 7.8]);
+const puntajeEvaluado = modeloCompiladoConSensores.evaluar([18.0, 48.0, 42.0, 45.0]);
 assert.ok(Array.isArray(puntajeEvaluado), "Debe retornar arreglo de Pareto");
 assert.strictEqual(puntajeEvaluado.length, 2);
 assert.ok(typeof puntajeEvaluado[0] === "number" && !isNaN(puntajeEvaluado[0]), "f1 debe ser número válido");
@@ -131,19 +133,19 @@ console.log(`    ✓ Modelo evaluado consumiendo sensores CAD: [f1: ${puntajeEva
 console.log("\n[4] Probando sincronización bidireccional de variables e Inspector CAD...");
 
 const editorMock = new EditorGraficoView();
-editorMock.cargarGrafo(grafoJansen);
+editorMock.cargarGrafo(grafoCaminante);
 
-assert.ok(editorMock.grafo.barras.length >= 10, "El grafo Jansen cargado debe contener al menos 10 barras cinemáticas");
-assert.strictEqual(editorMock.grafo.nodos.length, 8, "Debe contener 8 nodos articulados");
+assert.strictEqual(editorMock.grafo.barras.length, 2, "El grafo caminante cargado debe contener 2 barras acopladas más la manivela motriz");
+assert.strictEqual(editorMock.grafo.nodos.length, 4, "Debe contener 4 nodos articulados");
 
 // 4.1 Modificar variables mediante panel/sliders y verificar actualización de geometría del grafo
-editorMock.actualizarValoresVariables({ a: 40.0, b: 42.0 });
-const nodoX = editorMock.grafo.nodos.find(n => n.id === "X_fijo");
-assert.strictEqual(Math.abs(nodoX.x), 40.0, "La coordenada X del nodo frame debe actualizarse con variable 'a'");
-const barraB = editorMock.grafo.barras.find(b => b.variableAsociada === "b");
-assert.strictEqual(barraB.longitud, 42.0, "La longitud de la barra 'b' debe actualizarse al recibir variable 'b'");
+editorMock.actualizarValoresVariables({ l4_chasis: 50.0, l2_biela: 52.0 });
+const nodoB = editorMock.grafo.nodos.find(n => n.id === "B_chasis");
+assert.strictEqual(Math.abs(nodoB.x), 50.0, "La coordenada X del nodo chasis debe actualizarse con variable 'l4_chasis'");
+const barraBiela = editorMock.grafo.barras.find(b => b.variableAsociada === "l2_biela");
+assert.strictEqual(barraBiela.longitud, 52.0, "La longitud de la biela debe actualizarse al recibir variable 'l2_biela'");
 
-const telemetriaActualizada = editorMock.obtenerTelemetriaSensores({ a: 40.0, b: 42.0 });
+const telemetriaActualizada = editorMock.obtenerTelemetriaSensores({ l4_chasis: 50.0, l2_biela: 52.0 });
 assert.ok(telemetriaActualizada.pie, "La telemetría del sensor 'pie' debe recalcularse al cambiar variables");
 console.log(`    ✓ Actualización geométrica desde variables (Sliders -> CAD) verificada | OK`);
 
@@ -154,12 +156,12 @@ const editorDrag = new EditorGraficoView({
     variablesDetectadas[nombre] = valor;
   }
 });
-editorDrag.cargarGrafo(grafoJansen);
+editorDrag.cargarGrafo(grafoCaminante);
 
-// Simular arrastre del nodo frame 'X_fijo' a nuevas coordenadas (-45.0, -12.0)
-const nodoFrame = editorDrag.grafo.nodos.find(n => n.id === "X_fijo");
-nodoFrame.x = -45.0;
-nodoFrame.y = -12.0;
+// Simular arrastre del nodo frame 'B_chasis' a nueva coordenada (48.0, 0.0)
+const nodoFrame = editorDrag.grafo.nodos.find(n => n.id === "B_chasis");
+nodoFrame.x = 48.0;
+nodoFrame.y = 0.0;
 
 // Disparar la lógica de actualización geométrica por arrastre
 if (nodoFrame.variableX) {
@@ -167,13 +169,8 @@ if (nodoFrame.variableX) {
   editorDrag.valoresVariables[nodoFrame.variableX] = valX;
   editorDrag.onVariableModificada?.({ nombre: nodoFrame.variableX, valor: valX });
 }
-if (nodoFrame.variableY) {
-  const valY = parseFloat(Math.abs(nodoFrame.y).toFixed(1));
-  editorDrag.valoresVariables[nodoFrame.variableY] = valY;
-  editorDrag.onVariableModificada?.({ nombre: nodoFrame.variableY, valor: valY });
-}
 
-// Barras conectadas a X_fijo (b, c, d)
+// Barras conectadas a B_chasis (l3_balancin)
 editorDrag.grafo.barras.forEach(b => {
   if (b.nodoA === nodoFrame.id || b.nodoB === nodoFrame.id) {
     const nA = editorDrag.grafo.nodos.find(n => n.id === b.nodoA);
@@ -190,11 +187,8 @@ editorDrag.grafo.barras.forEach(b => {
   }
 });
 
-assert.strictEqual(variablesDetectadas["a"], 45.0, "La variable 'a' debe actualizarse al arrastrar nodo X_fijo");
-assert.strictEqual(variablesDetectadas["l"], 12.0, "La variable 'l' debe actualizarse al arrastrar nodo X_fijo");
-assert.ok(typeof variablesDetectadas["b"] === "number" && variablesDetectadas["b"] > 0, "La barra 'b' debe actualizar su variable");
-assert.ok(typeof variablesDetectadas["c"] === "number" && variablesDetectadas["c"] > 0, "La barra 'c' debe actualizar su variable");
-assert.ok(typeof variablesDetectadas["d"] === "number" && variablesDetectadas["d"] > 0, "La barra 'd' debe actualizar su variable");
+assert.strictEqual(variablesDetectadas["l4_chasis"], 48.0, "La variable 'l4_chasis' debe actualizarse al arrastrar nodo B_chasis");
+assert.ok(typeof variablesDetectadas["l3_balancin"] === "number" && variablesDetectadas["l3_balancin"] > 0, "La barra 'l3_balancin' debe actualizar su variable");
 console.log(`    ✓ Propagación reactiva por arrastre de nodos (CAD -> Variables de optimización) verificada | OK`);
 
 // -------------------------------------------------------------------------
@@ -202,26 +196,26 @@ console.log(`    ✓ Propagación reactiva por arrastre de nodos (CAD -> Variabl
 // -------------------------------------------------------------------------
 console.log("\n[5] Probando paridad de reconstrucción desde cero en plantillas predefinidas...");
 
-assert.ok(PLANTILLAS_SIMULACION.pata_jansen.grafo, "La plantilla pata_jansen debe incluir grafo multicuerpo preconfigurado");
+assert.ok(PLANTILLAS_SIMULACION["pata-caminante"].grafo, "La plantilla pata-caminante debe incluir grafo multicuerpo preconfigurado");
 assert.ok(PLANTILLAS_SIMULACION.brazo_robotico.grafo, "La plantilla brazo_robotico debe incluir grafo multicuerpo preconfigurado");
 
-const grafoJansenPlantilla = new GrafoMecanismoMultifisica(PLANTILLAS_SIMULACION.pata_jansen.grafo);
-const dofPlantillaJansen = analizarGradosLibertad(grafoJansenPlantilla);
-assert.strictEqual(dofPlantillaJansen.M, 1, "La plantilla de Jansen debe preservar M=1 GDL");
+const grafoCaminantePlantilla = new GrafoMecanismoMultifisica(PLANTILLAS_SIMULACION["pata-caminante"].grafo);
+const dofPlantillaCaminante = analizarGradosLibertad(grafoCaminantePlantilla);
+assert.strictEqual(dofPlantillaCaminante.M, 1, "La plantilla de Pata Caminante debe preservar M=1 GDL");
 
 const grafoBrazoPlantilla = new GrafoMecanismoMultifisica(PLANTILLAS_SIMULACION.brazo_robotico.grafo);
 const dofPlantillaBrazo = analizarGradosLibertad(grafoBrazoPlantilla);
 assert.strictEqual(dofPlantillaBrazo.M, 3, "La plantilla de Brazo Robótico debe preservar M=3 GDL");
 
-// 5.2 Verificar coherencia geométrica exacta en theta=0 de crearGrafoPataJansen (ninguna barra cambia al arrastrar 0 px)
-const gJansenExacto = crearGrafoPataJansen();
-gJansenExacto.barras.forEach(b => {
-  const nA = gJansenExacto.nodos.find(n => n.id === b.nodoA);
-  const nB = gJansenExacto.nodos.find(n => n.id === b.nodoB);
+// 5.2 Verificar coherencia geométrica exacta en theta=0 de crearGrafoPataCaminante
+const gCaminanteExacto = crearGrafoPataCaminante();
+gCaminanteExacto.barras.forEach(b => {
+  const nA = gCaminanteExacto.nodos.find(n => n.id === b.nodoA);
+  const nB = gCaminanteExacto.nodos.find(n => n.id === b.nodoB);
   const distReal = Math.hypot(nA.x - nB.x, nA.y - nB.y);
   assert.ok(Math.abs(distReal - b.longitud) < 0.25, `Barra ${b.id} (${b.variableAsociada}) debe coincidir con distancia euclidiana de sus nodos (${distReal.toFixed(2)} vs ${b.longitud})`);
 });
-console.log("    ✓ Coherencia geométrica exacta en θ=0 de los 8 nodos y 10 barras de Theo Jansen verificada | OK");
+console.log("    ✓ Coherencia geométrica exacta en θ=0 de nodos y barras del caminante verificada | OK");
 console.log("    ✓ Paridad completa de plantillas preconfiguradas con el Editor CAD | OK");
 
 console.log("\n=== ¡TODAS LAS PRUEBAS DEL MOTOR CAD Y MECANISMOS PASARON CON ÉXITO (5/5)! ===");

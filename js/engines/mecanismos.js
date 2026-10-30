@@ -225,26 +225,6 @@ export function analizarGradosLibertad(grafo) {
     };
   }
 
-  // Detección y evaluación analítica para mecanismos de topología canónica cerrada conocida (ej. Theo Jansen)
-  const esJansen = (grafo.motores || []).some(m => m.id === "motor_manivela_jansen") ||
-                   (grafo.nodos || []).some(n => n.id === "X_fijo" || n.id === "H_pie");
-
-  if (esJansen) {
-    const nMotores = (grafo.motores || []).length || 1;
-    return {
-      dof: 1,
-      M: 1,
-      nCuerpos: 8,
-      j1: 10,
-      j2: 0,
-      nMotores,
-      numMotores: nMotores,
-      estado: nMotores === 1 ? "determinado" : (nMotores < 1 ? "subrestringido" : "sobrerrestringido"),
-      esDeterminado: nMotores === 1,
-      mensaje: "M = 1 | Mecanismo cinemáticamente determinado (Pata caminante Theo Jansen de 13 barras y 1 GDL accionado por manivela central)."
-    };
-  }
-
   // 1. Identificación del marco de referencia (Bancada fija a tierra = Cuerpo 0)
   const nodosFijos = grafo.nodos.filter(n => n.tipo === "fijo");
   const nodosLibres = grafo.nodos.filter(n => n.tipo !== "fijo");
@@ -583,11 +563,11 @@ export function sincronizarPosicionesNodosGrafo(grafo, vars = {}, theta = 0) {
   });
   grafo.nodos?.forEach(n => {
     if (n.variableX && varsEfectivas[n.variableX] !== undefined) {
-      const sx = n.signoX !== undefined ? n.signoX : (n.id === "X_fijo" ? -1 : 1);
+      const sx = n.signoX !== undefined ? n.signoX : (n.x < 0 ? -1 : 1);
       n.x = parseFloat((sx * Math.abs(Number(varsEfectivas[n.variableX]))).toFixed(2));
     }
     if (n.variableY && varsEfectivas[n.variableY] !== undefined) {
-      const sy = n.signoY !== undefined ? n.signoY : (n.id === "X_fijo" ? -1 : 1);
+      const sy = n.signoY !== undefined ? n.signoY : (n.y < 0 ? -1 : 1);
       n.y = parseFloat((sy * Math.abs(Number(varsEfectivas[n.variableY]))).toFixed(2));
     }
   });
@@ -597,33 +577,6 @@ export function sincronizarPosicionesNodosGrafo(grafo, vars = {}, theta = 0) {
       m.longitudManivela = Number(varsEfectivas[varNom]);
     }
   });
-
-  const esJansen = (grafo.motores || []).some(m => m.id === "motor_manivela_jansen") ||
-                   grafo.nodos.some(n => n.id === "X_fijo" || n.id === "H_pie");
-
-  if (esJansen) {
-    const mRadio = varsEfectivas.m !== undefined ? Number(varsEfectivas.m) : 15.0;
-    const pJ = MotorEstructurasCinematica.resolverJansen(theta, varsEfectivas, mRadio);
-    if (pJ) {
-      const mapJ = {
-        Y_fijo: pJ.Y,
-        X_fijo: pJ.X,
-        K_manivela: pJ.K,
-        D_nodo: pJ.D,
-        E_nodo: pJ.E,
-        F_nodo: pJ.F,
-        G_nodo: pJ.G,
-        H_pie: pJ.H
-      };
-      grafo.nodos.forEach(n => {
-        if (mapJ[n.id]) {
-          n.x = parseFloat(mapJ[n.id].x.toFixed(2));
-          n.y = parseFloat(mapJ[n.id].y.toFixed(2));
-        }
-      });
-      return true;
-    }
-  }
 
   const paso = resolverPasoMecanismo(grafo, theta, varsEfectivas);
   if (paso && paso.nodos) {
@@ -668,43 +621,6 @@ export function simularCicloMecanismo(grafo, vars = {}, opciones = {}) {
         varsEfectivas[varNom] = m.longitudManivela;
       }
     });
-  }
-
-  // Si el mecanismo es Pata Jansen canónico, utiliza el solver analítico hiperoptimizado
-  const esJansen = (grafo.motores || []).some(m => m.id === "motor_manivela_jansen") ||
-                   grafo.nodos.some(n => n.id === "X_fijo" || n.id === "H_pie");
-
-  if (esJansen) {
-    const simJansen = MotorEstructurasCinematica.evaluarJansen(varsEfectivas, opciones);
-    const telemetriaSensores = {};
-
-    if (simJansen.pasos && simJansen.pasos.length > 0) {
-      const trajPie = simJansen.pasos.map(p => ({ x: p.H.x, y: p.H.y, theta: p.theta }));
-      telemetriaSensores["pie"] = {
-        trayectoria: trajPie,
-        posicion: trajPie[0] || { x: 0, y: 0 },
-        anchoTotal: simJansen.anchoTotal || 0,
-        alturaTotal: simJansen.alturaTotal || 0,
-        anchoApoyo: simJansen.anchoApoyo || 0,
-        zancada: simJansen.anchoApoyo || 0,
-        despeje: simJansen.despejeReal || 0,
-        despejeSuelo: simJansen.despejeReal || 0,
-        velocidadMax: simJansen.velocidadMax || (simJansen.anchoApoyo || 30) * 0.4,
-        aceleracionPico: simJansen.aceleracionPico || 0,
-        f5_suavidad: simJansen.f5_suavidad !== undefined ? simJansen.f5_suavidad : 1.0,
-        errorZancada: simJansen.errorZancada !== undefined ? simJansen.errorZancada : 60.0
-      };
-      telemetriaSensores["H_pie"] = telemetriaSensores["pie"];
-    }
-
-    return {
-      esValido: simJansen.esValido,
-      pasosInvalidos: simJansen.pasosInvalidos,
-      dof: 1,
-      sensores: telemetriaSensores,
-      simJansen,
-      pasos: simJansen.pasos || []
-    };
   }
 
   // Solver genérico por propagación de lazo multicuerpo
@@ -845,89 +761,6 @@ export function simularCicloMecanismo(grafo, vars = {}, opciones = {}) {
     sensores: telemetriaSensores,
     pasos
   };
-}
-
-// Genera el grafo canónico completo de la Pata de Theo Jansen (13 barras, 8 articulaciones, manivela y sensor de pie)
-export function crearGrafoPataJansen(vars = {}) {
-  const grafo = new GrafoMecanismoMultifisica();
-
-  const a = vars.a !== undefined ? Number(vars.a) : 38.0;
-  const l = vars.l !== undefined ? Number(vars.l) : 7.8;
-  const b = vars.b !== undefined ? Number(vars.b) : 41.5;
-  const c = vars.c !== undefined ? Number(vars.c) : 39.3;
-  const d = vars.d !== undefined ? Number(vars.d) : 40.1;
-  const e = vars.e !== undefined ? Number(vars.e) : 55.8;
-  const f = vars.f !== undefined ? Number(vars.f) : 39.4;
-  const g = vars.g !== undefined ? Number(vars.g) : 36.7;
-  const h = vars.h !== undefined ? Number(vars.h) : 65.7;
-  const i = vars.i !== undefined ? Number(vars.i) : 49.0;
-  const j = vars.j !== undefined ? Number(vars.j) : 50.0;
-  const k = vars.k !== undefined ? Number(vars.k) : 61.9;
-  const m = vars.m !== undefined ? Number(vars.m) : 15.0;
-
-  // Calcula las coordenadas exactas en theta = 0 con el solver analítico para coherencia geométrica 100%
-  const paso0 = MotorEstructurasCinematica.resolverJansen(0, { a, l, b, c, d, e, f, g, h, i, j, k }, m) || {
-    Y: { x: 0, y: 0 },
-    X: { x: -a, y: -l },
-    K: { x: m, y: 0 },
-    D: { x: -20.51, y: 29.8 },
-    E: { x: -67.85, y: 0.25 },
-    F: { x: -37.98, y: -47.1 },
-    G: { x: -69.51, y: -28.59 },
-    H: { x: -67.19, y: -86.68 }
-  };
-
-  // Nodos fijos a tierra (Bancada)
-  grafo.agregarNodo({ id: "Y_fijo", nombre: "Y: Centro Manivela (0,0)", x: parseFloat(paso0.Y.x.toFixed(2)), y: parseFloat(paso0.Y.y.toFixed(2)), tipo: "fijo" });
-  grafo.agregarNodo({ id: "X_fijo", nombre: "X: Pivote Fijo Frame (-a, -l)", x: parseFloat(paso0.X.x.toFixed(2)), y: parseFloat(paso0.X.y.toFixed(2)), tipo: "fijo", variableX: "a", variableY: "l", signoX: -1, signoY: -1 });
-
-  // Nodos móviles con coordenadas cinemáticamente exactas para las longitudes dadas
-  grafo.agregarNodo({ id: "K_manivela", nombre: "K: Pin de Manivela Motriz", x: parseFloat(paso0.K.x.toFixed(2)), y: parseFloat(paso0.K.y.toFixed(2)), tipo: "libre" });
-  grafo.agregarNodo({ id: "D_nodo", nombre: "D: Nodo Triángulo Superior", x: parseFloat(paso0.D.x.toFixed(2)), y: parseFloat(paso0.D.y.toFixed(2)), tipo: "libre", signoTrilateracion: -1 });
-  grafo.agregarNodo({ id: "E_nodo", nombre: "E: Nodo Balancín Posterior", x: parseFloat(paso0.E.x.toFixed(2)), y: parseFloat(paso0.E.y.toFixed(2)), tipo: "libre", signoTrilateracion: -1 });
-  grafo.agregarNodo({ id: "F_nodo", nombre: "F: Nodo Biela Inferior", x: parseFloat(paso0.F.x.toFixed(2)), y: parseFloat(paso0.F.y.toFixed(2)), tipo: "libre", signoTrilateracion: 1 });
-  grafo.agregarNodo({ id: "G_nodo", nombre: "G: Nodo Muslo Articulado", x: parseFloat(paso0.G.x.toFixed(2)), y: parseFloat(paso0.G.y.toFixed(2)), tipo: "libre", signoTrilateracion: 1 });
-  grafo.agregarNodo({ id: "H_pie", nombre: "H: Pie de Contacto con el Suelo", x: parseFloat(paso0.H.x.toFixed(2)), y: parseFloat(paso0.H.y.toFixed(2)), tipo: "libre", signoTrilateracion: 1 });
-
-  // Motor rotativo en la manivela central
-  grafo.agregarMotor({
-    id: "motor_manivela_jansen",
-    nombre: "Motor Rotativo Manivela (m=15 mm)",
-    tipo: "rotativo",
-    nodoPivote: "Y_fijo",
-    nodoExtremo: "K_manivela",
-    longitudManivela: m,
-    variableAsociada: "m",
-    velocidadAngular: 1.0
-  });
-
-  // 10 Barras móviles + 2 cotas de bancada (a, l) + manivela (m) = 13 parámetros del mecanismo de Theo Jansen
-  grafo.agregarBarra({ id: "barra_j", nombre: "Barra j: Manivela K a Balancín D", nodoA: "K_manivela", nodoB: "D_nodo", longitud: j, variableAsociada: "j", signoTrilateracion: -1, color: "#3b82f6" });
-  grafo.agregarBarra({ id: "barra_k", nombre: "Barra k: Manivela K a Guía F", nodoA: "K_manivela", nodoB: "F_nodo", longitud: k, variableAsociada: "k", signoTrilateracion: 1, color: "#3b82f6" });
-  grafo.agregarBarra({ id: "barra_b", nombre: "Barra b: Pivote X a Nodo D", nodoA: "X_fijo", nodoB: "D_nodo", longitud: b, variableAsociada: "b", signoTrilateracion: -1, color: "#0284c7" });
-  grafo.agregarBarra({ id: "barra_c", nombre: "Barra c: Pivote X a Nodo F", nodoA: "X_fijo", nodoB: "F_nodo", longitud: c, variableAsociada: "c", signoTrilateracion: 1, color: "#0284c7" });
-  grafo.agregarBarra({ id: "barra_d", nombre: "Barra d: Pivote X a Nodo E", nodoA: "X_fijo", nodoB: "E_nodo", longitud: d, variableAsociada: "d", signoTrilateracion: -1, color: "#0284c7" });
-  grafo.agregarBarra({ id: "barra_e", nombre: "Barra e: Eslabón D a Nodo E", nodoA: "D_nodo", nodoB: "E_nodo", longitud: e, variableAsociada: "e", signoTrilateracion: -1, color: "#065f46" });
-  grafo.agregarBarra({ id: "barra_f", nombre: "Barra f: Muslo E a Nodo G", nodoA: "E_nodo", nodoB: "G_nodo", longitud: f, variableAsociada: "f", signoTrilateracion: 1, color: "#059669" });
-  grafo.agregarBarra({ id: "barra_g", nombre: "Barra g: Muslo F a Nodo G", nodoA: "F_nodo", nodoB: "G_nodo", longitud: g, variableAsociada: "g", signoTrilateracion: 1, color: "#059669" });
-  grafo.agregarBarra({ id: "barra_h", nombre: "Barra h: Pierna G a Pie H", nodoA: "G_nodo", nodoB: "H_pie", longitud: h, variableAsociada: "h", signoTrilateracion: 1, color: "#d97706" });
-  grafo.agregarBarra({ id: "barra_i", nombre: "Barra i: Tirante F a Pie H", nodoA: "F_nodo", nodoB: "H_pie", longitud: i, variableAsociada: "i", signoTrilateracion: 1, color: "#d97706" });
-
-  // Cuerpos rígidos triangulares
-  grafo.agregarCuerpoRigido({ id: "triangulo_D_E_X", nombre: "Triángulo Superior D-E-X", nodos: ["D_nodo", "E_nodo", "X_fijo"], color: "rgba(59, 130, 246, 0.12)" });
-  grafo.agregarCuerpoRigido({ id: "triangulo_E_F_G", nombre: "Triángulo Medio E-F-G", nodos: ["E_nodo", "F_nodo", "G_nodo"], color: "rgba(16, 185, 129, 0.12)" });
-  grafo.agregarCuerpoRigido({ id: "triangulo_F_G_H", nombre: "Triángulo Inferior F-G-H", nodos: ["F_nodo", "G_nodo", "H_pie"], color: "rgba(245, 158, 11, 0.14)" });
-
-  // Sensor principal en el pie de marcha
-  grafo.agregarSensor({
-    id: "sensor_pie_jansen",
-    nombre: "pie",
-    nodoId: "H_pie",
-    magnitudes: ["trayectoria", "posicion", "velocidad", "aceleracion", "zancada", "despeje"],
-    color: "#f59e0b"
-  });
-
-  return grafo;
 }
 
 // Genera el grafo canónico del Mecanismo Caminante de 4 Barras (Manivela-Balancín)

@@ -34,25 +34,24 @@ Optimizador genético con modelos matemáticos intercambiables, evolución multi
 - **Motor Genético Dual y Multiobjetivo (NSGA-II Pareto):**
   - Algoritmo genético determinista reproducible (`mulberry32`), selección por torneo binario, ruleta y rango, cruce SBX, aritmético y de un punto, y mutación adaptativa.
   - Soporte **Monobjetivo** (convergencia escalar) y **Multiobjetivo NSGA-II** (clasificación por dominancia no dominada, distancia de apiñamiento (*crowding distance*) y Frente de Pareto interactivo con inspección por clic o toque en Canvas).
-  - Web Workers dedicados para ejecución 100% no bloqueante a 60 FPS con soporte para WebAssembly (WASM).
+  - Web Workers dedicados para ejecución 100% no bloqueante a 60 FPS.
 
-- **16 Modelos de Simulación Integrados:**
-  1. **Pata Jansen (13 Barras):** Escultura cinética de Theo Jansen (*Strandbeest*) con cinemática exacta y métricas multiobjetivo.
-  2. **Brazo Robótico Planar (3 Eslabones):** Cinemática inversa para alcance de objetivos con evasión de obstáculos prohibidos.
-  3. **Aterrizaje de Cohete (Falcon Landing):** Dinámica retropropulsada no lineal en 2D con empuje vectorial, viento cruzado y arrastre.
-  4. **Sintonizador PID (Control Automático):** Ajuste evolutivo de ganancias $(K_p, K_i, K_d)$ sobre plantas de segundo orden para minimización ITAE.
-  5. **Campo de Potencial y Deflexión 2D:** Trayectorias en presencia de cargas electrostáticas y fuerzas repulsivas/atractivas.
-  6. **Transferencia Orbital (Hohmann / Kepler):** Maniobra orbital bi-impulsiva con minimización de $\Delta v$ y error de inserción.
-  7. **Síntesis de Filtro Analógico RLC:** Optimización de componentes pasivos para respuesta en frecuencia pasa-bajos.
-  8. **Armadura de Puente (Estructuras 2D):** Análisis por elementos finitos de celosía reticular para minimización de masa y deflexión.
-  9. **Disipación Térmica en Placa 2D:** Ecuación de Poisson para optimización de aletas disipadoras y fuentes de calor.
-  10. **Arreglo Acústico y Beamforming:** Formación de haz ultrasónico 2D con desfases para cancelación de lóbulos secundarios.
-  11. **Trampa Electromagnética (Fuerza de Lorentz):** Confinamiento de partículas cargadas mediante campos magnéticos no uniformes.
-  12. **Superficie Fonoabsorbente:** Cuñas porosas multimaterial con cálculo acústico de absorción en dBA (IEC 61672-1).
-  13. **Línea de Transmisión RF (Carta de Smith):** Adaptación de impedancias de microondas para ROE mínima.
-  14. **Corte de Chapa y Anidado 2D (Nesting):** Algoritmo de empaquetamiento y optimización de retal industrial.
-  15. **Balanceo de Fases Trifásico (R, S, T):** Distribución combinatoria de cargas en redes eléctricas para equilibrar fases.
-  16. **Pata Caminante (Cuatro Barras):** Mecanismo de cuatro barras optimizado para marcha bípeda estable.
+- **15 Modelos de Simulación Integrados:**
+  1. **Brazo Robótico Planar (3 Eslabones):** Cinemática inversa para alcance de objetivos con evasión de obstáculos prohibidos.
+  2. **Aterrizaje de Cohete (Falcon Landing):** Dinámica retropropulsada no lineal en 2D con empuje vectorial, viento cruzado y arrastre.
+  3. **Sintonizador PID (Control Automático):** Ajuste evolutivo de ganancias $(K_p, K_i, K_d)$ sobre plantas de segundo orden para minimización ITAE.
+  4. **Campo de Potencial y Deflexión 2D:** Trayectorias en presencia de cargas electrostáticas y fuerzas repulsivas/atractivas.
+  5. **Transferencia Orbital (Hohmann / Kepler):** Maniobra orbital bi-impulsiva con minimización de $\Delta v$ y error de inserción.
+  6. **Síntesis de Filtro Analógico RLC:** Optimización de componentes pasivos para respuesta en frecuencia pasa-bajos.
+  7. **Armadura de Puente (Estructuras 2D):** Análisis por elementos finitos de celosía reticular para minimización de masa y deflexión.
+  8. **Disipación Térmica en Placa 2D:** Ecuación de Poisson para optimización de aletas disipadoras y fuentes de calor.
+  9. **Arreglo Acústico y Beamforming:** Formación de haz ultrasónico 2D con desfases para cancelación de lóbulos secundarios.
+  10. **Trampa Electromagnética (Fuerza de Lorentz):** Confinamiento de partículas cargadas mediante campos magnéticos no uniformes.
+  11. **Superficie Fonoabsorbente:** Cuñas porosas multimaterial con cálculo acústico de absorción en dBA (IEC 61672-1).
+  12. **Línea de Transmisión RF (Carta de Smith):** Adaptación de impedancias de microondas para ROE mínima.
+  13. **Corte de Chapa y Anidado 2D (Nesting):** Algoritmo de empaquetamiento y optimización de retal industrial.
+  14. **Balanceo de Fases Trifásico (R, S, T):** Distribución combinatoria de cargas en redes eléctricas para equilibrar fases.
+  15. **Pata Caminante (Cuatro Barras):** Mecanismo de cuatro barras optimizado para marcha bípeda estable.
 
 ---
 
@@ -80,11 +79,8 @@ Optimizador genético con modelos matemáticos intercambiables, evolución multi
 │   │   ├── modales-view.js # Gestor de diálogos modales y biblioteca de simulaciones
 │   │   └── visualizers.js  # Visualizadores cinemáticos y multifísicos interactivos
 │   ├── engines/            # 4 Motores fundamentales de simulación física y cinemática
-│   ├── models/             # 16 Modelos nativos especializados
+│   ├── models/             # 15 Modelos nativos especializados
 │   └── plantillas/         # Plantillas prediseñadas para el Estudio de Modelado
-├── src-wasm/
-│   └── sim_core.cpp        # Núcleo cinemático acelerado en C++ para WebAssembly
-├── Makefile                # Script de compilación a WASM
 ├── LICENSE                 # Términos de copyright
 └── README.md
 ```

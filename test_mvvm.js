@@ -5,7 +5,6 @@
 import { MODELOS, obtenerModeloPorId } from "./js/models/index.js";
 import { compilarModeloDinamico, clonarModeloExistente } from "./js/builder.js";
 import {
-  VisualizadorJansen,
   VisualizadorBrazo,
   VisualizadorCohete,
   VisualizadorPID,
@@ -85,7 +84,6 @@ console.log(`    ✓ Modelo clonado exitosamente: '${clonCompilado.nombre}' | OK
 // 3. Verificación de capa de Vista y Visualizadores
 console.log("\n[3] Verificando clases de la capa Vista y visualizadores...");
 const visualizadores = [
-  new VisualizadorJansen(),
   new VisualizadorBrazo(),
   new VisualizadorCohete(),
   new VisualizadorPID(),

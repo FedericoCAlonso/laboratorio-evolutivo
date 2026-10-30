@@ -9,11 +9,10 @@ import {
   resolverPasoMecanismo,
   sincronizarPosicionesNodosGrafo,
   simularCicloMecanismo,
-  crearGrafoPataJansen,
   crearGrafoBrazoRobotico,
   crearGrafoPataCaminante,
   crearGrafoTrenEngranajes
-} from "../engines/mecanismos.js?v=2.5";
+} from "../engines/mecanismos.js?v=2.7";
 
 // Vista de diseño y construcción gráfica de mecanismos articulados y acoplamientos multifísica
 export class EditorGraficoView {
@@ -71,7 +70,7 @@ export class EditorGraficoView {
     }
   }
 
-  // Carga un grafo completo (por ejemplo, al editar Jansen o Brazo Robótico)
+  // Carga un grafo completo de mecanismo multicuerpo en el lienzo
   cargarGrafo(grafo) {
     if (grafo instanceof GrafoMecanismoMultifisica) {
       this.grafo = grafo.clonar();
@@ -179,11 +178,11 @@ export class EditorGraficoView {
       // 2. Coordenadas de nodos vinculados a cotas dimensionales
       this.grafo.nodos?.forEach(n => {
         if (n.variableX === nom) {
-          const sx = n.signoX !== undefined ? n.signoX : (n.id === "X_fijo" ? -1 : 1);
+          const sx = n.signoX !== undefined ? n.signoX : (n.x < 0 ? -1 : 1);
           n.x = parseFloat((sx * Math.abs(val)).toFixed(2));
         }
         if (n.variableY === nom) {
-          const sy = n.signoY !== undefined ? n.signoY : (n.id === "X_fijo" ? -1 : 1);
+          const sy = n.signoY !== undefined ? n.signoY : (n.y < 0 ? -1 : 1);
           n.y = parseFloat((sy * Math.abs(val)).toFixed(2));
         }
       });
@@ -284,7 +283,6 @@ export class EditorGraficoView {
             <!-- Selector de mecanismos preconfigurados -->
             <select id="cad-select-predefinido" style="padding: 0.28rem 0.45rem; font-size: 0.75rem; border-radius: 6px; background: var(--bg-input, #0f172a); color: var(--texto-principal, #f8fafc); border: 1px solid var(--borde, #334155); cursor: pointer;">
               <option value="">💡 Cargar Mecanismo...</option>
-              <option value="jansen">🦵 Theo Jansen (13 Barras)</option>
               <option value="caminante">🦿 Pata Caminante (4 Barras)</option>
               <option value="brazo">🦾 Brazo Robótico (3 GDL)</option>
               <option value="engranajes">⚙️ Tren Engranajes + Pistón</option>
@@ -442,9 +440,7 @@ export class EditorGraficoView {
     // 3. Mecanismos predefinidos
     this.dom.selectPredefinido?.addEventListener("change", (e) => {
       const valor = e.target.value;
-      if (valor === "jansen") {
-        this.cargarGrafo(crearGrafoPataJansen(this.valoresVariables));
-      } else if (valor === "caminante") {
+      if (valor === "caminante") {
         this.cargarGrafo(crearGrafoPataCaminante(this.valoresVariables));
       } else if (valor === "brazo") {
         this.cargarGrafo(crearGrafoBrazoRobotico(this.valoresVariables));
@@ -786,7 +782,7 @@ export class EditorGraficoView {
         arrastrandoNodo.x = parseFloat(mundo.x.toFixed(1));
         arrastrandoNodo.y = parseFloat(mundo.y.toFixed(1));
 
-        // 1. Coordenadas de nodo si tiene variables asociadas (ej. 'a' y 'l' en frame Jansen)
+        // 1. Coordenadas de nodo si tiene variables asociadas
         if (arrastrandoNodo.variableX) {
           const valX = parseFloat(Math.abs(arrastrandoNodo.x).toFixed(1));
           this.valoresVariables[arrastrandoNodo.variableX] = valX;

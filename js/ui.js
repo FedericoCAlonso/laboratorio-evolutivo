@@ -17,8 +17,7 @@ export const HINTS_VISUALIZACION = {
   "electromagnetismo_lorentz": "Muestra el flujo magnético Bz, bobinas de electroimanes y la trayectoria del haz de iones bajo la fuerza de Lorentz.",
   "fonoabsorbente_acustico": "Ilustra el corte transversal de cuñas o capas estratificadas con atenuación espectral dBA y rebotes acústicos.",
   "linea_transmision_smith": "Traza el coeficiente de reflexión Gamma sobre la Carta de Smith polar y calcula la Relación de Onda Estacionaria (ROE).",
-  "corte_chapa_nesting": "Visualiza el plano de corte 2D con aprovechamiento de chapa matriz y minimización de retazos residuales.",
-  "mecanismo_jansen": "Simula el mecanismo de 13 barras de Theo Jansen con lazo cinemático cerrado, curva del pie, aceleración y manipulación interactiva directa."
+  "corte_chapa_nesting": "Visualiza el plano de corte 2D con aprovechamiento de chapa matriz y minimización de retazos residuales."
 };
 
 // Muestra u oculta la barra superior de alerta con mensajes de error o validación.
@@ -899,23 +898,15 @@ export function cerrarModalGuardarPreset(elementosPreset) {
   }
 }
 
-// Clasifica un modelo dentro de las categorías de ingeniería de la Biblioteca Material 3.
+// Clasifica un modelo dentro de las categorías de ingeniería de la Biblioteca Material 3 según sus metadatos de dominio.
 function obtenerCategoriaModelo(mod) {
   if (!mod) return "otros";
   if (mod.esDinamico) return "dinamicos";
-  const id = mod.id || "";
-  if (["pata-jansen", "pata-caminante", "brazo-robotico", "armadura-puente", "cohete-landing", "orbita-transferencia"].includes(id)) {
-    return "mecanismos";
-  }
-  if (["campo-potencial", "distribucion-termica", "confinamiento-em"].includes(id)) {
-    return "campos";
-  }
-  if (["acustica-beamforming", "superficie-fonoabsorbente", "linea-transmision-rf"].includes(id)) {
-    return "ondas";
-  }
-  if (["controlador-pid", "filtro-rlc", "corte-chapa-nesting", "balanceo-fases-trifasico"].includes(id)) {
-    return "control";
-  }
+  if (mod.categoria) return mod.categoria;
+  const tv = (mod.tipoVisualizacion || "").toLowerCase();
+  if (tv.includes("campo") || tv.includes("termic") || tv.includes("lorentz")) return "campos";
+  if (tv.includes("acustic") || tv.includes("fono") || tv.includes("smith") || tv.includes("onda")) return "ondas";
+  if (tv.includes("serie") || tv.includes("pid") || tv.includes("filtro") || tv.includes("distribucion") || tv.includes("nesting") || tv.includes("fases") || tv === "calibracion") return "control";
   return "mecanismos";
 }
 

@@ -7,7 +7,7 @@
   <meta name="description" content="Laboratorio Evolutivo: Optimizador genético con modelos intercambiables, evolución multiobjetivo Pareto, diseño Google Material 3 y modos de color">
   <title>Laboratorio Evolutivo</title>
   <!-- Estilos visuales desacoplados Google Material 3 con soporte para modos de color y temas -->
-  <link rel="stylesheet" href="./styles.css?v=2.6">
+  <link rel="stylesheet" href="./styles.css?v=2.7">
 </head>
 <body>
   <div class="app-contenedor" id="contenedor-principal">
@@ -289,25 +289,9 @@
         </div>
 
         <div class="estudio-acciones-top">
-          <!-- Selector rápido de plantillas base -->
+          <!-- Selector rápido de plantillas base (poblado dinámicamente desde el catálogo de plantillas) -->
           <select id="select-plantilla-constructor" class="select-plantilla-top" title="Cargar plantilla prediseñada">
             <option value="">💡 Cargar Plantilla...</option>
-            <option value="pata-jansen">🦵 1. Pata Theo Jansen (13 Barras)</option>
-            <option value="pata-caminante">🦿 2. Pata Caminante (4 Barras)</option>
-            <option value="brazo-robotico">🦾 3. Brazo Robótico (3 Eslabones)</option>
-            <option value="armadura-puente">🌉 4. Armadura de Puente Reticulado</option>
-            <option value="cohete-landing">🚀 5. Aterrizaje Suave de Cohete</option>
-            <option value="orbita-transferencia">🛰️ 6. Transferencia Orbital Hohmann</option>
-            <option value="controlador-pid">🎛️ 7. Controlador PID (Ziegler-Nichols)</option>
-            <option value="filtro-rlc">🔌 8. Filtro Pasa-Banda RLC</option>
-            <option value="campo-potencial">🌐 9. Campo Potencial Electrostático</option>
-            <option value="distribucion-termica">🔥 10. Distribución Térmica (Conducción)</option>
-            <option value="acustica-beamforming">🔊 11. Arreglo Acústico (Beamforming)</option>
-            <option value="confinamiento-em">⚡ 12. Trampa Electromagnética (Lorentz)</option>
-            <option value="superficie-fonoabsorbente">🔇 13. Superficie Fonoabsorbente dBA</option>
-            <option value="linea-transmision-rf">📶 14. Línea RF y Carta de Smith</option>
-            <option value="corte-chapa-nesting">✂️ 15. Corte de Chapa 2D (Nesting)</option>
-            <option value="balanceo-fases-trifasico">⚡ 16. Balanceo Trifásico de Cargas</option>
           </select>
 
           <button type="button" id="btn-estudio-probar" class="btn-m3-tonal" style="padding: 0.38rem 0.85rem; font-size: 0.8rem;" title="Evaluar código y actualizar vista previa">
@@ -401,7 +385,6 @@
             <div id="estudio-barra-snippets" class="barra-snippets">
               <span style="font-size: 0.75rem; font-weight: 600; color: var(--md-sys-color-on-surface-variant);">Insertar:</span>
               <button type="button" class="btn-snippet chip-snippet" data-snippet="sensores">+ Sensores CAD</button>
-              <button type="button" class="btn-snippet chip-snippet" data-snippet="jansen">+ Theo Jansen</button>
               <button type="button" class="btn-snippet chip-snippet" data-snippet="pareto">+ Frente Pareto</button>
               <button type="button" class="btn-snippet chip-snippet" data-snippet="escalar">+ Monobjetivo</button>
               <button type="button" class="btn-snippet chip-snippet" data-snippet="campos">+ Campos</button>
@@ -443,7 +426,6 @@
               <label for="select-tipo-visualizacion">Motor Visual</label>
               <select id="select-tipo-visualizacion">
                 <option value="calibracion">🎛️ Medidores de Calibración de Variables (Gauges)</option>
-                <option value="mecanismo_jansen">🦵 Cinemática Theo Jansen (13 Barras y Curva del Pie)</option>
                 <option value="pata_caminante">🦿 Mecanismo Caminante 4 Barras (Manivela-Balancín)</option>
                 <option value="brazo_robotico">🦾 Brazo Robótico Articulado 3 GDL + Obstáculo</option>
                 <option value="armadura_puente">🌉 Armadura Reticulada de Puente (Esfuerzos)</option>
@@ -612,7 +594,7 @@
       <div class="modal-body">
         <div class="grupo-campo">
           <label for="input-nombre-preset">Nombre del Preset</label>
-          <input type="text" id="input-nombre-preset" placeholder="Ej: Jansen - Obstáculo Difícil 25mm">
+          <input type="text" id="input-nombre-preset" placeholder="Ej: Escenario Alta Precisión">
         </div>
         <span class="descripcion-campo">
           Guarda la combinación exacta del modelo activo, sus entradas configuradas y todos los parámetros del motor genético.
@@ -713,6 +695,6 @@
   </nav>
 
   <!-- Carga del punto de entrada modular con ES Modules nativos -->
-  <script type="module" src="./js/main.js?v=2.6"></script>
+  <script type="module" src="./js/main.js?v=2.7"></script>
 </body>
 </html>

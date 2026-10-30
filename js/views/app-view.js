@@ -3,11 +3,11 @@
 // ARQUITECTURA MVVM - ENLACE BIDIRECCIONAL ENTRE EL VIEWMODEL Y EL DOM
 // =========================================================================
 
-import { GraficoView } from "./grafico-view.js?v=2.6";
-import { ModalesView } from "./modales-view.js?v=2.6";
-import { EstudioView } from "./estudio-view.js?v=2.6";
-import { obtenerVisualizador, detenerTodosLosVisualizadores } from "./visualizers.js?v=2.6";
-import { obtenerPlantillaSimulacion } from "../builder.js?v=2.6";
+import { GraficoView } from "./grafico-view.js?v=2.7";
+import { ModalesView } from "./modales-view.js?v=2.7";
+import { EstudioView } from "./estudio-view.js?v=2.7";
+import { obtenerVisualizador, detenerTodosLosVisualizadores } from "./visualizers.js?v=2.7";
+import { obtenerPlantillaSimulacion } from "../builder.js?v=2.7";
 import {
   construirFormularioModelo,
   obtenerDatosEntradaModelo,
@@ -286,11 +286,11 @@ export class AppView {
     const modo = this.dom.selectModoSensorMovil?.value || "angulo_mecanismo";
 
     if (modo === "angulo_mecanismo") {
-      // 1. Actualiza la manivela en el visualizador del Laboratorio si está presente
-      const sliderJansen = document.getElementById("slider-jansen-theta");
-      if (sliderJansen) {
-        sliderJansen.value = String(angGrados);
-        sliderJansen.dispatchEvent(new Event("input"));
+      // 1. Actualiza el control deslizante de ángulo en el visualizador del Laboratorio si está presente
+      const sliderMecanismo = document.querySelector("#contenedor-dibujo-modelo input[type='range']");
+      if (sliderMecanismo) {
+        sliderMecanismo.value = String(angGrados);
+        sliderMecanismo.dispatchEvent(new Event("input"));
       }
       // 2. Actualiza en vivo el ángulo del motor en el Editor CAD 2D del Estudio
       const thetaRad = (angGrados * Math.PI) / 180;

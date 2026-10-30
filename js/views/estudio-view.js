@@ -3,20 +3,18 @@
 // ARQUITECTURA MVVM - VISTA DEDICADA DE EDICIÓN LOW-CODE CON PREVIEW EN VIVO
 // =========================================================================
 
-import { VisualizadorDinamico } from "./visualizers.js?v=2.6";
-import { obtenerPlantillaSimulacion } from "../builder.js?v=2.6";
-import { HINTS_VISUALIZACION, mostrarAlerta } from "../ui.js?v=2.6";
-import { MotorCamposUnificados } from "../engines/campos.js?v=2.6";
-import { MotorEstructurasCinematica } from "../engines/estructuras.js?v=2.6";
-import { MotorOndasAcustica } from "../engines/ondas.js?v=2.6";
-import { MotorFuncionalTopologico } from "../engines/topologia.js?v=2.6";
-import { EditorGraficoView } from "./editor-grafico-view.js?v=2.6";
+import { VisualizadorDinamico } from "./visualizers.js?v=2.7";
+import { obtenerPlantillaSimulacion } from "../builder.js?v=2.7";
+import { PLANTILLAS_FIELES } from "../plantillas/index.js?v=2.7";
+import { HINTS_VISUALIZACION, mostrarAlerta } from "../ui.js?v=2.7";
+import { MotorCamposUnificados } from "../engines/campos.js?v=2.7";
+import { MotorEstructurasCinematica } from "../engines/estructuras.js?v=2.7";
+import { MotorOndasAcustica } from "../engines/ondas.js?v=2.7";
+import { MotorFuncionalTopologico } from "../engines/topologia.js?v=2.7";
+import { EditorGraficoView } from "./editor-grafico-view.js?v=2.7";
 import {
-  GrafoMecanismoMultifisica,
-  crearGrafoPataJansen,
-  crearGrafoBrazoRobotico,
-  crearGrafoPataCaminante
-} from "../engines/mecanismos.js?v=2.6";
+  GrafoMecanismoMultifisica
+} from "../engines/mecanismos.js?v=2.7";
 
 // Vista de pantalla completa para el diseño, edición y prueba interactiva de simulaciones evolutivas.
 export class EstudioView {
@@ -50,7 +48,22 @@ export class EstudioView {
     this._eventosRegistrados = false;
 
     this._mapearDom();
+    this._poblarSelectorPlantillas();
     this._registrarEventos();
+  }
+
+  // Puebla dinámicamente el selector de plantillas del Estudio a partir del catálogo registrado.
+  _poblarSelectorPlantillas() {
+    const sel = this.dom?.selectPlantilla;
+    if (!sel || typeof document === "undefined" || typeof document.createElement !== "function") return;
+    sel.innerHTML = `<option value="">💡 Cargar Plantilla...</option>`;
+    Object.entries(PLANTILLAS_FIELES).forEach(([id, plant]) => {
+      if (!plant) return;
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = plant.nombre || id;
+      sel.appendChild(opt);
+    });
   }
 
   // Mapea y actualiza las referencias a los elementos del DOM del Estudio de Modelado.
@@ -433,19 +446,10 @@ export class EstudioView {
       });
     }
 
-    // Carga o genera el grafo de mecanismo multicuerpo en el editor CAD
+    // Carga el grafo de mecanismo multicuerpo en el editor CAD desde la definición o su plantilla asociada
     if (this.editorGrafico) {
-      if (def.grafo) {
-        this.editorGrafico.cargarGrafo(def.grafo);
-      } else if (def.id === "pata-jansen" || def.id === "jansen" || def.nombre?.toLowerCase().includes("jansen")) {
-        this.editorGrafico.cargarGrafo(crearGrafoPataJansen(this.valoresGenesPrueba));
-      } else if (def.id === "pata-caminante" || def.nombre?.toLowerCase().includes("caminante")) {
-        this.editorGrafico.cargarGrafo(crearGrafoPataCaminante(this.valoresGenesPrueba));
-      } else if (def.id === "brazo-robotico" || def.id === "brazo" || def.nombre?.toLowerCase().includes("brazo")) {
-        this.editorGrafico.cargarGrafo(crearGrafoBrazoRobotico(this.valoresGenesPrueba));
-      } else {
-        this.editorGrafico.cargarGrafo(new GrafoMecanismoMultifisica());
-      }
+      const grafoDefinido = def.grafo || (def.id ? obtenerPlantillaSimulacion(def.id)?.grafo : null);
+      this.editorGrafico.cargarGrafo(grafoDefinido || new GrafoMecanismoMultifisica());
       this.editorGrafico.actualizarValoresVariables(this.valoresGenesPrueba);
     }
 
@@ -934,9 +938,6 @@ return [suavidad, errZancada];`;
         break;
       case "estructuras":
         snippet = `\n// Motor de Estructuras: cinemática y esfuerzo mecánico\nconst radioTotal = vars.longitud1 + vars.longitud2;\nconst errorAlcance = Math.abs(radioTotal - 60);\nreturn [errorAlcance, vars.longitud1 * 0.1];`;
-        break;
-      case "jansen":
-        snippet = `\n// Simulación cinemática cerrada de Theo Jansen (180 pasos con criterios completos)\nreturn estructuras.evaluarJansenFitness(vars, { modoOptimizacion: "multiobjetivo", maxAncho: 80, maxAlto: 40, obstaculoAlto: 15, zancadaObjetivo: 4.0 });`;
         break;
       case "ondas":
         snippet = `\n// Motor de Ondas: absorción acústica y directividad\nconst absorcion = Math.sin((vars.frecuencia || 1000) * 0.001);\nreturn 1.0 - Math.min(1.0, Math.max(0.0, absorcion));`;

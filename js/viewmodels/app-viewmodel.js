@@ -30,7 +30,7 @@ export class AppViewModel {
     const dinamicosPersistidos = cargarModelosDinamicos();
     cargarModelosDinamicosEnRegistro(dinamicosPersistidos);
 
-    // 2. Modelo activo inicial (Theo Jansen por defecto).
+    // 2. Modelo activo inicial (primer modelo registrado en el catálogo).
     this.modeloActual = MODELOS[0];
 
     // 3. Estado de la corrida de optimización.
@@ -242,64 +242,31 @@ export class AppViewModel {
     });
   }
 
-  // Devuelve un genoma representativo o canónico de inicio para previsualización inmediata.
+  // Devuelve un genoma inicial basado en el contrato del modelo (valores nominales o punto medio del dominio).
   obtenerGenomaInicial(modelo, entrada = {}) {
     if (!modelo) return null;
 
-    if (modelo.esDinamico) {
-      const defGenes = modelo.crearGenoma();
-      return defGenes.map(g => (g.min + g.max) / 2);
+    if (typeof modelo.obtenerGenomaInicial === "function") {
+      return modelo.obtenerGenomaInicial(entrada);
     }
-    if (modelo.id === "pata-jansen") {
-      return [38.0, 7.8, 41.5, 39.3, 40.1, 55.8, 39.4, 36.7, 65.7, 49.0, 50.0, 61.9];
+    if (Array.isArray(modelo.genomaInicial)) {
+      return [...modelo.genomaInicial];
     }
-    if (modelo.id === "brazo-robotico") {
-      return [30.0, -45.0, 30.0];
-    }
-    if (modelo.id === "cohete-landing") {
-      return [12000, 10000, 8000, 6000, -2.0, 0.0, 2.0, 0.0];
-    }
-    if (modelo.id === "controlador-pid") {
-      return [6.0, 2.5, 1.2];
-    }
-    if (modelo.id === "pata-caminante") {
-      return [-1.8, 0.5, 3.0, 2.5, 3.0, 0.0];
-    }
-    if (modelo.id === "balanceo-fases-trifasico") {
-      const lineas = entrada?.circuitos || [500, 400, 350, 600, 300, 450, 550, 700, 250];
-      return lineas.map(() => 0);
-    }
-    if (modelo.id === "campo-potencial") {
-      return [-20.0, 15.0, -1.8, 15.0, -12.0, 1.5];
-    }
-    if (modelo.id === "orbita-transferencia") {
-      return [3.2, 0.0, 5.8, 2.4];
-    }
-    if (modelo.id === "filtro-rlc") {
-      return [2.7, -2.1, -6.8];
-    }
-    if (modelo.id === "armadura-puente") {
-      return [10.0, 0.0, 16.0, 10.0];
-    }
-    if (modelo.id === "distribucion-termica") {
-      return [-20.0, 12.0, 18.0, 10.0, -15.0, -14.0, 16.0, -16.0];
-    }
-    if (modelo.id === "acustica-beamforming") {
-      return [-1.2, -0.7, -0.2, 0.3, 0.8, 1.3, 0.45, 0.75, 1.0, 1.0, 0.75, 0.45];
-    }
-    if (modelo.id === "confinamiento-em") {
-      return [4.5, -3.2, -4.5, 3.2, -80.0, 60.0];
-    }
-    if (modelo.id === "superficie-fonoabsorbente") {
-      return [85.0, 35.0, 50.0, 1.2, 22.0, 15.0];
-    }
-    if (modelo.id === "linea-transmision-rf") {
-      return [0.05, 50.0, 0.02, 50.0];
-    }
-    if (modelo.id === "corte-chapa-nesting") {
-      return [8.0, 6.0, 4.0, 7.0, 3.0, 2.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0];
-    }
-    return null;
+
+    const defGenes = typeof modelo.crearGenoma === "function"
+      ? modelo.crearGenoma(entrada)
+      : (modelo.variables || []);
+    if (!Array.isArray(defGenes) || defGenes.length === 0) return null;
+
+    return defGenes.map((g) => {
+      if (g.valorNominal !== undefined && Number.isFinite(Number(g.valorNominal))) {
+        return Number(g.valorNominal);
+      }
+      const min = Number(g.min ?? 0);
+      const max = Number(g.max ?? 100);
+      const medio = (min + max) / 2;
+      return (g.tipo === "entero" || g.tipo === "categorico") ? Math.round(medio) : medio;
+    });
   }
 
   // Actualiza los parámetros de entrada específicos del modelo activo.

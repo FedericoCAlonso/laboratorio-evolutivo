@@ -14,7 +14,6 @@ import rf from "./linea-transmision-rf.js";
 import nesting from "./corte-chapa-nesting.js";
 import brazo from "./brazo-robotico.js";
 import caminante from "./pata-caminante.js";
-import jansen from "./pata-jansen.js";
 
 export const PLANTILLAS_FIELES = {
   "cohete-landing": cohete, "controlador-pid": pid, "orbita-transferencia": orbita,
@@ -23,5 +22,5 @@ export const PLANTILLAS_FIELES = {
   "acustica-beamforming": acustica, "confinamiento-em": em,
   "superficie-fonoabsorbente": fono, "linea-transmision-rf": rf,
   "corte-chapa-nesting": nesting, "brazo-robotico": brazo,
-  "pata-caminante": caminante, "pata-jansen": jansen
+  "pata-caminante": caminante
 };

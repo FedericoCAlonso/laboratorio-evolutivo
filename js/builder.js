@@ -9,51 +9,12 @@ import { MotorFuncionalTopologico } from "./engines/topologia.js";
 import {
   GrafoMecanismoMultifisica,
   simularCicloMecanismo,
-  crearGrafoPataJansen,
   crearGrafoBrazoRobotico
 } from "./engines/mecanismos.js";
 import { PLANTILLAS_FIELES } from "./plantillas/index.js";
 
 // Plantillas preconfiguradas para inspirar y servir de base a nuevas simulaciones de diversas naturalezas.
 export const PLANTILLAS_SIMULACION = {
-  "pata_jansen": {
-    nombre: "Pata Cinemática de Theo Jansen (13 Barras)",
-    descripcion: "Optimización mecatrónica multiobjetivo de las 12 barras del mecanismo caminante de Theo Jansen para maximizar suavidad inercial y precisión de zancada superando obstáculos.",
-    tipoVisualizacion: "mecanismo_jansen",
-    grafo: crearGrafoPataJansen().exportarJSON(),
-    variables: [
-      { nombre: "a", etiqueta: "a: Offset horizontal al pivote fijo X (-a, -l)", tipo: "continuo", min: 26.6, max: 49.4, valorNominal: 38.0 },
-      { nombre: "l", etiqueta: "l: Offset vertical al pivote fijo X (-a, -l)", tipo: "continuo", min: 5.46, max: 10.14, valorNominal: 7.8 },
-      { nombre: "b", etiqueta: "b: Eslabón superior pivote X a nodo D", tipo: "continuo", min: 29.0, max: 54.0, valorNominal: 41.5 },
-      { nombre: "c", etiqueta: "c: Biela motriz inferior pivote X a nodo F", tipo: "continuo", min: 27.5, max: 51.1, valorNominal: 39.3 },
-      { nombre: "d", etiqueta: "d: Balancín pivote X a nodo E", tipo: "continuo", min: 28.0, max: 52.1, valorNominal: 40.1 },
-      { nombre: "e", etiqueta: "e: Eslabón de cierre superior nodo D a E", tipo: "continuo", min: 39.0, max: 72.5, valorNominal: 55.8 },
-      { nombre: "f", etiqueta: "f: Muslo superior nodo E a nodo G", tipo: "continuo", min: 27.5, max: 51.2, valorNominal: 39.4 },
-      { nombre: "g", etiqueta: "g: Muslo inferior nodo F a nodo G", tipo: "continuo", min: 25.7, max: 47.7, valorNominal: 36.7 },
-      { nombre: "h", etiqueta: "h: Pierna inferior de apoyo nodo G a pie H", tipo: "continuo", min: 46.0, max: 85.4, valorNominal: 65.7 },
-      { nombre: "i", etiqueta: "i: Tirante de talón nodo F a pie H", tipo: "continuo", min: 34.3, max: 63.7, valorNominal: 49.0 },
-      { nombre: "j", etiqueta: "j: Biela de manivela K a balancín D", tipo: "continuo", min: 35.0, max: 65.0, valorNominal: 50.0 },
-      { nombre: "k", etiqueta: "k: Biela de manivela K a guía F", tipo: "continuo", min: 43.3, max: 80.5, valorNominal: 61.9 }
-    ],
-    codigoEvaluacion: `// Simulación cinemática cerrada de Theo Jansen (180 pasos)
-// Motores inyectados: 'estructuras' / 'cinematica' y telemetría de 'sensores'
-const sim = estructuras.evaluarJansen(vars, {
-  longitudManivela: 15,
-  zancadaObjetivo: 60,
-  obstaculoAlto: 15,
-  limitePico: 30
-});
-
-// En caso de bloqueo geométrico o incapacidad de cerrar lazo:
-if (!sim.esValido) {
-  return [1000 + 10 * sim.pasosInvalidos, 1000 + 10 * sim.pasosInvalidos];
-}
-
-// Retorna Frente de Pareto NSGA-II:
-// f1: Aceleración pico e inercia dinámica del pie
-// f2: Error de zancada respecto al objetivo con despeje de obstáculo
-return [sim.f5_suavidad, sim.errorZancada];`
-  },
   "brazo_robotico": {
     nombre: "Brazo Robótico Articulado (3 Eslabones)",
     descripcion: "Cinemática de 3 grados de libertad para alcanzar el objetivo (55, 40) eludiendo un obstáculo circular con mínimo esfuerzo angular.",
@@ -233,7 +194,6 @@ return [distObjetivo + penColision, esfuerzo];`
 };
 
 // Aliases canónicos para vincular identificadores de modelos nativos (con guiones) a plantillas
-PLANTILLAS_SIMULACION["pata-jansen"] = PLANTILLAS_SIMULACION["pata_jansen"];
 PLANTILLAS_SIMULACION["brazo-robotico"] = PLANTILLAS_SIMULACION["brazo_robotico"];
 PLANTILLAS_SIMULACION["campo-potencial"] = PLANTILLAS_SIMULACION["campo_potencial"];
 PLANTILLAS_SIMULACION["acustica-beamforming"] = PLANTILLAS_SIMULACION["acustica_beamforming"];
@@ -247,7 +207,7 @@ for (const [id, plantilla] of Object.entries(PLANTILLAS_FIELES)) {
   if (!plantilla) continue;
   PLANTILLAS_SIMULACION[id] = plantilla;
   const alias = id.replace(/-/g, "_");
-  if (PLANTILLAS_SIMULACION[alias]) PLANTILLAS_SIMULACION[alias] = plantilla;
+  PLANTILLAS_SIMULACION[alias] = plantilla;
 }
 
 // Obtiene una copia profunda de una plantilla predefinida a partir de su clave o identificador de modelo.
