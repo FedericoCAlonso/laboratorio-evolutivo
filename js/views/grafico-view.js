@@ -81,12 +81,15 @@ export class GraficoView {
 
     const ctx = this.canvas.getContext("2d");
     const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
-    const anchoCSS = this.canvas.clientWidth || 800;
+    const maxAnchoMovil = typeof window !== "undefined" ? Math.max(260, window.innerWidth - 28) : 800;
+    const anchoCSS = Math.min(this.canvas.parentElement?.clientWidth || this.canvas.clientWidth || 340, maxAnchoMovil);
     const altoCSS = this.canvas.clientHeight || 220;
+    const targetW = Math.round(anchoCSS * dpr);
+    const targetH = Math.round(altoCSS * dpr);
 
-    if (this.canvas.width !== anchoCSS * dpr || this.canvas.height !== altoCSS * dpr) {
-      this.canvas.width = anchoCSS * dpr;
-      this.canvas.height = altoCSS * dpr;
+    if (this.canvas.width !== targetW || this.canvas.height !== targetH) {
+      this.canvas.width = targetW;
+      this.canvas.height = targetH;
     }
 
     ctx.resetTransform();

@@ -102,7 +102,35 @@ export class VisualizadorJansen {
 
     contenedor.innerHTML = `
       ${bannerAlerta}
-      <div class="comparativa-azar">
+      <div style="position: relative; width: 100%; max-width: 100%; border-radius: var(--radio-sm, 12px); overflow: hidden; border: 1px solid var(--borde, rgba(148,163,184,0.2)); background: var(--bg-input, #0f172a);">
+        <canvas id="canvas-jansen" width="320" height="360" style="width: 100%; max-width: 100%; height: 370px; display: block; touch-action: none;"></canvas>
+      </div>
+
+      <div class="jansen-controles-bar" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-top: 0.65rem; gap: 0.65rem; background: var(--bg-tarjeta, rgba(30,41,59,0.7)); padding: 0.65rem 0.85rem; border-radius: var(--radio-sm, 10px); border: 1px solid var(--borde, rgba(148,163,184,0.2));">
+        <div style="display: flex; align-items: center; gap: 0.65rem; flex: 1; min-width: 220px;">
+          <button type="button" id="btn-jansen-play" class="btn-m3-tonal" style="padding: 0.45rem 0.9rem; font-size: 0.9rem; min-height: 42px; cursor: pointer; border-radius: 8px; white-space: nowrap;">
+            ${jansenPausado ? "▶ Reanudar" : "⏸ Pausar"}
+          </button>
+          <div style="display: flex; align-items: center; gap: 0.45rem; flex: 1; font-size: 0.9rem;">
+            <label for="slider-jansen-theta" style="font-weight: 700; white-space: nowrap;">θ:</label>
+            <input type="range" id="slider-jansen-theta" min="0" max="359" value="0" style="flex: 1; min-width: 90px; cursor: pointer;">
+            <span id="label-jansen-theta" style="font-family: monospace; font-size: 0.9rem; font-weight: 700; min-width: 38px;">0°</span>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap;">
+          <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.88rem; font-weight: 600; cursor: pointer; user-select: none;">
+            <input type="checkbox" id="check-jansen-cotas" ${mostrarCotasJansen ? "checked" : ""} style="cursor: pointer;">
+            <span>🏷️ Cotas (a..k)</span>
+          </label>
+          <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.88rem; font-weight: 600; cursor: pointer; user-select: none;">
+            <input type="checkbox" id="check-jansen-referencia" ${mostrarReferenciaJansen ? "checked" : ""} style="cursor: pointer;">
+            <span>Ref. Jansen</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="comparativa-azar" style="margin-top: 0.65rem; margin-bottom: 0;">
         <div class="tarjeta-stat">
           <div class="stat-etiqueta">Fitness Óptimo / Jansen</div>
           <div class="stat-valor" style="color: ${esValido && mMet.fitness <= mRef.fitness ? 'var(--exito, #10b981)' : 'var(--primario, #3b82f6)'};">
@@ -124,34 +152,6 @@ export class VisualizadorJansen {
           <div class="stat-etiqueta">Ataque f7 / Eficiencia f9</div>
           <div class="stat-valor" style="color: ${(mMet.f7 || 1) <= mRef.f7 ? 'var(--exito, #10b981)' : 'var(--aviso, #f59e0b)'};">${(mMet.f7 || 1).toFixed(3)} / ${(mMet.f9 || 0).toFixed(3)}</div>
           <div class="stat-sub">Ataque: ${(mMet.dxAtaque || 0).toFixed(1)} u | Efic: ${((mMet.f9 || 0) * 100).toFixed(1)}%</div>
-        </div>
-      </div>
-
-      <div style="position: relative; width: 100%; border-radius: var(--radio-sm, 8px); overflow: hidden; border: 1px solid var(--borde, rgba(148,163,184,0.2)); background: var(--bg-input, #0f172a);">
-        <canvas id="canvas-jansen" width="850" height="420" style="width: 100%; height: 380px; display: block;"></canvas>
-      </div>
-
-      <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-top: 0.65rem; gap: 0.5rem; background: var(--bg-tarjeta, rgba(30,41,59,0.7)); padding: 0.5rem 0.75rem; border-radius: var(--radio-sm, 8px); border: 1px solid var(--borde, rgba(148,163,184,0.2));">
-        <div style="display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap;">
-          <button type="button" id="btn-jansen-play" class="btn-m3-tonal" style="padding: 0.25rem 0.65rem; font-size: 0.78rem; cursor: pointer; border-radius: 6px;">
-            ${jansenPausado ? "▶ Reanudar" : "⏸ Pausar"}
-          </button>
-          <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem;">
-            <label for="slider-jansen-theta" style="font-weight: 600;">θ Manivela:</label>
-            <input type="range" id="slider-jansen-theta" min="0" max="359" value="0" style="width: 105px; cursor: pointer;">
-            <span id="label-jansen-theta" style="font-family: monospace; font-size: 0.8rem; min-width: 32px;">0°</span>
-          </div>
-        </div>
-
-        <div style="display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap;">
-          <label style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; user-select: none;">
-            <input type="checkbox" id="check-jansen-cotas" ${mostrarCotasJansen ? "checked" : ""} style="cursor: pointer;">
-            <span>🏷️ Cotas y Nombres (a..k)</span>
-          </label>
-          <label style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; user-select: none;">
-            <input type="checkbox" id="check-jansen-referencia" ${mostrarReferenciaJansen ? "checked" : ""} style="cursor: pointer;">
-            <span>Theo Jansen canónico (gris)</span>
-          </label>
         </div>
       </div>
     `;
@@ -399,12 +399,13 @@ export class VisualizadorJansen {
       }
 
       const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
-      const anchoCSS = canvas.clientWidth || 850;
-      const altoCSS = canvas.clientHeight || 380;
+      const maxAnchoMovil = typeof window !== "undefined" ? Math.max(260, window.innerWidth - 28) : 850;
+      const anchoCSS = Math.min(canvas.parentElement?.clientWidth || canvas.clientWidth || 340, maxAnchoMovil);
+      const altoCSS = canvas.clientHeight || 370;
 
-      if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
-        canvas.width = anchoCSS * dpr;
-        canvas.height = altoCSS * dpr;
+      if (canvas.width !== Math.round(anchoCSS * dpr) || canvas.height !== Math.round(altoCSS * dpr)) {
+        canvas.width = Math.round(anchoCSS * dpr);
+        canvas.height = Math.round(altoCSS * dpr);
       }
 
       ctx.resetTransform();

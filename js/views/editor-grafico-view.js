@@ -129,13 +129,25 @@ export class EditorGraficoView {
     this.viewport.centroX = (minX + maxX) / 2;
     this.viewport.centroY = (minY + maxY) / 2;
 
-    const canvas = this.dom?.canvas;
-    const wCSS = (canvas && canvas.clientWidth > 60) ? canvas.clientWidth : (typeof window !== "undefined" && window.innerWidth < 768 ? Math.max(300, window.innerWidth - 36) : 820);
-    const hCSS = (canvas && canvas.clientHeight > 60) ? canvas.clientHeight : (typeof window !== "undefined" && window.innerWidth < 768 ? 380 : 500);
+    const { w: wCSS, h: hCSS } = this._obtenerDimensionesLienzo();
 
     const factorMargen = wCSS < 600 ? 0.80 : 0.74;
     const zoomOptimo = Math.min((wCSS * factorMargen) / rangoX, (hCSS * factorMargen) / rangoY);
     this.viewport.zoom = Math.max(0.6, Math.min(8.5, zoomOptimo));
+  }
+
+  // Obtiene las dimensiones reales y acotadas del lienzo CAD evitando desbordes por DPR en móviles
+  _obtenerDimensionesLienzo() {
+    const canvas = this.dom?.canvas;
+    const maxW = typeof window !== "undefined" ? Math.max(260, window.innerWidth - 24) : 1000;
+    const rawW = (canvas && (canvas.parentElement?.clientWidth || canvas.clientWidth) > 60)
+      ? (canvas.parentElement?.clientWidth || canvas.clientWidth)
+      : (typeof window !== "undefined" && window.innerWidth < 768 ? Math.max(300, window.innerWidth - 28) : 820);
+    const w = Math.min(rawW, maxW);
+    const h = (canvas && (canvas.parentElement?.clientHeight || canvas.clientHeight) > 60)
+      ? (canvas.parentElement?.clientHeight || canvas.clientHeight)
+      : (typeof window !== "undefined" && window.innerWidth < 768 ? 380 : 500);
+    return { w, h };
   }
 
   // Permite que sensores físicos del móvil (giroscopio / inclinación) o sliders externos roten el mecanismo en vivo.
@@ -296,57 +308,57 @@ export class EditorGraficoView {
           
           <!-- Viewport del Canvas CAD interactivo -->
           <div class="cad-canvas-viewport" style="flex: 1; position: relative; width: 100%; height: 100%; overflow: hidden; background: #0b0f19;">
-            <canvas id="canvas-editor-cad" width="1000" height="540" style="display: block; width: 100%; height: 100%; cursor: default; touch-action: none;"></canvas>
+            <canvas id="canvas-editor-cad" width="320" height="380" style="display: block; width: 100%; height: 100%; cursor: default; touch-action: none;"></canvas>
 
             <!-- Overlay de información de coordenadas del cursor -->
-            <div id="cad-overlay-coords" style="position: absolute; bottom: 8px; left: 12px; font-size: 0.72rem; color: #94a3b8; font-family: monospace; background: rgba(15,23,42,0.85); padding: 0.2rem 0.5rem; border-radius: 4px; pointer-events: none; border: 1px solid rgba(148,163,184,0.15);">
+            <div id="cad-overlay-coords" style="position: absolute; bottom: 8px; left: 12px; font-size: 0.78rem; color: #cbd5e1; font-family: monospace; background: rgba(15,23,42,0.88); padding: 0.25rem 0.55rem; border-radius: 6px; pointer-events: none; border: 1px solid rgba(148,163,184,0.2);">
               X: 0.0 | Y: 0.0 | 100%
             </div>
 
             <!-- Botones de zoom flotantes -->
-            <div style="position: absolute; bottom: 10px; right: 12px; display: flex; flex-direction: column; gap: 4px;">
-              <button type="button" id="cad-btn-zoom-in" style="width: 32px; height: 32px; border-radius: 6px; background: rgba(30,41,59,0.88); color: #fff; border: 1px solid #475569; font-weight: bold; cursor: pointer;">+</button>
-              <button type="button" id="cad-btn-zoom-out" style="width: 32px; height: 32px; border-radius: 6px; background: rgba(30,41,59,0.88); color: #fff; border: 1px solid #475569; font-weight: bold; cursor: pointer;">-</button>
-              <button type="button" id="cad-btn-zoom-reset" style="width: 32px; height: 32px; border-radius: 6px; background: rgba(30,41,59,0.88); color: #fff; border: 1px solid #475569; font-size: 0.75rem; cursor: pointer;" title="Centrar mecanismo">⌖</button>
+            <div style="position: absolute; bottom: 10px; right: 12px; display: flex; flex-direction: column; gap: 6px;">
+              <button type="button" id="cad-btn-zoom-in" style="width: 38px; height: 38px; border-radius: 8px; background: rgba(30,41,59,0.92); color: #fff; border: 1px solid #475569; font-weight: bold; font-size: 1.05rem; cursor: pointer;">+</button>
+              <button type="button" id="cad-btn-zoom-out" style="width: 38px; height: 38px; border-radius: 8px; background: rgba(30,41,59,0.92); color: #fff; border: 1px solid #475569; font-weight: bold; font-size: 1.05rem; cursor: pointer;">-</button>
+              <button type="button" id="cad-btn-zoom-reset" style="width: 38px; height: 38px; border-radius: 8px; background: rgba(30,41,59,0.92); color: #fff; border: 1px solid #475569; font-size: 0.95rem; cursor: pointer;" title="Centrar mecanismo">⌖</button>
             </div>
           </div>
 
           <!-- Sidebar lateral: Inspector de Propiedades, Variables Vinculadas en Vivo y Telemetría de Sensores -->
-          <div id="cad-sidebar-inspector" style="width: 310px; border-left: 1px solid var(--borde, rgba(148,163,184,0.2)); background: var(--bg-card, #111827); padding: 0.75rem; display: flex; flex-direction: column; gap: 0.65rem; overflow-y: auto;">
+          <div id="cad-sidebar-inspector" style="width: 310px; border-left: 1px solid var(--borde, rgba(148,163,184,0.2)); background: var(--bg-card, #111827); padding: 0.85rem; display: flex; flex-direction: column; gap: 0.75rem; overflow-y: auto;">
             <div style="display: flex; align-items: center; justify-content: space-between;">
-              <h4 style="margin: 0; font-size: 0.82rem; font-weight: 700; color: var(--texto-principal, #f8fafc); text-transform: uppercase; letter-spacing: 0.05em;">
+              <h4 style="margin: 0; font-size: 0.92rem; font-weight: 700; color: var(--texto-principal, #f8fafc); text-transform: uppercase; letter-spacing: 0.05em;">
                 🔍 Inspector CAD
               </h4>
-              <span id="cad-inspector-tipo-tag" style="font-size: 0.68rem; padding: 0.15rem 0.4rem; border-radius: 4px; background: #1e293b; color: #94a3b8;">
+              <span id="cad-inspector-tipo-tag" style="font-size: 0.78rem; padding: 0.2rem 0.5rem; border-radius: 6px; background: #1e293b; color: #cbd5e1; font-weight: 600;">
                 Ninguno
               </span>
             </div>
 
             <!-- Contenido dinámico del elemento seleccionado -->
-            <div id="cad-inspector-contenido" style="font-size: 0.78rem; color: #cbd5e1;">
-              <div style="padding: 0.75rem 0.4rem; text-align: center; color: #94a3b8; font-size: 0.76rem; background: rgba(30,41,59,0.35); border-radius: 6px;">
-                Seleccione o arrastre cualquier <strong>nodo</strong>, <strong>barra</strong>, <strong>motor</strong>, <strong>engranaje</strong> o <strong>sensor</strong> en el lienzo.
+            <div id="cad-inspector-contenido" style="font-size: 0.88rem; color: #e2e8f0;">
+              <div style="padding: 0.85rem 0.5rem; text-align: center; color: #94a3b8; font-size: 0.86rem; background: rgba(30,41,59,0.35); border-radius: 8px;">
+                Toque o arrastre cualquier <strong>nodo</strong>, <strong>barra</strong>, <strong>motor</strong>, <strong>engranaje</strong> o <strong>sensor</strong> en el lienzo.
               </div>
             </div>
 
             <!-- Panel en vivo de Variables / Cotas Vinculadas al Mecanismo (se actualizan en vivo al arrastrar nodos) -->
-            <div style="border-top: 1px solid rgba(148,163,184,0.18); padding-top: 0.6rem;">
-              <div style="font-size: 0.76rem; font-weight: 700; margin-bottom: 0.35rem; color: #60a5fa; display: flex; align-items: center; justify-content: space-between;">
+            <div style="border-top: 1px solid rgba(148,163,184,0.18); padding-top: 0.65rem;">
+              <div style="font-size: 0.86rem; font-weight: 700; margin-bottom: 0.45rem; color: #60a5fa; display: flex; align-items: center; justify-content: space-between;">
                 <span>📐 Cotas / Variables Vinculadas</span>
-                <span id="cad-conteo-vars" style="color: #93c5fd; font-family: monospace; font-size: 0.72rem;">(0)</span>
+                <span id="cad-conteo-vars" style="color: #93c5fd; font-family: monospace; font-size: 0.82rem;">(0)</span>
               </div>
-              <div id="cad-lista-variables-vivas" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; max-height: 185px; overflow-y: auto; padding-right: 2px;">
-                <span style="color: #64748b; font-size: 0.72rem; grid-column: span 2;">Sin variables vinculadas.</span>
+              <div id="cad-lista-variables-vivas" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; max-height: 220px; overflow-y: auto; padding-right: 2px;">
+                <span style="color: #64748b; font-size: 0.82rem; grid-column: span 2;">Sin variables vinculadas.</span>
               </div>
             </div>
 
             <!-- Resumen de Sensores activos y Telemetría Multimagnitud -->
-            <div style="border-top: 1px solid rgba(148,163,184,0.18); padding-top: 0.6rem;">
-              <div style="font-size: 0.76rem; font-weight: 700; margin-bottom: 0.35rem; color: #e2e8f0; display: flex; align-items: center; justify-content: space-between;">
+            <div style="border-top: 1px solid rgba(148,163,184,0.18); padding-top: 0.65rem;">
+              <div style="font-size: 0.86rem; font-weight: 700; margin-bottom: 0.45rem; color: #e2e8f0; display: flex; align-items: center; justify-content: space-between;">
                 <span>🎯 Puntos de Medida (Sensores)</span>
-                <span id="cad-conteo-sensores" style="color: #f59e0b; font-family: monospace; font-size: 0.72rem;">(0)</span>
+                <span id="cad-conteo-sensores" style="color: #f59e0b; font-family: monospace; font-size: 0.82rem;">(0)</span>
               </div>
-              <div id="cad-lista-sensores-telemetria" style="font-size: 0.72rem; display: flex; flex-direction: column; gap: 4px; max-height: 130px; overflow-y: auto;">
+              <div id="cad-lista-sensores-telemetria" style="font-size: 0.82rem; display: flex; flex-direction: column; gap: 6px; max-height: 150px; overflow-y: auto;">
                 <span style="color: #64748b;">No hay sensores definidos.</span>
               </div>
             </div>
@@ -1071,9 +1083,9 @@ export class EditorGraficoView {
     let html = "";
     mapaVars.forEach((info, nom) => {
       html += `
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; background: var(--md-sys-color-surface-container-high, rgba(15,23,42,0.75)); border: 1px solid var(--md-sys-color-outline-variant, rgba(59,130,246,0.3)); border-radius: 6px; padding: 3px 6px;" title="${info.origen}">
-          <span style="font-family: monospace; font-weight: 700; color: var(--md-sys-color-primary, #93c5fd); font-size: 0.74rem;">${nom}:</span>
-          <input type="number" step="0.1" data-cad-var="${nom}" value="${info.valor}" style="width: 64px; background: var(--md-sys-color-surface-container-highest, #090d16); color: var(--md-sys-color-on-surface, #f8fafc); border: 1px solid var(--md-sys-color-outline, #334155); border-radius: 4px; padding: 2px 4px; font-family: monospace; font-size: 0.74rem; text-align: right;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; background: var(--md-sys-color-surface-container-high, rgba(15,23,42,0.85)); border: 1px solid var(--md-sys-color-outline-variant, rgba(59,130,246,0.35)); border-radius: 8px; padding: 5px 8px;" title="${info.origen}">
+          <span style="font-family: monospace; font-weight: 700; color: var(--md-sys-color-primary, #93c5fd); font-size: 0.88rem;">${nom}:</span>
+          <input type="number" step="0.5" data-cad-var="${nom}" value="${info.valor}" style="width: 72px; min-height: 32px; background: var(--md-sys-color-surface-container-highest, #090d16); color: var(--md-sys-color-on-surface, #f8fafc); border: 1px solid var(--md-sys-color-outline, #334155); border-radius: 6px; padding: 3px 6px; font-family: monospace; font-size: 0.88rem; text-align: right;">
         </div>
       `;
     });
@@ -1308,44 +1320,53 @@ export class EditorGraficoView {
       if (!barra) return;
 
       const inpLongExistente = this.dom.inspectorContenido.querySelector("#insp-barra-long");
+      const inpSliderExistente = this.dom.inspectorContenido.querySelector("#insp-barra-slider");
       if (inpLongExistente && this._inspectorIdActual === id) {
         if (document.activeElement !== inpLongExistente) inpLongExistente.value = barra.longitud;
+        if (inpSliderExistente && document.activeElement !== inpSliderExistente) inpSliderExistente.value = barra.longitud;
         return;
       }
       this._inspectorIdActual = id;
+      const maxSlider = Math.max(150, Math.ceil((barra.longitud || 40) * 1.8));
 
       this.dom.inspectorContenido.innerHTML = `
-        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <div style="display: flex; flex-direction: column; gap: 0.6rem;">
           <div>
-            <label style="font-size: 0.7rem; color: #94a3b8;">Nombre del Eslabón</label>
-            <input type="text" id="insp-barra-nom" value="${barra.nombre}" style="width: 100%; padding: 0.25rem 0.35rem; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #fff;">
+            <label style="font-size: 0.84rem; color: #cbd5e1; font-weight: 600;">Nombre del Eslabón</label>
+            <input type="text" id="insp-barra-nom" value="${barra.nombre}" style="width: 100%; min-height: 38px; padding: 0.35rem 0.5rem; font-size: 0.92rem; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #fff;">
           </div>
           <div>
-            <label style="font-size: 0.7rem; color: #94a3b8;">Longitud (mm)</label>
-            <input type="number" id="insp-barra-long" step="any" value="${barra.longitud}" style="width: 100%; padding: 0.25rem 0.35rem; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #fff;">
+            <label style="font-size: 0.84rem; color: #cbd5e1; font-weight: 600;">Longitud (mm)</label>
+            <div style="display: flex; align-items: center; gap: 0.4rem; margin-top: 0.2rem;">
+              <button type="button" id="insp-barra-menos" class="btn-m3-tonal" style="min-width: 38px; min-height: 38px; padding: 0; font-size: 1.05rem; font-weight: 700;">-1</button>
+              <input type="number" id="insp-barra-long" step="any" value="${barra.longitud}" style="flex: 1; min-height: 38px; padding: 0.35rem 0.5rem; font-size: 0.95rem; font-family: monospace; text-align: center; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #fff;">
+              <button type="button" id="insp-barra-mas" class="btn-m3-tonal" style="min-width: 38px; min-height: 38px; padding: 0; font-size: 1.05rem; font-weight: 700;">+1</button>
+            </div>
+            <input type="range" id="insp-barra-slider" min="2" max="${maxSlider}" step="0.5" value="${barra.longitud}" style="width: 100%; height: 28px; margin-top: 0.35rem; accent-color: var(--md-sys-color-primary, #7bd0ff); cursor: pointer;">
           </div>
           
           <!-- Vinculación con variable de optimización -->
-          <div style="background: rgba(59, 130, 246, 0.1); padding: 0.45rem; border-radius: 6px; border: 1px solid rgba(59, 130, 246, 0.3);">
-            <div style="font-weight: 700; color: #60a5fa; font-size: 0.72rem; margin-bottom: 0.25rem;">⚡ Variable de Decisión Vinculada</div>
-            <input type="text" id="insp-barra-var" value="${barra.variableAsociada || ""}" placeholder="Ej: b, j, radio..." style="width: 100%; padding: 0.25rem 0.35rem; background: #0f172a; border: 1px solid #3b82f6; border-radius: 4px; color: #fff; font-family: monospace;">
-            <button type="button" id="insp-barra-vincular" class="btn-m3-filled" style="width: 100%; margin-top: 0.35rem; padding: 0.28rem; font-size: 0.72rem;">
+          <div style="background: rgba(59, 130, 246, 0.1); padding: 0.55rem; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3);">
+            <div style="font-weight: 700; color: #60a5fa; font-size: 0.84rem; margin-bottom: 0.3rem;">⚡ Variable de Decisión Vinculada</div>
+            <input type="text" id="insp-barra-var" value="${barra.variableAsociada || ""}" placeholder="Ej: b, j, radio..." style="width: 100%; min-height: 38px; padding: 0.35rem 0.5rem; font-size: 0.9rem; background: #0f172a; border: 1px solid #3b82f6; border-radius: 6px; color: #fff; font-family: monospace;">
+            <button type="button" id="insp-barra-vincular" class="btn-m3-filled" style="width: 100%; min-height: 38px; margin-top: 0.45rem; padding: 0.4rem; font-size: 0.86rem;">
               Asociar a Variables de Algoritmo
             </button>
           </div>
 
-          <button type="button" id="insp-barra-borrar" style="margin-top: 0.25rem; padding: 0.3rem; background: rgba(239,68,68,0.2); color: #ef4444; border: 1px solid #ef4444; border-radius: 4px; cursor: pointer; font-size: 0.74rem;">
+          <button type="button" id="insp-barra-borrar" style="margin-top: 0.25rem; min-height: 38px; padding: 0.4rem; background: rgba(239,68,68,0.2); color: #ef4444; border: 1px solid #ef4444; border-radius: 6px; cursor: pointer; font-size: 0.86rem; font-weight: 600;">
             🗑️ Eliminar Barra
           </button>
         </div>
       `;
 
-      this.dom.inspectorContenido.querySelector("#insp-barra-nom")?.addEventListener("input", (e) => {
-        barra.nombre = e.target.value;
-        this.redibujar();
-      });
-      this.dom.inspectorContenido.querySelector("#insp-barra-long")?.addEventListener("input", (e) => {
-        barra.longitud = parseFloat(e.target.value) || 0;
+      const aplicarLongitudBarra = (nuevaLong) => {
+        if (!isFinite(nuevaLong) || nuevaLong <= 0.5) return;
+        barra.longitud = parseFloat(nuevaLong.toFixed(2));
+        const inpL = this.dom.inspectorContenido.querySelector("#insp-barra-long");
+        const inpS = this.dom.inspectorContenido.querySelector("#insp-barra-slider");
+        if (inpL && document.activeElement !== inpL) inpL.value = barra.longitud;
+        if (inpS && document.activeElement !== inpS) inpS.value = barra.longitud;
         const varNom = barra.variableAsociada || barra.longitudVinculada;
         if (varNom) {
           this.valoresVariables[varNom] = barra.longitud;
@@ -1355,6 +1376,23 @@ export class EditorGraficoView {
         }
         sincronizarPosicionesNodosGrafo(this.grafo, this.valoresVariables, this.thetaActual);
         this._notificarCambioGrafo();
+      };
+
+      this.dom.inspectorContenido.querySelector("#insp-barra-nom")?.addEventListener("input", (e) => {
+        barra.nombre = e.target.value;
+        this.redibujar();
+      });
+      this.dom.inspectorContenido.querySelector("#insp-barra-long")?.addEventListener("input", (e) => {
+        aplicarLongitudBarra(parseFloat(e.target.value));
+      });
+      this.dom.inspectorContenido.querySelector("#insp-barra-slider")?.addEventListener("input", (e) => {
+        aplicarLongitudBarra(parseFloat(e.target.value));
+      });
+      this.dom.inspectorContenido.querySelector("#insp-barra-menos")?.addEventListener("click", () => {
+        aplicarLongitudBarra((Number(barra.longitud) || 10) - 1);
+      });
+      this.dom.inspectorContenido.querySelector("#insp-barra-mas")?.addEventListener("click", () => {
+        aplicarLongitudBarra((Number(barra.longitud) || 10) + 1);
       });
       this.dom.inspectorContenido.querySelector("#insp-barra-var")?.addEventListener("input", (e) => {
         barra.variableAsociada = e.target.value.trim() || null;
@@ -1582,9 +1620,7 @@ export class EditorGraficoView {
 
   // Convierte coordenadas de pantalla (píxeles) a coordenadas métricas del mundo (mm)
   pantallaAMundo(px, py) {
-    const canvas = this.dom.canvas;
-    const w = canvas ? canvas.clientWidth : 1000;
-    const h = canvas ? canvas.clientHeight : 520;
+    const { w, h } = this._obtenerDimensionesLienzo();
     return {
       x: this.viewport.centroX + (px - w / 2) / this.viewport.zoom,
       y: this.viewport.centroY - (py - h / 2) / this.viewport.zoom
@@ -1593,9 +1629,7 @@ export class EditorGraficoView {
 
   // Convierte coordenadas métricas del mundo a pantalla
   mundoAPantalla(x, y) {
-    const canvas = this.dom.canvas;
-    const w = canvas ? canvas.clientWidth : 1000;
-    const h = canvas ? canvas.clientHeight : 520;
+    const { w, h } = this._obtenerDimensionesLienzo();
     return {
       x: w / 2 + (x - this.viewport.centroX) * this.viewport.zoom,
       y: h / 2 - (y - this.viewport.centroY) * this.viewport.zoom
@@ -1686,12 +1720,13 @@ export class EditorGraficoView {
     if (!canvas || !ctx) return;
 
     const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
-    const wCSS = canvas.clientWidth || 1000;
-    const hCSS = canvas.clientHeight || 520;
+    const { w: wCSS, h: hCSS } = this._obtenerDimensionesLienzo();
+    const targetW = Math.round(wCSS * dpr);
+    const targetH = Math.round(hCSS * dpr);
 
-    if (canvas.width !== wCSS * dpr || canvas.height !== hCSS * dpr) {
-      canvas.width = wCSS * dpr;
-      canvas.height = hCSS * dpr;
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
     }
 
     ctx.resetTransform();

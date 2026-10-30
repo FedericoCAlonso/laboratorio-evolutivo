@@ -2,12 +2,12 @@
 <html lang="es" data-theme="auto" data-color="ocean">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
   <meta name="theme-color" content="#0061a4">
   <meta name="description" content="Laboratorio Evolutivo: Optimizador genético con modelos intercambiables, evolución multiobjetivo Pareto, diseño Google Material 3 y modos de color">
   <title>Laboratorio Evolutivo</title>
   <!-- Estilos visuales desacoplados Google Material 3 con soporte para modos de color y temas -->
-  <link rel="stylesheet" href="./styles.css?v=2.5">
+  <link rel="stylesheet" href="./styles.css?v=2.6">
 </head>
 <body>
   <div class="app-contenedor" id="contenedor-principal">
@@ -102,30 +102,14 @@
         <div class="lab-control-column">
           <!-- Tarjeta 1: Selección de Modelo y Ejecución Directa -->
           <section class="tarjeta">
-            <div class="grupo-campo" style="margin-bottom: 0.65rem;">
+            <div class="grupo-campo" style="margin-bottom: 0.55rem;">
               <label for="selector-modelo">Modelo o Simulación Activa</label>
               <select id="selector-modelo" aria-label="Seleccionar Modelo"></select>
               <span id="descripcion-modelo" class="descripcion-campo"></span>
             </div>
 
-            <!-- Barra de herramientas compacta para gestión de la simulación -->
-            <div class="barra-acciones-simulacion">
-              <button type="button" id="btn-abrir-constructor" class="btn-m3-filled" style="padding: 0.3rem 0.65rem; font-size: 0.76rem; min-height: 32px;" title="Crear nueva simulación">➕ Nuevo</button>
-              <button type="button" id="btn-editar-modelo" class="btn-m3-tonal" style="padding: 0.3rem 0.65rem; font-size: 0.76rem; min-height: 32px;" title="Editar en el Estudio CAD/Código">✏️ Editar</button>
-              <button type="button" id="btn-copiar-modelo" class="btn-m3-tonal" style="padding: 0.3rem 0.65rem; font-size: 0.76rem; min-height: 32px;" title="Duplicar simulación">📑 Copiar</button>
-              <button type="button" id="btn-renombrar-modelo" class="btn-m3-tonal" style="padding: 0.3rem 0.65rem; font-size: 0.76rem; min-height: 32px; display: none;" title="Renombrar">🏷️ Renombrar</button>
-              <button type="button" id="btn-guardar-preset" class="btn-m3-tonal" style="padding: 0.3rem 0.65rem; font-size: 0.76rem; min-height: 32px;" title="Guardar configuración como Preset">⭐ Preset</button>
-              <button type="button" id="btn-exportar-modelo" class="btn-m3-outlined" style="padding: 0.3rem 0.6rem; font-size: 0.76rem; min-height: 32px;" title="Exportar JSON">📤 Exportar</button>
-              <button type="button" id="btn-importar-modelo" class="btn-m3-outlined" style="padding: 0.3rem 0.6rem; font-size: 0.76rem; min-height: 32px;" title="Importar JSON">📥 Importar</button>
-              <button type="button" id="btn-eliminar-modelo" class="btn-peligro" style="padding: 0.3rem 0.6rem; font-size: 0.76rem; min-height: 32px; display: none;" title="Eliminar simulación">🗑️ Borrar</button>
-            </div>
-
-            <div id="contenedor-formulario-modelo" style="margin-top: 0.75rem;">
-              <!-- Campos generados dinámicamente desde parametrosEntrada del modelo -->
-            </div>
-
-            <!-- Controles primarios de ejecución inmediatamente accesibles en móvil y escritorio -->
-            <div class="botonera" style="margin-top: 0.9rem;">
+            <!-- Controles primarios de ejecución al frente para iniciar sin hacer scroll en celular -->
+            <div class="botonera" style="margin-top: 0.5rem;">
               <button type="button" id="btn-correr" class="btn-exito" style="flex: 1.4;">▶ Evolucionar</button>
               <button type="button" id="btn-pausar" class="btn-aviso" style="flex: 1;" disabled>⏸ Pausar</button>
               <button type="button" id="btn-detener" class="btn-peligro" style="flex: 1;" disabled>⏹ Detener</button>
@@ -140,8 +124,32 @@
               <span id="texto-generacion">Gen 0 / 100</span>
             </div>
 
+            <!-- Ajustes de entrada del modelo y acciones CRUD en acordeón limpio -->
+            <details class="m3-accordion-details" style="margin-top: 0.75rem; margin-bottom: 0;">
+              <summary class="m3-accordion-summary">
+                <span>🔧 Ajustes del Modelo y Acciones</span>
+                <span>▾</span>
+              </summary>
+              <div class="m3-accordion-body">
+                <div class="barra-acciones-simulacion" style="margin-top: 0; margin-bottom: 0.75rem;">
+                  <button type="button" id="btn-abrir-constructor" class="btn-m3-filled" title="Crear nueva simulación">➕ Nuevo</button>
+                  <button type="button" id="btn-editar-modelo" class="btn-m3-tonal" title="Editar en el Estudio CAD/Código">✏️ Editar</button>
+                  <button type="button" id="btn-copiar-modelo" class="btn-m3-tonal" title="Duplicar simulación">📑 Copiar</button>
+                  <button type="button" id="btn-renombrar-modelo" class="btn-m3-tonal" style="display: none;" title="Renombrar">🏷️ Renombrar</button>
+                  <button type="button" id="btn-guardar-preset" class="btn-m3-tonal" title="Guardar configuración como Preset">⭐ Preset</button>
+                  <button type="button" id="btn-exportar-modelo" class="btn-m3-outlined" title="Exportar JSON">📤 Exportar</button>
+                  <button type="button" id="btn-importar-modelo" class="btn-m3-outlined" title="Importar JSON">📥 Importar</button>
+                  <button type="button" id="btn-eliminar-modelo" class="btn-peligro" style="display: none;" title="Eliminar simulación">🗑️ Borrar</button>
+                </div>
+
+                <div id="contenedor-formulario-modelo">
+                  <!-- Campos generados dinámicamente desde parametrosEntrada del modelo -->
+                </div>
+              </div>
+            </details>
+
             <!-- Parámetros del Motor Genético colapsables para mantener interfaz limpia -->
-            <details class="m3-accordion-details" style="margin-top: 0.85rem; margin-bottom: 0;">
+            <details class="m3-accordion-details" style="margin-top: 0.6rem; margin-bottom: 0;">
               <summary class="m3-accordion-summary">
                 <span>⚙️ Parámetros del Algoritmo Genético</span>
                 <span>▾</span>
@@ -246,7 +254,7 @@
               <span id="etiqueta-mejor-fitness" style="font-size: 0.85rem; color: var(--md-sys-color-primary);">Fitness: --</span>
             </h2>
             <div class="grafico-contenedor" id="contenedor-grafico-principal">
-              <canvas id="canvas-fitness" width="800" height="230"></canvas>
+              <canvas id="canvas-fitness" width="320" height="240"></canvas>
               <div id="tooltip-grafico-m3" class="m3-chart-tooltip" role="status" aria-live="polite"></div>
               <div class="leyenda-grafico">
                 <div class="item-leyenda">
@@ -491,7 +499,7 @@
 
           <!-- Contenedor del Lienzo Canvas del Estudio -->
           <div id="estudio-contenedor-canvas" class="contenedor-canvas-estudio">
-            <canvas id="canvas-preview-estudio" width="700" height="380"></canvas>
+            <canvas id="canvas-preview-estudio" width="320" height="300"></canvas>
           </div>
 
           <!-- Sintonizador Interactivo de Genes (Sliders) -->
@@ -705,6 +713,6 @@
   </nav>
 
   <!-- Carga del punto de entrada modular con ES Modules nativos -->
-  <script type="module" src="./js/main.js?v=2.5"></script>
+  <script type="module" src="./js/main.js?v=2.6"></script>
 </body>
 </html>

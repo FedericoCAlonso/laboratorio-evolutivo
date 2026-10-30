@@ -269,6 +269,14 @@
   padding: 0;
 }
 
+html, body {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   font-family: var(--md-sys-typescale-font);
   background-color: var(--md-sys-color-surface);
@@ -280,6 +288,31 @@ body {
   flex-direction: column;
   align-items: center;
   transition: var(--md-transicion);
+}
+
+.app-contenedor,
+.vista-laboratorio,
+.vista-estudio,
+.lab-bento-grid,
+.lab-control-column,
+.lab-stage-column,
+.grid-estudio,
+.panel-editor-estudio,
+.panel-preview-estudio,
+.tarjeta,
+.grafico-contenedor,
+#contenedor-dibujo-modelo,
+.editor-cad-contenedor,
+.cad-main-split,
+.cad-canvas-viewport {
+  min-width: 0;
+  max-width: 100%;
+}
+
+canvas {
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
 }
 
 .app-contenedor {
@@ -1474,7 +1507,7 @@ canvas {
 /* 2. Layout Bento Adaptativo del Laboratorio Evolutivo */
 .lab-bento-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.15rem;
   align-items: start;
 }
@@ -2060,6 +2093,53 @@ canvas {
     min-height: 40px;
     font-size: 0.88rem;
     padding: 0.45rem 0.9rem;
+  }
+
+  /* Acordeones táctiles más grandes y cómodos en móvil */
+  .m3-accordion-summary {
+    min-height: 48px;
+    font-size: 0.95rem;
+    padding: 0.7rem 0.95rem;
+  }
+
+  /* Tabla de Variables del Estudio convertida en tarjetas apiladas para móvil (sin desborde horizontal) */
+  #tabla-variables-constructor,
+  #tabla-variables-constructor tbody {
+    display: block;
+    width: 100%;
+  }
+
+  #tabla-variables-constructor thead {
+    display: none;
+  }
+
+  #tabla-variables-constructor tbody tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    margin-bottom: 0.65rem;
+    background: var(--md-sys-color-surface-container-high);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: var(--md-shape-corner-md);
+    align-items: center;
+  }
+
+  #tabla-variables-constructor tbody td {
+    display: block;
+    padding: 0 !important;
+    border: none !important;
+    width: 100% !important;
+  }
+
+  #tabla-variables-constructor tbody td:first-child {
+    grid-column: 1 / -1;
+  }
+
+  #tabla-variables-constructor tbody td:last-child {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
   }
 
   /* Toast por encima de la barra de navegación inferior */

@@ -3,20 +3,20 @@
 // ARQUITECTURA MVVM - VISTA DEDICADA DE EDICIÓN LOW-CODE CON PREVIEW EN VIVO
 // =========================================================================
 
-import { VisualizadorDinamico } from "./visualizers.js?v=2.5";
-import { obtenerPlantillaSimulacion } from "../builder.js?v=2.5";
-import { HINTS_VISUALIZACION, mostrarAlerta } from "../ui.js?v=2.5";
-import { MotorCamposUnificados } from "../engines/campos.js?v=2.5";
-import { MotorEstructurasCinematica } from "../engines/estructuras.js?v=2.5";
-import { MotorOndasAcustica } from "../engines/ondas.js?v=2.5";
-import { MotorFuncionalTopologico } from "../engines/topologia.js?v=2.5";
-import { EditorGraficoView } from "./editor-grafico-view.js?v=2.5";
+import { VisualizadorDinamico } from "./visualizers.js?v=2.6";
+import { obtenerPlantillaSimulacion } from "../builder.js?v=2.6";
+import { HINTS_VISUALIZACION, mostrarAlerta } from "../ui.js?v=2.6";
+import { MotorCamposUnificados } from "../engines/campos.js?v=2.6";
+import { MotorEstructurasCinematica } from "../engines/estructuras.js?v=2.6";
+import { MotorOndasAcustica } from "../engines/ondas.js?v=2.6";
+import { MotorFuncionalTopologico } from "../engines/topologia.js?v=2.6";
+import { EditorGraficoView } from "./editor-grafico-view.js?v=2.6";
 import {
   GrafoMecanismoMultifisica,
   crearGrafoPataJansen,
   crearGrafoBrazoRobotico,
   crearGrafoPataCaminante
-} from "../engines/mecanismos.js?v=2.5";
+} from "../engines/mecanismos.js?v=2.6";
 
 // Vista de pantalla completa para el diseño, edición y prueba interactiva de simulaciones evolutivas.
 export class EstudioView {
@@ -280,7 +280,7 @@ export class EstudioView {
       }
     });
 
-    // Si se activa la pestaña de mecanismo, asegurar que el canvas CAD esté montado y renderizado
+    // Si se activa la pestaña de mecanismo, asegurar que el canvas CAD esté montado, encuadrado y renderizado
     if (tab === "mecanismo") {
       const contCad = this.dom?.contenedorCad || document.getElementById("contenedor-editor-grafico-cad");
       if (this.editorGrafico && contCad) {
@@ -288,7 +288,14 @@ export class EstudioView {
           this.editorGrafico.inicializar(contCad);
         }
         this.editorGrafico.actualizarValoresVariables(this.valoresGenesPrueba);
+        this.editorGrafico.autoEncuadrar();
         this.editorGrafico.redibujar();
+        if (typeof requestAnimationFrame === "function") {
+          requestAnimationFrame(() => {
+            this.editorGrafico.autoEncuadrar();
+            this.editorGrafico.redibujar();
+          });
+        }
       }
     }
 

@@ -3,11 +3,11 @@
 // ARQUITECTURA MVVM - ENLACE BIDIRECCIONAL ENTRE EL VIEWMODEL Y EL DOM
 // =========================================================================
 
-import { GraficoView } from "./grafico-view.js?v=2.5";
-import { ModalesView } from "./modales-view.js?v=2.5";
-import { EstudioView } from "./estudio-view.js?v=2.5";
-import { obtenerVisualizador, detenerTodosLosVisualizadores } from "./visualizers.js?v=2.5";
-import { obtenerPlantillaSimulacion } from "../builder.js?v=2.5";
+import { GraficoView } from "./grafico-view.js?v=2.6";
+import { ModalesView } from "./modales-view.js?v=2.6";
+import { EstudioView } from "./estudio-view.js?v=2.6";
+import { obtenerVisualizador, detenerTodosLosVisualizadores } from "./visualizers.js?v=2.6";
+import { obtenerPlantillaSimulacion } from "../builder.js?v=2.6";
 import {
   construirFormularioModelo,
   obtenerDatosEntradaModelo,
@@ -568,8 +568,18 @@ export class AppView {
     this.dom.btnNavLaboratorio?.addEventListener("click", irALaboratorio);
     this.dom.btnBnavLaboratorio?.addEventListener("click", irALaboratorio);
 
-    this.dom.btnNavEstudio?.addEventListener("click", irAEstudio);
-    this.dom.btnBnavEstudio?.addEventListener("click", irAEstudio);
+    this.dom.btnNavEstudio?.addEventListener("click", () => {
+      irAEstudio();
+      if (typeof window !== "undefined" && window.innerWidth <= 768 && this.estudioView) {
+        this.estudioView.cambiarTab("mecanismo");
+      }
+    });
+    this.dom.btnBnavEstudio?.addEventListener("click", () => {
+      irAEstudio();
+      if (this.estudioView) {
+        this.estudioView.cambiarTab("mecanismo");
+      }
+    });
 
     // Controles de Sensores Móviles (Giroscopio, Inclinación y Agitar/Shake)
     this.dom.btnAbrirSensoresMovil?.addEventListener("click", () => this._alternarPanelSensoresMovil());
