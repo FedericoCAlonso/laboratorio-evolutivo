@@ -638,6 +638,7 @@ export class AppView {
       nombre: plantilla.nombre || `${modelo.nombre} (Copia Editable)`,
       descripcion: plantilla.descripcion || modelo.descripcion,
       tipoVisualizacion: plantilla.tipoVisualizacion || modelo.tipoVisualizacion || "calibracion",
+      grafo: plantilla.grafo || modelo.grafo || (modelo.definicionCruda?.grafo) || null,
       variables: varsLista.length > 0 ? varsLista : [
         { nombre: "var1", tipo: "continuo", min: 0, max: 100 }
       ],

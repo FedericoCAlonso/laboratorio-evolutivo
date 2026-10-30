@@ -136,13 +136,18 @@ if (typeof document === "undefined") {
     "alerta-estudio": new MockElement("div"),
     "select-plantilla-constructor": new MockElement("select"),
     "tab-btn-vars": new MockElement("button"),
+    "tab-btn-mecanismo": new MockElement("button"),
     "tab-btn-codigo": new MockElement("button"),
     "tab-btn-meta": new MockElement("button"),
     "tab-panel-vars": new MockElement("div"),
+    "tab-panel-mecanismo": new MockElement("div"),
     "tab-panel-codigo": new MockElement("div"),
     "tab-panel-meta": new MockElement("div"),
+    "contenedor-editor-grafico-cad": new MockElement("div"),
     "tabs-estudio-contenedor": new MockElement("div"),
     "btn-etapa-siguiente-vars": new MockElement("button"),
+    "btn-etapa-anterior-mecanismo": new MockElement("button"),
+    "btn-etapa-siguiente-mecanismo": new MockElement("button"),
     "btn-etapa-anterior-codigo": new MockElement("button"),
     "btn-etapa-siguiente-codigo": new MockElement("button"),
     "btn-etapa-anterior-meta": new MockElement("button"),
@@ -196,6 +201,11 @@ assert.strictEqual(estudio.dom.vistaLaboratorio.style.display, "none", "El labor
 assert.strictEqual(estudio.dom.vistaEstudio.style.display, "flex", "El estudio debe mostrarse en pantalla completa");
 assert.ok(estudio.dom.contenedorPrincipal.classList.contains("modo-estudio"), "Debe activarse la clase modo-estudio");
 
+// Cambio de pestaña a Mecanismo CAD
+estudio.cambiarTab("mecanismo");
+assert.strictEqual(estudio.tabActiva, "mecanismo", "La pestaña activa debe ser 'mecanismo'");
+assert.strictEqual(estudio.dom.tabPanelMecanismo.style.display, "flex", "El panel de mecanismo debe ser visible");
+
 // Cambio de pestaña a Código
 estudio.cambiarTab("codigo");
 assert.strictEqual(estudio.tabActiva, "codigo", "La pestaña activa debe ser 'codigo'");
@@ -205,12 +215,16 @@ assert.strictEqual(estudio.dom.tabPanelCodigo.style.display, "flex", "El panel d
 estudio.cambiarTab("meta");
 assert.strictEqual(estudio.tabActiva, "meta", "La pestaña activa debe ser 'meta'");
 
-// Navegación guiada entre etapas con botones Anterior / Siguiente
+// Navegación guiada entre etapas con botones Anterior / Siguiente (Flujo de 4 etapas)
 estudio.dom.btnEtapaAnteriorMeta.dispatchEvent({ type: "click" });
 assert.strictEqual(estudio.tabActiva, "codigo", "El botón anterior debe retroceder a 'codigo'");
 estudio.dom.btnEtapaAnteriorCodigo.dispatchEvent({ type: "click" });
+assert.strictEqual(estudio.tabActiva, "mecanismo", "El botón anterior debe retroceder a 'mecanismo'");
+estudio.dom.btnEtapaAnteriorMecanismo.dispatchEvent({ type: "click" });
 assert.strictEqual(estudio.tabActiva, "vars", "El botón anterior debe retroceder a 'vars'");
 estudio.dom.btnEtapaSiguienteVars.dispatchEvent({ type: "click" });
+assert.strictEqual(estudio.tabActiva, "mecanismo", "El botón siguiente debe avanzar a 'mecanismo'");
+estudio.dom.btnEtapaSiguienteMecanismo.dispatchEvent({ type: "click" });
 assert.strictEqual(estudio.tabActiva, "codigo", "El botón siguiente debe avanzar a 'codigo'");
 estudio.dom.btnEtapaSiguienteCodigo.dispatchEvent({ type: "click" });
 assert.strictEqual(estudio.tabActiva, "meta", "El botón siguiente debe avanzar a 'meta'");

@@ -6,6 +6,12 @@ import { MotorCamposUnificados } from "./engines/campos.js";
 import { MotorEstructurasCinematica } from "./engines/estructuras.js";
 import { MotorOndasAcustica } from "./engines/ondas.js";
 import { MotorFuncionalTopologico } from "./engines/topologia.js";
+import {
+  GrafoMecanismoMultifisica,
+  simularCicloMecanismo,
+  crearGrafoPataJansen,
+  crearGrafoBrazoRobotico
+} from "./engines/mecanismos.js";
 
 // Plantillas preconfiguradas para inspirar y servir de base a nuevas simulaciones de diversas naturalezas.
 export const PLANTILLAS_SIMULACION = {
@@ -13,6 +19,7 @@ export const PLANTILLAS_SIMULACION = {
     nombre: "Pata Cinemática de Theo Jansen (13 Barras)",
     descripcion: "Optimización mecatrónica multiobjetivo de las 12 barras del mecanismo caminante de Theo Jansen para maximizar suavidad inercial y precisión de zancada superando obstáculos.",
     tipoVisualizacion: "mecanismo_jansen",
+    grafo: crearGrafoPataJansen().exportarJSON(),
     variables: [
       { nombre: "a", etiqueta: "a: Offset horizontal al pivote fijo X (-a, -l)", tipo: "continuo", min: 26.6, max: 49.4, valorNominal: 38.0 },
       { nombre: "l", etiqueta: "l: Offset vertical al pivote fijo X (-a, -l)", tipo: "continuo", min: 5.46, max: 10.14, valorNominal: 7.8 },
@@ -28,7 +35,7 @@ export const PLANTILLAS_SIMULACION = {
       { nombre: "k", etiqueta: "k: Biela de manivela K a guía F", tipo: "continuo", min: 43.3, max: 80.5, valorNominal: 61.9 }
     ],
     codigoEvaluacion: `// Simulación cinemática cerrada de Theo Jansen (180 pasos)
-// Motores inyectados: 'estructuras' / 'cinematica' (MotorEstructurasCinematica)
+// Motores inyectados: 'estructuras' / 'cinematica' y telemetría de 'sensores'
 const sim = estructuras.evaluarJansen(vars, {
   longitudManivela: 15,
   zancadaObjetivo: 60,
@@ -50,6 +57,7 @@ return [sim.f5_suavidad, sim.errorZancada];`
     nombre: "Brazo Robótico Articulado (3 Eslabones)",
     descripcion: "Cinemática de 3 grados de libertad para alcanzar el objetivo (55, 40) eludiendo un obstáculo circular con mínimo esfuerzo angular.",
     tipoVisualizacion: "mecanismo_barras_2d",
+    grafo: crearGrafoBrazoRobotico().exportarJSON(),
     variables: [
       { nombre: "theta1", etiqueta: "theta1: Ángulo base θ₁ (-180° a 180°)", tipo: "continuo", min: -180, max: 180 },
       { nombre: "theta2", etiqueta: "theta2: Ángulo codo θ₂ (-180° a 180°)", tipo: "continuo", min: -180, max: 180 },
@@ -246,7 +254,7 @@ export function obtenerPlantillaSimulacion(clave) {
   return null;
 }
 
-// Compila de forma segura la función de evaluación inyectando los 4 motores físicos fundamentales.
+// Compila de forma segura la función de evaluación inyectando los 4 motores físicos fundamentales y telemetría de sensores CAD.
 export function compilarFuncionEvaluacion(codigoFuente) {
   try {
     const fn = new Function(
@@ -257,6 +265,8 @@ export function compilarFuncionEvaluacion(codigoFuente) {
       "campos",
       "ondas",
       "topologia",
+      "sensores",
+      "mecanismo",
       codigoFuente
     );
     return { ok: true, fn };
@@ -336,6 +346,20 @@ export function validarDefinicionModelo(definicion) {
     varsPrueba[v.nombre.trim()] = (Number(v.min) + Number(v.max)) / 2;
   });
 
+  // Telemetría de sensores de prueba si el modelo incluye mecanismo CAD o sensores
+  let telemetriaPrueba = {
+    pie: { x: 0, y: -40, velocidad: 0, aceleracionPico: 12.5, zancada: 60, despejeSuelo: 15, emB: 0, emE: 0 },
+    efector: { x: 55, y: 40, velocidad: 0, aceleracionPico: 5.0, emB: 0, emE: 0 }
+  };
+  let grafoInstancia = null;
+  if (definicion.grafo) {
+    try {
+      grafoInstancia = new GrafoMecanismoMultifisica(definicion.grafo);
+      const res = simularCicloMecanismo(grafoInstancia, varsPrueba, { pasos: 30 });
+      if (res && res.sensores) telemetriaPrueba = { ...telemetriaPrueba, ...res.sensores };
+    } catch (_) {}
+  }
+
   try {
     const resPrueba = compilacion.fn(
       varsPrueba,
@@ -344,7 +368,9 @@ export function validarDefinicionModelo(definicion) {
       MotorEstructurasCinematica,
       MotorCamposUnificados,
       MotorOndasAcustica,
-      MotorFuncionalTopologico
+      MotorFuncionalTopologico,
+      telemetriaPrueba,
+      grafoInstancia
     );
     const esNumeroValido = typeof resPrueba === "number" && !isNaN(resPrueba);
     const esArregloValido = Array.isArray(resPrueba) && resPrueba.length >= 2 && resPrueba.every(v => typeof v === "number" && !isNaN(v));
@@ -374,12 +400,14 @@ export function compilarModeloDinamico(definicionCruda) {
 
   const modeloId = definicionCruda.id || generarIdModelo(definicionCruda.nombre);
   const tipoVisualizacion = definicionCruda.tipoVisualizacion || "calibracion";
+  const grafoInstancia = definicionCruda.grafo ? new GrafoMecanismoMultifisica(definicionCruda.grafo) : null;
 
   return {
     id: modeloId,
     nombre: definicionCruda.nombre.trim(),
     descripcion: (definicionCruda.descripcion || "Modelo matemático personalizado creado dinámicamente.").trim(),
     tipoVisualizacion,
+    grafo: definicionCruda.grafo || null,
     esDinamico: true,
     usaWasm: false,
     usaRuido: false,
@@ -388,7 +416,8 @@ export function compilarModeloDinamico(definicionCruda) {
       ...definicionCruda,
       id: modeloId,
       tipoVisualizacion,
-      variables: varsDef
+      variables: varsDef,
+      grafo: definicionCruda.grafo || null
     },
 
     // Genera la especificación de los genes a optimizar a partir de las variables definidas.
@@ -410,6 +439,18 @@ export function compilarModeloDinamico(definicionCruda) {
         vars[varsDef[i].nombre] = genoma[i];
       }
 
+      // Telemetría de sensores si el modelo incluye mecanismo CAD
+      let telemetriaSensores = {
+        pie: { x: 0, y: -40, velocidad: 0, aceleracionPico: 12.5, zancada: 60, despejeSuelo: 15, emB: 0, emE: 0 },
+        efector: { x: 55, y: 40, velocidad: 0, aceleracionPico: 5.0, emB: 0, emE: 0 }
+      };
+      if (grafoInstancia) {
+        try {
+          const res = simularCicloMecanismo(grafoInstancia, vars, { pasos: 60 });
+          if (res && res.sensores) telemetriaSensores = { ...telemetriaSensores, ...res.sensores };
+        } catch (_) {}
+      }
+
       try {
         const puntaje = funcionEvaluacion(
           vars,
@@ -418,7 +459,9 @@ export function compilarModeloDinamico(definicionCruda) {
           MotorEstructurasCinematica,
           MotorCamposUnificados,
           MotorOndasAcustica,
-          MotorFuncionalTopologico
+          MotorFuncionalTopologico,
+          telemetriaSensores,
+          grafoInstancia
         );
         if (Array.isArray(puntaje)) {
           if (puntaje.length >= 2 && puntaje.every(v => typeof v === "number" && !isNaN(v))) {
@@ -442,6 +485,17 @@ export function compilarModeloDinamico(definicionCruda) {
         vars[varsDef[i].nombre] = genoma[i];
       }
 
+      let telemetriaSensores = {
+        pie: { x: 0, y: -40, velocidad: 0, aceleracionPico: 12.5, zancada: 60, despejeSuelo: 15, emB: 0, emE: 0 },
+        efector: { x: 55, y: 40, velocidad: 0, aceleracionPico: 5.0, emB: 0, emE: 0 }
+      };
+      if (grafoInstancia) {
+        try {
+          const res = simularCicloMecanismo(grafoInstancia, vars, { pasos: 60 });
+          if (res && res.sensores) telemetriaSensores = { ...telemetriaSensores, ...res.sensores };
+        } catch (_) {}
+      }
+
       let fitness = 0;
       try {
         fitness = funcionEvaluacion(
@@ -451,7 +505,9 @@ export function compilarModeloDinamico(definicionCruda) {
           MotorEstructurasCinematica,
           MotorCamposUnificados,
           MotorOndasAcustica,
-          MotorFuncionalTopologico
+          MotorFuncionalTopologico,
+          telemetriaSensores,
+          grafoInstancia
         );
       } catch (e) {
         fitness = 999999;
@@ -505,6 +561,7 @@ export function clonarModeloExistente(modeloOriginal, nuevoNombre = null) {
       nombre: nombreCopia,
       descripcion: `Variante personalizada basada en ${modeloOriginal.nombre}.`,
       tipoVisualizacion: plantilla.tipoVisualizacion || modeloOriginal.tipoVisualizacion || "calibracion",
+      grafo: plantilla.grafo || modeloOriginal.grafo || (modeloOriginal.definicionCruda?.grafo) || null,
       variables: plantilla.variables,
       codigoEvaluacion: plantilla.codigoEvaluacion
     };

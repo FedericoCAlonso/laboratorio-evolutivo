@@ -228,18 +228,22 @@
       <div class="grid-estudio">
         <!-- Columna Izquierda: Panel de Edición con Pestañas Material 3 -->
         <section class="panel-editor-estudio">
-          <!-- Selector de Pestañas Material 3 (Variables, Código, Metadatos) -->
+          <!-- Selector de Pestañas Material 3 (Variables, Mecanismo CAD, Código, Metadatos) -->
           <div class="tabs-estudio" role="tablist" id="tabs-estudio-contenedor">
             <button type="button" id="tab-btn-vars" class="tab-estudio-btn activo" role="tab" aria-selected="true" data-tab="vars" tabindex="0" onclick="window.estudioView && window.estudioView.cambiarTab('vars')">
               <span class="paso-num">1</span>
               <span>🧬 Variables (Genes)</span>
             </button>
-            <button type="button" id="tab-btn-codigo" class="tab-estudio-btn" role="tab" aria-selected="false" data-tab="codigo" tabindex="-1" onclick="window.estudioView && window.estudioView.cambiarTab('codigo')">
+            <button type="button" id="tab-btn-mecanismo" class="tab-estudio-btn" role="tab" aria-selected="false" data-tab="mecanismo" tabindex="-1" onclick="window.estudioView && window.estudioView.cambiarTab('mecanismo')">
               <span class="paso-num">2</span>
-              <span>💻 Código de Evaluación</span>
+              <span>📐 Mecanismo / CAD</span>
+            </button>
+            <button type="button" id="tab-btn-codigo" class="tab-estudio-btn" role="tab" aria-selected="false" data-tab="codigo" tabindex="-1" onclick="window.estudioView && window.estudioView.cambiarTab('codigo')">
+              <span class="paso-num">3</span>
+              <span>💻 Código & Telemetría</span>
             </button>
             <button type="button" id="tab-btn-meta" class="tab-estudio-btn" role="tab" aria-selected="false" data-tab="meta" tabindex="-1" onclick="window.estudioView && window.estudioView.cambiarTab('meta')">
-              <span class="paso-num">3</span>
+              <span class="paso-num">4</span>
               <span>⚙️ Metadatos & Visualizador</span>
             </button>
           </div>
@@ -247,7 +251,7 @@
           <!-- Pestaña 1: Definición de Variables de Decisión (Genes) -->
           <div id="tab-panel-vars" class="tab-panel-estudio">
             <div class="card-guia-estudio">
-              <span><strong>Etapa 1 de 3:</strong> Defina los parámetros que el algoritmo genético optimizará. Cada variable tiene un rango admisible [mín, máx] y tipo de dato.</span>
+              <span><strong>Etapa 1 de 4:</strong> Defina los parámetros que el algoritmo genético optimizará. Cada variable tiene un rango admisible [mín, máx] y tipo de dato.</span>
             </div>
 
             <div class="tabla-responsive-estudio">
@@ -272,28 +276,51 @@
               <button type="button" id="btn-agregar-variable" class="btn-m3-tonal">
                 ➕ Agregar Variable
               </button>
-              <button type="button" id="btn-etapa-siguiente-vars" class="btn-m3-filled" title="Avanzar a la función de evaluación en JavaScript" onclick="window.estudioView && window.estudioView.cambiarTab('codigo')">
-                Siguiente: 💻 Código de Evaluación ➔
+              <button type="button" id="btn-etapa-siguiente-vars" class="btn-m3-filled" title="Avanzar al editor gráfico de mecanismos y acoplamientos" onclick="window.estudioView && window.estudioView.cambiarTab('mecanismo')">
+                Siguiente: 📐 Mecanismo / CAD ➔
               </button>
             </div>
           </div>
 
-          <!-- Pestaña 2: Función de Evaluación JavaScript con snippets -->
+          <!-- Pestaña 2: Editor Gráfico CAD de Mecanismos Multicuerpo y Multifísica 2D -->
+          <div id="tab-panel-mecanismo" class="tab-panel-estudio" style="display: none; width: 100%; flex-direction: column; gap: 0.75rem;">
+            <div class="card-guia-estudio">
+              <span><strong>Etapa 2 de 4:</strong> Modele el mecanismo planar articulado, defina cuerpos rígidos con bisagras, palitos, motores y acoples multiefecto (imanes y cargas). Analice los grados de libertad (Grübler-Kutzbach) y fije sensores para medir trayectorias, velocidades, aceleraciones y campos.</span>
+            </div>
+
+            <!-- Contenedor del Editor Gráfico CAD interactivo -->
+            <div id="contenedor-editor-grafico-cad" style="width: 100%; min-height: 560px; flex: 1;">
+              <!-- Montado por EditorGraficoView -->
+            </div>
+
+            <!-- Barra de navegación de la Etapa 2 -->
+            <div class="nav-etapas-estudio">
+              <button type="button" id="btn-etapa-anterior-mecanismo" class="btn-m3-tonal" title="Regresar a la configuración de variables" onclick="window.estudioView && window.estudioView.cambiarTab('vars')">
+                ⬅ Anterior: 🧬 Variables
+              </button>
+              <button type="button" id="btn-etapa-siguiente-mecanismo" class="btn-m3-filled" title="Avanzar a la función de evaluación en JavaScript" onclick="window.estudioView && window.estudioView.cambiarTab('codigo')">
+                Siguiente: 💻 Código & Telemetría ➔
+              </button>
+            </div>
+          </div>
+
+          <!-- Pestaña 3: Función de Evaluación JavaScript con snippets y telemetría de sensores -->
           <div id="tab-panel-codigo" class="tab-panel-estudio" style="display: none;">
             <div class="card-guia-estudio">
-              <span><strong>Etapa 2 de 3:</strong> Escriba la función de aptitud (fitness) en JavaScript que califica a cada individuo según las variables definidas.</span>
+              <span><strong>Etapa 3 de 4:</strong> Escriba la función de aptitud (fitness) en JavaScript. Puede acceder a las variables en <code>vars</code>, a los motores físicos y a las lecturas en vivo de los sensores CAD definidos en <code>sensores</code> (ej: <code>sensores.pie.aceleracionPico</code>, <code>sensores.pie.zancada</code>).</span>
             </div>
 
             <!-- Barra de inserción de snippets de código -->
             <div id="estudio-barra-snippets" class="barra-snippets">
               <span style="font-size: 0.78rem; font-weight: 600; color: var(--md-sys-color-on-surface-variant);">Snippets:</span>
-              <button type="button" class="btn-snippet chip-snippet" data-snippet="escalar">+ Monobjetivo</button>
+              <button type="button" class="btn-snippet chip-snippet" data-snippet="sensores">+ Sensores CAD</button>
+              <button type="button" class="btn-snippet chip-snippet" data-snippet="jansen">+ Theo Jansen</button>
               <button type="button" class="btn-snippet chip-snippet" data-snippet="pareto">+ Frente Pareto</button>
-              <button type="button" class="btn-snippet chip-snippet" data-snippet="jansen">+ Theo Jansen (180p)</button>
+              <button type="button" class="btn-snippet chip-snippet" data-snippet="escalar">+ Monobjetivo</button>
               <button type="button" class="btn-snippet chip-snippet" data-snippet="campos">+ Motor Campos</button>
-              <button type="button" class="btn-snippet chip-snippet" data-snippet="estructuras">+ Motor Estructuras</button>
-              <button type="button" class="btn-snippet chip-snippet" data-snippet="ondas">+ Motor Ondas</button>
-              <button type="button" class="btn-snippet chip-snippet" data-snippet="topologia">+ Motor Topología</button>
+              <button type="button" class="btn-snippet chip-snippet" data-snippet="estructuras">+ Cinemática</button>
+              <button type="button" class="btn-snippet chip-snippet" data-snippet="ondas">+ Ondas</button>
+              <button type="button" class="btn-snippet chip-snippet" data-snippet="topologia">+ Topología</button>
             </div>
 
             <!-- Contenedor del Editor de Código amplio -->
@@ -303,14 +330,14 @@
             </div>
 
             <span class="descripcion-campo">
-              Dispone del objeto <code>vars</code> (ej: <code>vars.ancho</code>) y <code>rng</code> (pseudoaleatorio determinista).
+              Dispone de <code>vars</code> (variables optimizadas), <code>sensores</code> (telemetría de puntos de medida CAD) y <code>rng</code>.
               Retorne un <strong>número escalar</strong> a minimizar o un arreglo <strong>[f1, f2]</strong> para el Frente de Pareto NSGA-II.
             </span>
 
-            <!-- Barra de navegación de la Etapa 2 -->
+            <!-- Barra de navegación de la Etapa 3 -->
             <div class="nav-etapas-estudio">
-              <button type="button" id="btn-etapa-anterior-codigo" class="btn-m3-tonal" title="Regresar a la configuración de variables" onclick="window.estudioView && window.estudioView.cambiarTab('vars')">
-                ⬅ Anterior: 🧬 Variables
+              <button type="button" id="btn-etapa-anterior-codigo" class="btn-m3-tonal" title="Regresar al lienzo gráfico de mecanismos" onclick="window.estudioView && window.estudioView.cambiarTab('mecanismo')">
+                ⬅ Anterior: 📐 Mecanismo / CAD
               </button>
               <button type="button" id="btn-etapa-siguiente-codigo" class="btn-m3-filled" title="Avanzar a la configuración de metadatos y visualizador" onclick="window.estudioView && window.estudioView.cambiarTab('meta')">
                 Siguiente: ⚙️ Metadatos & Visualizador ➔
@@ -318,10 +345,10 @@
             </div>
           </div>
 
-          <!-- Pestaña 3: Configuración de Metadatos y Motor de Renderizado -->
+          <!-- Pestaña 4: Configuración de Metadatos y Motor de Renderizado -->
           <div id="tab-panel-meta" class="tab-panel-estudio" style="display: none;">
             <div class="card-guia-estudio">
-              <span><strong>Etapa 3 de 3:</strong> Configure el nombre, descripción técnica y el motor gráfico interactivo que visualizará los resultados en tiempo real.</span>
+              <span><strong>Etapa 4 de 4:</strong> Configure el nombre, descripción técnica y el motor gráfico interactivo que visualizará los resultados en tiempo real.</span>
             </div>
 
             <div class="grupo-campo">
@@ -356,10 +383,10 @@
               </span>
             </div>
 
-            <!-- Barra de navegación y guardado de la Etapa 3 -->
+            <!-- Barra de navegación y guardado de la Etapa 4 -->
             <div class="nav-etapas-estudio">
               <button type="button" id="btn-etapa-anterior-meta" class="btn-m3-tonal" title="Regresar al editor de código" onclick="window.estudioView && window.estudioView.cambiarTab('codigo')">
-                ⬅ Anterior: 💻 Código de Evaluación
+                ⬅ Anterior: 💻 Código & Telemetría
               </button>
               <button type="button" id="btn-etapa-guardar-meta" class="btn-m3-filled" title="Compilar y guardar la simulación en el Laboratorio" onclick="window.estudioView && window.estudioView.ejecutarGuardado()">
                 💾 Guardar y Aplicar Simulación

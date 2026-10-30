@@ -10,6 +10,12 @@ import { MotorCamposUnificados } from "../engines/campos.js?v=2.4";
 import { MotorEstructurasCinematica } from "../engines/estructuras.js?v=2.4";
 import { MotorOndasAcustica } from "../engines/ondas.js?v=2.4";
 import { MotorFuncionalTopologico } from "../engines/topologia.js?v=2.4";
+import { EditorGraficoView } from "./editor-grafico-view.js?v=2.5";
+import {
+  GrafoMecanismoMultifisica,
+  crearGrafoPataJansen,
+  crearGrafoBrazoRobotico
+} from "../engines/mecanismos.js?v=2.5";
 
 // Vista de pantalla completa para el diseño, edición y prueba interactiva de simulaciones evolutivas.
 export class EstudioView {
@@ -20,6 +26,17 @@ export class EstudioView {
 
     // Instancia del visualizador dinámico para la previsualización en vivo
     this.visualizador = new VisualizadorDinamico();
+
+    // Editor Gráfico CAD de Mecanismos Multicuerpo y Multifísica 2D
+    this.editorGrafico = new EditorGraficoView({
+      onGrafoModificado: (grafo) => {
+        this.sincronizarVariablesDesdeGrafo(grafo);
+        this.ejecutarPruebaEnVivo();
+      },
+      onVariableVinculada: (variable) => {
+        this._asegurarVariableEnTabla(variable);
+      }
+    });
 
     // Estado interno del estudio
     this.modo = "creacion"; // 'creacion' | 'edicion'
@@ -51,15 +68,21 @@ export class EstudioView {
       // Pestañas (Tabs) Material 3 y Navegación de Etapas
       tabsEstudio: document.getElementById("tabs-estudio-contenedor") || document.querySelector(".tabs-estudio"),
       tabBtnVars: document.getElementById("tab-btn-vars"),
+      tabBtnMecanismo: document.getElementById("tab-btn-mecanismo"),
       tabBtnCodigo: document.getElementById("tab-btn-codigo"),
       tabBtnMeta: document.getElementById("tab-btn-meta"),
       tabPanelVars: document.getElementById("tab-panel-vars"),
+      tabPanelMecanismo: document.getElementById("tab-panel-mecanismo"),
       tabPanelCodigo: document.getElementById("tab-panel-codigo"),
       tabPanelMeta: document.getElementById("tab-panel-meta"),
       panelEditor: document.querySelector(".panel-editor-estudio"),
+      gridEstudio: document.querySelector(".grid-estudio"),
+      contenedorCad: document.getElementById("contenedor-editor-grafico-cad"),
 
       // Botones de navegación secuencial entre etapas (Workflow por pasos)
       btnEtapaSiguienteVars: document.getElementById("btn-etapa-siguiente-vars"),
+      btnEtapaAnteriorMecanismo: document.getElementById("btn-etapa-anterior-mecanismo"),
+      btnEtapaSiguienteMecanismo: document.getElementById("btn-etapa-siguiente-mecanismo"),
       btnEtapaAnteriorCodigo: document.getElementById("btn-etapa-anterior-codigo"),
       btnEtapaSiguienteCodigo: document.getElementById("btn-etapa-siguiente-codigo"),
       btnEtapaAnteriorMeta: document.getElementById("btn-etapa-anterior-meta"),
@@ -108,6 +131,7 @@ export class EstudioView {
     };
 
     this.dom.tabBtnVars?.addEventListener("click", () => manejarClickTab("vars"));
+    this.dom.tabBtnMecanismo?.addEventListener("click", () => manejarClickTab("mecanismo"));
     this.dom.tabBtnCodigo?.addEventListener("click", () => manejarClickTab("codigo"));
     this.dom.tabBtnMeta?.addEventListener("click", () => manejarClickTab("meta"));
 
@@ -115,13 +139,17 @@ export class EstudioView {
     this.dom.tabsEstudio?.addEventListener("click", (e) => {
       const btn = e.target.closest(".tab-estudio-btn");
       if (!btn) return;
-      const tabTarget = btn.dataset.tab || (btn.id === "tab-btn-vars" ? "vars" : btn.id === "tab-btn-codigo" ? "codigo" : "meta");
+      const tabTarget = btn.dataset.tab || (
+        btn.id === "tab-btn-vars" ? "vars" :
+        btn.id === "tab-btn-mecanismo" ? "mecanismo" :
+        btn.id === "tab-btn-codigo" ? "codigo" : "meta"
+      );
       manejarClickTab(tabTarget);
     });
 
     // Accesibilidad por teclado en la barra de pestañas (Flechas Izquierda / Derecha)
     this.dom.tabsEstudio?.addEventListener("keydown", (e) => {
-      const orden = ["vars", "codigo", "meta"];
+      const orden = ["vars", "mecanismo", "codigo", "meta"];
       const idx = orden.indexOf(this.tabActiva);
       if (e.key === "ArrowRight") {
         e.preventDefault();
@@ -134,9 +162,11 @@ export class EstudioView {
       }
     });
 
-    // Botones de navegación secuencial entre etapas (Flujo guiado tipo Wizard)
-    this.dom.btnEtapaSiguienteVars?.addEventListener("click", () => this.cambiarTab("codigo"));
-    this.dom.btnEtapaAnteriorCodigo?.addEventListener("click", () => this.cambiarTab("vars"));
+    // Botones de navegación secuencial entre etapas (Flujo guiado tipo Wizard de 4 pasos)
+    this.dom.btnEtapaSiguienteVars?.addEventListener("click", () => this.cambiarTab("mecanismo"));
+    this.dom.btnEtapaAnteriorMecanismo?.addEventListener("click", () => this.cambiarTab("vars"));
+    this.dom.btnEtapaSiguienteMecanismo?.addEventListener("click", () => this.cambiarTab("codigo"));
+    this.dom.btnEtapaAnteriorCodigo?.addEventListener("click", () => this.cambiarTab("mecanismo"));
     this.dom.btnEtapaSiguienteCodigo?.addEventListener("click", () => this.cambiarTab("meta"));
     this.dom.btnEtapaAnteriorMeta?.addEventListener("click", () => this.cambiarTab("codigo"));
     this.dom.btnEtapaGuardarMeta?.addEventListener("click", () => this._ejecutarGuardado());
@@ -210,15 +240,24 @@ export class EstudioView {
     this.tabActiva = tab;
 
     const btnVars = this.dom?.tabBtnVars || document.getElementById("tab-btn-vars");
+    const btnMecanismo = this.dom?.tabBtnMecanismo || document.getElementById("tab-btn-mecanismo");
     const btnCodigo = this.dom?.tabBtnCodigo || document.getElementById("tab-btn-codigo");
     const btnMeta = this.dom?.tabBtnMeta || document.getElementById("tab-btn-meta");
     const panelVars = this.dom?.tabPanelVars || document.getElementById("tab-panel-vars");
+    const panelMecanismo = this.dom?.tabPanelMecanismo || document.getElementById("tab-panel-mecanismo");
     const panelCodigo = this.dom?.tabPanelCodigo || document.getElementById("tab-panel-codigo");
     const panelMeta = this.dom?.tabPanelMeta || document.getElementById("tab-panel-meta");
+    const grid = this.dom?.gridEstudio || document.querySelector(".grid-estudio");
+
+    // En la etapa de mecanismo gráfico, se activa el modo pantalla completa para el editor CAD
+    if (grid) {
+      grid.classList.toggle("modo-lienzo-completo", tab === "mecanismo");
+    }
 
     // Actualiza botones de pestañas y accesibilidad WAI-ARIA
     const botones = [
       { id: "vars", el: btnVars, panel: panelVars },
+      { id: "mecanismo", el: btnMecanismo, panel: panelMecanismo },
       { id: "codigo", el: btnCodigo, panel: panelCodigo },
       { id: "meta", el: btnMeta, panel: panelMeta }
     ];
@@ -236,6 +275,18 @@ export class EstudioView {
         panel.style.display = esActivo ? "flex" : "none";
       }
     });
+
+    // Si se activa la pestaña de mecanismo, asegurar que el canvas CAD esté montado y renderizado
+    if (tab === "mecanismo") {
+      const contCad = this.dom?.contenedorCad || document.getElementById("contenedor-editor-grafico-cad");
+      if (this.editorGrafico && contCad) {
+        if (!this.editorGrafico.contenedor || this.editorGrafico.contenedor !== contCad) {
+          this.editorGrafico.inicializar(contCad);
+        }
+        this.editorGrafico.actualizarValoresVariables(this.valoresGenesPrueba);
+        this.editorGrafico.redibujar();
+      }
+    }
 
     // Enfocar automáticamente el textarea si se pasa a la etapa de código
     const textarea = this.dom?.textareaCodigo || document.getElementById("textarea-codigo-evaluacion");
@@ -289,7 +340,14 @@ export class EstudioView {
           : "Nuevo Modelo Matemático";
       }
 
-      // 3. Carga los datos iniciales o una plantilla por omisión
+      // 3. Montar editor CAD en su contenedor si está disponible
+      if (this.dom.contenedorCad && this.editorGrafico) {
+        if (!this.editorGrafico.contenedor || this.editorGrafico.contenedor !== this.dom.contenedorCad) {
+          this.editorGrafico.inicializar(this.dom.contenedorCad);
+        }
+      }
+
+      // 4. Carga los datos iniciales o una plantilla por omisión
       if (datosIniciales) {
         this.cargarDesdeDefinicion(datosIniciales, esEdicion);
       } else {
@@ -304,7 +362,7 @@ export class EstudioView {
       this.cambiarTab("vars");
       this.sincronizarSlidersGenes();
 
-      // 4. Intenta ejecutar la prueba en vivo sin bloquear si ocurre alguna excepción
+      // 5. Intenta ejecutar la prueba en vivo sin bloquear si ocurre alguna excepción
       try {
         this.ejecutarPruebaEnVivo();
       } catch (errPrueba) {
@@ -322,6 +380,9 @@ export class EstudioView {
   // Cierra el Estudio de Modelado y retorna a la vista principal del Laboratorio.
   cerrar() {
     this.visualizador.detener();
+    if (this.editorGrafico) {
+      this.editorGrafico.detener();
+    }
 
     if (this.dom.vistaEstudio) this.dom.vistaEstudio.style.display = "none";
     if (this.dom.vistaLaboratorio) this.dom.vistaLaboratorio.style.display = "flex";
@@ -356,6 +417,19 @@ export class EstudioView {
       this.dom.tbodyVariables.innerHTML = "";
       const vars = def.variables || [];
       vars.forEach((v) => this.agregarVariable(v));
+    }
+
+    // Carga o genera el grafo de mecanismo multicuerpo en el editor CAD
+    if (this.editorGrafico) {
+      if (def.grafo) {
+        this.editorGrafico.cargarGrafo(def.grafo);
+      } else if (def.id === "pata-jansen" || def.id === "jansen" || def.nombre?.toLowerCase().includes("jansen")) {
+        this.editorGrafico.cargarGrafo(crearGrafoPataJansen(this.valoresGenesPrueba));
+      } else if (def.id === "brazo-robotico" || def.id === "brazo" || def.nombre?.toLowerCase().includes("brazo")) {
+        this.editorGrafico.cargarGrafo(crearGrafoBrazoRobotico(this.valoresGenesPrueba));
+      } else {
+        this.editorGrafico.cargarGrafo(new GrafoMecanismoMultifisica());
+      }
     }
 
     this._validarSintaxisCodigo();
@@ -508,7 +582,8 @@ export class EstudioView {
       descripcion,
       tipoVisualizacion,
       variables,
-      codigoEvaluacion
+      codigoEvaluacion,
+      grafo: this.editorGrafico?.grafo ? this.editorGrafico.grafo.exportarJSON() : null
     };
   }
 
@@ -613,7 +688,7 @@ export class EstudioView {
 
     try {
       // eslint-disable-next-line no-new-func
-      new Function("vars", "rng", "estructuras", "cinematica", "campos", "ondas", "topologia", codigo);
+      new Function("vars", "rng", "estructuras", "cinematica", "campos", "ondas", "topologia", "sensores", "mecanismo", codigo);
       this.dom.statusCodigo.textContent = "✓ Sintaxis JavaScript válida";
       this.dom.statusCodigo.className = "status-codigo status-valido";
       return true;
@@ -630,7 +705,7 @@ export class EstudioView {
 
     try {
       const def = this.extraerDatos();
-      const fnEval = new Function("vars", "rng", "estructuras", "cinematica", "campos", "ondas", "topologia", def.codigoEvaluacion);
+      const fnEval = new Function("vars", "rng", "estructuras", "cinematica", "campos", "ondas", "topologia", "sensores", "mecanismo", def.codigoEvaluacion);
 
       // Arma el objeto vars con los valores de prueba activos
       const vars = {};
@@ -646,6 +721,14 @@ export class EstudioView {
         genoma.push(val);
       });
 
+      // Actualizar variables en el editor CAD interactivo
+      this.editorGrafico?.actualizarValoresVariables(vars);
+
+      // Obtener telemetría de sensores calculada desde el ciclo cinemático CAD
+      const telemetriaSensores = this.editorGrafico
+        ? this.editorGrafico.obtenerTelemetriaSensores(vars)
+        : {};
+
       // Medición de rendimiento de la función
       const t0 = performance.now();
       const resultadoFitness = fnEval(
@@ -655,7 +738,9 @@ export class EstudioView {
         MotorEstructurasCinematica,
         MotorCamposUnificados,
         MotorOndasAcustica,
-        MotorFuncionalTopologico
+        MotorFuncionalTopologico,
+        telemetriaSensores,
+        this.editorGrafico?.grafo
       );
       const t1 = performance.now();
       const tiempoMs = (t1 - t0).toFixed(2);
@@ -735,6 +820,15 @@ export class EstudioView {
 
     let snippet = "";
     switch (tipo) {
+      case "sensores":
+        snippet = `\n// Telemetría en tiempo real desde sensores del lienzo CAD:
+const sensorPie = sensores?.pie || {};
+const zancada = sensorPie.zancada || 60;
+const suavidad = sensorPie.aceleracionPico || 1.0;
+const errZancada = Math.abs(zancada - 60);
+// Frente de Pareto [Inercia / Suavidad, Error de Zancada]:
+return [suavidad, errZancada];`;
+        break;
       case "escalar":
         snippet = `\n// Monobjetivo: minimizar error respecto a valor ideal\nconst costo = vars.ancho * vars.alto;\nreturn Math.abs(costo - 100);`;
         break;
@@ -770,6 +864,53 @@ export class EstudioView {
     this.dom.textareaCodigo.focus();
     this._validarSintaxisCodigo();
     this.ejecutarPruebaEnVivo();
+  }
+
+  // Asegura que una variable vinculada en el CAD figure en la tabla de variables del Estudio.
+  _asegurarVariableEnTabla(variable) {
+    if (!variable || !variable.nombre) return;
+    const filas = this.dom.tbodyVariables ? Array.from(this.dom.tbodyVariables.querySelectorAll("tr")) : [];
+    const existe = filas.some(tr => {
+      const inp = tr.querySelector(".var-nombre");
+      return inp && inp.value.trim() === variable.nombre.trim();
+    });
+
+    if (!existe) {
+      const val = variable.valor !== undefined ? variable.valor : 10;
+      this.agregarVariable({
+        nombre: variable.nombre.trim(),
+        tipo: variable.tipo || "continuo",
+        min: variable.min !== undefined ? variable.min : Math.max(0.1, Number((val * 0.7).toFixed(1))),
+        max: variable.max !== undefined ? variable.max : Number((val * 1.3).toFixed(1)),
+        valorNominal: val
+      });
+      this.sincronizarSlidersGenes();
+    }
+  }
+
+  // Sincroniza variables de todas las barras y motores del grafo CAD
+  sincronizarVariablesDesdeGrafo(grafo) {
+    if (!grafo) return;
+    grafo.barras?.forEach(b => {
+      if (b.longitudVinculada) {
+        this._asegurarVariableEnTabla({
+          nombre: b.longitudVinculada,
+          valor: b.longitud,
+          min: Math.max(0.1, Number((b.longitud * 0.7).toFixed(1))),
+          max: Number((b.longitud * 1.3).toFixed(1))
+        });
+      }
+    });
+    grafo.motores?.forEach(m => {
+      if (m.amplitudVinculada) {
+        this._asegurarVariableEnTabla({
+          nombre: m.amplitudVinculada,
+          valor: m.amplitud || 30,
+          min: 0,
+          max: 180
+        });
+      }
+    });
   }
 
   // Ejecuta la validación final y despacha el callback onGuardar hacia el ViewModel.

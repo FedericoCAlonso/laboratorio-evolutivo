@@ -991,6 +991,38 @@ canvas {
   align-items: stretch;
 }
 
+/* Modo Lienzo Gráfico / Mecanismo CAD a Pantalla Completa */
+.grid-estudio.modo-lienzo-completo {
+  grid-template-columns: 1fr;
+}
+
+.grid-estudio.modo-lienzo-completo .panel-preview-estudio {
+  display: none !important;
+}
+
+.grid-estudio.modo-lienzo-completo .panel-editor-estudio {
+  width: 100%;
+}
+
+/* Estilos de botones de herramientas CAD */
+.btn-tool-cad {
+  background: var(--md-sys-color-surface-container-high, #1e293b);
+  color: var(--md-sys-color-on-surface, #e2e8f0);
+  border: 1px solid var(--md-sys-color-outline-variant, rgba(148, 163, 184, 0.3));
+  transition: all 0.15s ease;
+}
+
+.btn-tool-cad:hover {
+  background: var(--md-sys-color-surface-container-highest, #334155);
+}
+
+.btn-tool-cad.activo {
+  background: var(--md-sys-color-primary, #3b82f6) !important;
+  color: var(--md-sys-color-on-primary, #ffffff) !important;
+  border-color: var(--md-sys-color-primary, #3b82f6) !important;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+}
+
 @media (max-width: 1080px) {
   .grid-estudio {
     grid-template-columns: 1fr;
