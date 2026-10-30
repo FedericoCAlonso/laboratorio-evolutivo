@@ -2,7 +2,7 @@
 export default {
   nombre: "Armadura de Puente (Estructuras 2D)",
   descripcion: "Optimiza la geometría y altura de los nudos superiores de una celosía articulada para soportar cargas de tránsito con mínima masa de acero y sin pandeo.",
-  tipoVisualizacion: "calibracion",
+  tipoVisualizacion: "armadura_puente",
   variables: [
     { nombre: "h1", etiqueta: "h1: Altura nudo superior izquierdo (m)", tipo: "continuo", min: 4.0, max: 22.0 },
     { nombre: "xCentroRel", etiqueta: "xCentroRel: Desvío horizontal del nudo central (m)", tipo: "continuo", min: -6.0, max: 6.0 },

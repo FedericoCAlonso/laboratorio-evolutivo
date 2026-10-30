@@ -4,7 +4,7 @@ import { crearGrafoBrazoRobotico } from "../engines/mecanismos.js";
 export default {
   nombre: "Brazo Robótico (Cinemática Inversa)",
   descripcion: "Manipulador planar de 3 eslabones articulados que optimiza la orientación de sus articulaciones para alcanzar un punto objetivo evadiendo un obstáculo circular.",
-  tipoVisualizacion: "mecanismo_barras_2d",
+  tipoVisualizacion: "brazo_robotico",
   grafo: crearGrafoBrazoRobotico().exportarJSON(),
   variables: [
     { nombre: "theta1", etiqueta: "theta1: Ángulo eslabón base θ₁ (-180° a 180°)", tipo: "continuo", min: -180, max: 180 },

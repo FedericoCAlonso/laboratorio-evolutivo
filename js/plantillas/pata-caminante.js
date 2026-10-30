@@ -14,7 +14,7 @@ grafo.agregarBarra({ id: "balancin", nombre: "Balancín r3", nodoA: "B", nodoB: 
 export default {
   nombre: "Pata caminante (cuatro barras)",
   descripcion: "Optimiza un mecanismo de cuatro barras para que el pie describa una marcha con apoyo horizontal plano y retorno elevado.",
-  tipoVisualizacion: "mecanismo_barras_2d",
+  tipoVisualizacion: "pata_caminante",
   grafo: grafo.exportarJSON(),
   variables: [
     { nombre: "dx", etiqueta: "dx: Pivote O2 en X", tipo: "continuo", min: -3.0, max: 3.0 },

@@ -2,7 +2,7 @@
 export default {
   nombre: "Sintonizador PID (Control Automático)",
   descripcion: "Optimiza las ganancias Proporcional (Kp), Integral (Ki) y Derivativa (Kd) para controlar una planta dinámica minimizando sobrepico y tiempo de respuesta.",
-  tipoVisualizacion: "calibracion",
+  tipoVisualizacion: "controlador_pid",
   variables: [
     { nombre: "Kp", etiqueta: "Kp: Ganancia proporcional del lazo", tipo: "continuo", min: 0.1, max: 35.0 },
     { nombre: "Ki", etiqueta: "Ki: Ganancia integral (eliminación de error de estado estacionario)", tipo: "continuo", min: 0.0, max: 25.0 },

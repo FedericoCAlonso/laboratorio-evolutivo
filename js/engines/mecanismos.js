@@ -43,7 +43,11 @@ export class GrafoMecanismoMultifisica {
       variableX: nodo.variableX || null,
       variableY: nodo.variableY || null,
       signoX: nodo.signoX !== undefined ? Number(nodo.signoX) : undefined,
-      signoY: nodo.signoY !== undefined ? Number(nodo.signoY) : undefined
+      signoY: nodo.signoY !== undefined ? Number(nodo.signoY) : undefined,
+      offsetX: nodo.offsetX !== undefined ? Number(nodo.offsetX) : 0,
+      offsetY: nodo.offsetY !== undefined ? Number(nodo.offsetY) : 0,
+      escalaX: nodo.escalaX !== undefined ? Number(nodo.escalaX) : 1,
+      escalaY: nodo.escalaY !== undefined ? Number(nodo.escalaY) : 1
     };
     const idx = this.nodos.findIndex(n => n.id === id);
     if (idx >= 0) this.nodos[idx] = nuevo;
@@ -363,17 +367,22 @@ export function analizarGradosLibertad(grafo) {
 // Resuelve la posición cinemática de todos los nodos del mecanismo para un ángulo theta dado
 export function resolverPasoMecanismo(grafo, theta, vars = {}) {
   const mapaNodos = {};
+  const sinMotores = !grafo.motores || grafo.motores.length === 0;
   grafo.nodos.forEach(n => {
     let x = n.x;
     let y = n.y;
-    // Permite sobreescribir coordenadas fijas mediante variables vinculadas
+    // Permite sobreescribir coordenadas mediante variables vinculadas (con soporte de offset y escala)
     if (n.variableX && vars[n.variableX] !== undefined) {
-      const sx = n.signoX !== undefined ? n.signoX : (n.id === "X_fijo" ? -1 : 1);
-      x = sx * Math.abs(Number(vars[n.variableX]));
+      const valX = Number(vars[n.variableX]);
+      const ox = n.offsetX || 0;
+      const ex = n.escalaX || 1;
+      x = n.signoX !== undefined ? ox + n.signoX * Math.abs(valX) * ex : ox + valX * ex;
     }
     if (n.variableY && vars[n.variableY] !== undefined) {
-      const sy = n.signoY !== undefined ? n.signoY : (n.id === "X_fijo" ? -1 : 1);
-      y = sy * Math.abs(Number(vars[n.variableY]));
+      const valY = Number(vars[n.variableY]);
+      const oy = n.offsetY || 0;
+      const ey = n.escalaY || 1;
+      y = n.signoY !== undefined ? oy + n.signoY * Math.abs(valY) * ey : oy + valY * ey;
     }
     mapaNodos[n.id] = {
       id: n.id,
@@ -383,7 +392,7 @@ export function resolverPasoMecanismo(grafo, theta, vars = {}) {
       xBase: x,
       yBase: y,
       anguloGuia: n.anguloGuia || 0,
-      resuelto: n.tipo === "fijo",
+      resuelto: n.tipo === "fijo" || Boolean(n.variableX || n.variableY) || sinMotores,
       tipo: n.tipo,
       anguloGiro: 0
     };
@@ -563,12 +572,16 @@ export function sincronizarPosicionesNodosGrafo(grafo, vars = {}, theta = 0) {
   });
   grafo.nodos?.forEach(n => {
     if (n.variableX && varsEfectivas[n.variableX] !== undefined) {
-      const sx = n.signoX !== undefined ? n.signoX : (n.x < 0 ? -1 : 1);
-      n.x = parseFloat((sx * Math.abs(Number(varsEfectivas[n.variableX]))).toFixed(2));
+      const valX = Number(varsEfectivas[n.variableX]);
+      const ox = n.offsetX || 0;
+      const ex = n.escalaX || 1;
+      n.x = parseFloat((n.signoX !== undefined ? ox + n.signoX * Math.abs(valX) * ex : ox + valX * ex).toFixed(2));
     }
     if (n.variableY && varsEfectivas[n.variableY] !== undefined) {
-      const sy = n.signoY !== undefined ? n.signoY : (n.y < 0 ? -1 : 1);
-      n.y = parseFloat((sy * Math.abs(Number(varsEfectivas[n.variableY]))).toFixed(2));
+      const valY = Number(varsEfectivas[n.variableY]);
+      const oy = n.offsetY || 0;
+      const ey = n.escalaY || 1;
+      n.y = parseFloat((n.signoY !== undefined ? oy + n.signoY * Math.abs(valY) * ey : oy + valY * ey).toFixed(2));
     }
   });
   grafo.motores?.forEach(m => {
@@ -585,6 +598,16 @@ export function sincronizarPosicionesNodosGrafo(grafo, vars = {}, theta = 0) {
       if (nr && nr.resuelto) {
         n.x = parseFloat(nr.x.toFixed(2));
         n.y = parseFloat(nr.y.toFixed(2));
+      }
+    });
+    // Actualiza longitudes geométricas de barras cuyos nodos cambiaron por coordenadas parametrizadas
+    grafo.barras?.forEach(b => {
+      if (!b.variableAsociada && !b.longitudVinculada) {
+        const nA = grafo.nodos.find(nx => nx.id === b.nodoA);
+        const nB = grafo.nodos.find(nx => nx.id === b.nodoB);
+        if (nA && nB) {
+          b.longitud = parseFloat(Math.hypot(nA.x - nB.x, nA.y - nB.y).toFixed(2));
+        }
       }
     });
     return paso.esValido;
@@ -882,4 +905,431 @@ export function crearGrafoBrazoRobotico(vars = {}) {
   });
 
   return grafo;
+}
+
+// Genera el grafo estructural canónico de la Armadura de Puente (7 nudos y 11 barras)
+export function crearGrafoArmaduraPuente(vars = {}) {
+  const grafo = new GrafoMecanismoMultifisica();
+  const h1 = vars.h1 !== undefined ? Number(vars.h1) : 13.0;
+  const xCentroRel = vars.xCentroRel !== undefined ? Number(vars.xCentroRel) : 0.0;
+  const hCentro = vars.hCentro !== undefined ? Number(vars.hCentro) : 16.0;
+  const h2 = vars.h2 !== undefined ? Number(vars.h2) : 13.0;
+
+  // 4 nudos inferiores de calzada (fijos) y 3 nudos superiores (parametrizados por variables)
+  grafo.agregarNodo({ id: "N0", nombre: "N0: Apoyo Izquierdo (0,0)", x: 0.0, y: 0.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "N1", nombre: "N1: Calzada 1 (20m)", x: 20.0, y: 0.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "N2", nombre: "N2: Calzada 2 (40m)", x: 40.0, y: 0.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "N3", nombre: "N3: Apoyo Derecho (60m)", x: 60.0, y: 0.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "N4", nombre: "N4: Cordón Sup Izq (h1)", x: 20.0, y: h1, tipo: "libre", variableY: "h1", signoY: 1 });
+  grafo.agregarNodo({ id: "N5", nombre: "N5: Corona Central (hCentro)", x: 30.0 + xCentroRel, y: hCentro, tipo: "libre", variableX: "xCentroRel", offsetX: 30.0, variableY: "hCentro", signoY: 1 });
+  grafo.agregarNodo({ id: "N6", nombre: "N6: Cordón Sup Der (h2)", x: 40.0, y: h2, tipo: "libre", variableY: "h2", signoY: 1 });
+
+  const pares = [
+    ["N0", "N1", "Cordón Inf 1", "#ef4444"],
+    ["N1", "N2", "Cordón Inf 2", "#ef4444"],
+    ["N2", "N3", "Cordón Inf 3", "#ef4444"],
+    ["N4", "N5", "Cordón Sup Izq", "#2563eb"],
+    ["N5", "N6", "Cordón Sup Der", "#2563eb"],
+    ["N0", "N4", "Diagonal Ext Izq", "#2563eb"],
+    ["N1", "N4", "Montante Izq", "#10b981"],
+    ["N1", "N5", "Diagonal Central Izq", "#3b82f6"],
+    ["N2", "N5", "Diagonal Central Der", "#3b82f6"],
+    ["N2", "N6", "Montante Der", "#10b981"],
+    ["N3", "N6", "Diagonal Ext Der", "#2563eb"]
+  ];
+
+  pares.forEach(([idA, idB, nombre, color], idx) => {
+    const nA = grafo.nodos.find(n => n.id === idA);
+    const nB = grafo.nodos.find(n => n.id === idB);
+    const dist = parseFloat(Math.hypot(nA.x - nB.x, nA.y - nB.y).toFixed(2));
+    grafo.agregarBarra({ id: `B_${idx + 1}`, nombre, nodoA: idA, nodoB: idB, longitud: dist, color, grosor: 3.2 });
+  });
+
+  grafo.agregarCuerpoRigido({ id: "vano_central", nombre: "Celosía Central", nodos: ["N1", "N2", "N5"], color: "rgba(59, 130, 246, 0.12)" });
+  grafo.agregarSensor({ id: "sensor_puente", nombre: "corona", nodoId: "N5", magnitudes: ["posicion", "trayectoria"], color: "#f59e0b" });
+  return grafo;
+}
+
+// Genera el grafo interactivo de Aterrizaje de Cohete (4 fases de empuje vectorial + plataforma ASDS)
+export function crearGrafoCoheteLanding(vars = {}) {
+  const grafo = new GrafoMecanismoMultifisica();
+  const F1 = vars.F1 !== undefined ? Number(vars.F1) : 10000;
+  const F2 = vars.F2 !== undefined ? Number(vars.F2) : 10000;
+  const F3 = vars.F3 !== undefined ? Number(vars.F3) : 10000;
+  const F4 = vars.F4 !== undefined ? Number(vars.F4) : 10000;
+  const A1 = vars.A1 !== undefined ? Number(vars.A1) : 0;
+  const A2 = vars.A2 !== undefined ? Number(vars.A2) : 0;
+  const A3 = vars.A3 !== undefined ? Number(vars.A3) : 0;
+  const A4 = vars.A4 !== undefined ? Number(vars.A4) : 0;
+
+  grafo.agregarNodo({ id: "asds_centro", nombre: "Barcaza ASDS (0,0)", x: 0.0, y: 0.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "asds_izq", nombre: "Babor Plataforma", x: -16.0, y: 0.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "asds_der", nombre: "Estribor Plataforma", x: 16.0, y: 0.0, tipo: "fijo" });
+
+  grafo.agregarNodo({ id: "fase4", nombre: "Fase 4: Touchdown (A4, F4)", x: 2.0 + A4, y: Math.max(4, F4 * 0.0018), tipo: "libre", variableX: "A4", offsetX: 2.0, variableY: "F4", signoY: 1, escalaY: 0.0018, temperaturaFuente: 75 });
+  grafo.agregarNodo({ id: "fase3", nombre: "Fase 3: Frenado (A3, F3)", x: 6.0 + A3, y: Math.max(12, F3 * 0.0032), tipo: "libre", variableX: "A3", offsetX: 6.0, variableY: "F3", signoY: 1, escalaY: 0.0032, temperaturaFuente: 82 });
+  grafo.agregarNodo({ id: "fase2", nombre: "Fase 2: Descenso (A2, F2)", x: 10.0 + A2, y: Math.max(22, F2 * 0.0046), tipo: "libre", variableX: "A2", offsetX: 10.0, variableY: "F2", signoY: 1, escalaY: 0.0046, temperaturaFuente: 88 });
+  grafo.agregarNodo({ id: "fase1", nombre: "Fase 1: Entrada (A1, F1)", x: 15.0 + A1, y: Math.max(32, F1 * 0.006), tipo: "libre", variableX: "A1", offsetX: 15.0, variableY: "F1", signoY: 1, escalaY: 0.006, temperaturaFuente: 95 });
+
+  grafo.agregarBarra({ id: "cubierta_asds", nombre: "Cubierta Barcaza Marina", nodoA: "asds_izq", nodoB: "asds_der", longitud: 32.0, color: "#64748b", grosor: 4.0 });
+  grafo.agregarBarra({ id: "tramo_1_2", nombre: "Trayectoria Fase 1→2", nodoA: "fase1", nodoB: "fase2", longitud: 20.0, color: "#f97316", grosor: 3.0 });
+  grafo.agregarBarra({ id: "tramo_2_3", nombre: "Trayectoria Fase 2→3", nodoA: "fase2", nodoB: "fase3", longitud: 18.0, color: "#f59e0b", grosor: 3.0 });
+  grafo.agregarBarra({ id: "tramo_3_4", nombre: "Trayectoria Fase 3→4", nodoA: "fase3", nodoB: "fase4", longitud: 16.0, color: "#eab308", grosor: 3.0 });
+  grafo.agregarBarra({ id: "tramo_touchdown", nombre: "Aproximación Final ASDS", nodoA: "fase4", nodoB: "asds_centro", longitud: 18.0, color: "#10b981", grosor: 3.2 });
+
+  grafo.agregarSensor({ id: "sensor_cohete", nombre: "tobera", nodoId: "fase4", magnitudes: ["posicion", "velocidad", "aceleracion", "temperatura"], color: "#f59e0b" });
+  return grafo;
+}
+
+// Genera el grafo interactivo de la Trampa Electromagnética de Lorentz (4 bobinas + 2 placas deflectoras + haz)
+export function crearGrafoConfinamientoEM(vars = {}) {
+  const grafo = new GrafoMecanismoMultifisica();
+  const i1 = vars.i1 !== undefined ? Number(vars.i1) : 4.0;
+  const i2 = vars.i2 !== undefined ? Number(vars.i2) : -4.0;
+  const i3 = vars.i3 !== undefined ? Number(vars.i3) : -4.0;
+  const i4 = vars.i4 !== undefined ? Number(vars.i4) : 4.0;
+  const vSup = vars.vSup !== undefined ? Number(vars.vSup) : 80.0;
+  const vInf = vars.vInf !== undefined ? Number(vars.vInf) : -80.0;
+
+  grafo.agregarNodo({ id: "inyector", nombre: "Inyector Haz q+ (-40,0)", x: -40.0, y: 0.0, tipo: "fijo", carga: 1.0 });
+  grafo.agregarNodo({ id: "bobina1", nombre: "Bobina 1 Sup-Izq (i1)", x: -18.0, y: 16.0 + i1 * 0.5, tipo: "libre", variableY: "i1", offsetY: 16.0, escalaY: 0.5, imanDipolo: i1 || 4.0 });
+  grafo.agregarNodo({ id: "bobina2", nombre: "Bobina 2 Sup-Der (i2)", x: 18.0, y: 16.0 + i2 * 0.5, tipo: "libre", variableY: "i2", offsetY: 16.0, escalaY: 0.5, imanDipolo: i2 || -4.0 });
+  grafo.agregarNodo({ id: "bobina3", nombre: "Bobina 3 Inf-Izq (i3)", x: -18.0, y: -16.0 + i3 * 0.5, tipo: "libre", variableY: "i3", offsetY: -16.0, escalaY: 0.5, imanDipolo: i3 || -4.0 });
+  grafo.agregarNodo({ id: "bobina4", nombre: "Bobina 4 Inf-Der (i4)", x: 18.0, y: -16.0 + i4 * 0.5, tipo: "libre", variableY: "i4", offsetY: -16.0, escalaY: 0.5, imanDipolo: i4 || 4.0 });
+  grafo.agregarNodo({ id: "placa_sup", nombre: "Placa Deflectora Sup (vSup)", x: 0.0, y: 24.0 + vSup * 0.02, tipo: "libre", variableY: "vSup", offsetY: 24.0, escalaY: 0.02, carga: vSup });
+  grafo.agregarNodo({ id: "placa_inf", nombre: "Placa Deflectora Inf (vInf)", x: 0.0, y: -24.0 + vInf * 0.02, tipo: "libre", variableY: "vInf", offsetY: -24.0, escalaY: 0.02, carga: vInf });
+  grafo.agregarNodo({ id: "foco_lorentz", nombre: "Punto Focal Lorentz", x: 0.0, y: 3.0, tipo: "libre" });
+  grafo.agregarNodo({ id: "detector", nombre: "Detector Salida (38,6)", x: 38.0, y: 6.0, tipo: "fijo" });
+
+  grafo.agregarBarra({ id: "haz_entrada", nombre: "Haz Entrada F=q(E+v×B)", nodoA: "inyector", nodoB: "foco_lorentz", longitud: 40.1, color: "#10b981", grosor: 3.0 });
+  grafo.agregarBarra({ id: "haz_salida", nombre: "Haz Colimado a Detector", nodoA: "foco_lorentz", nodoB: "detector", longitud: 38.1, color: "#34d399", grosor: 3.0 });
+  grafo.agregarBarra({ id: "yugo_sup", nombre: "Yugo Magnético Superior", nodoA: "bobina1", nodoB: "bobina2", longitud: 36.0, color: "#a855f7", grosor: 2.2 });
+  grafo.agregarBarra({ id: "yugo_inf", nombre: "Yugo Magnético Inferior", nodoA: "bobina3", nodoB: "bobina4", longitud: 36.0, color: "#a855f7", grosor: 2.2 });
+  grafo.agregarBarra({ id: "columna_izq", nombre: "Columna Magnética Izq", nodoA: "bobina1", nodoB: "bobina3", longitud: 32.0, color: "#6366f1", grosor: 2.0 });
+  grafo.agregarBarra({ id: "columna_der", nombre: "Columna Magnética Der", nodoA: "bobina2", nodoB: "bobina4", longitud: 32.0, color: "#6366f1", grosor: 2.0 });
+
+  grafo.agregarSensor({ id: "sensor_lorentz", nombre: "haz", nodoId: "foco_lorentz", magnitudes: ["posicion", "campo_b", "campo_e", "trayectoria"], color: "#10b981" });
+  return grafo;
+}
+
+// Genera el grafo interactivo de Campo de Potencial y Deflexión 2D (2 electrodos móviles + barrera central)
+export function crearGrafoCampoPotencial(vars = {}) {
+  const grafo = new GrafoMecanismoMultifisica();
+  const x1 = vars.x1 !== undefined ? Number(vars.x1) : -12.0;
+  const y1 = vars.y1 !== undefined ? Number(vars.y1) : 14.0;
+  const x2 = vars.x2 !== undefined ? Number(vars.x2) : 14.0;
+  const y2 = vars.y2 !== undefined ? Number(vars.y2) : -14.0;
+
+  grafo.agregarNodo({ id: "emisor", nombre: "Emisor (-45,0)", x: -45.0, y: 0.0, tipo: "fijo", carga: 0.5 });
+  grafo.agregarNodo({ id: "barrera", nombre: "Barrera Central (0,0)", x: 0.0, y: 0.0, tipo: "fijo", carga: 1.8 });
+  grafo.agregarNodo({ id: "colector", nombre: "Colector (45,0)", x: 45.0, y: 0.0, tipo: "fijo", carga: -1.2 });
+  grafo.agregarNodo({ id: "electrodo1", nombre: "Electrodo 1 (x1, y1)", x: x1, y: y1, tipo: "libre", variableX: "x1", variableY: "y1", carga: 2.0 });
+  grafo.agregarNodo({ id: "electrodo2", nombre: "Electrodo 2 (x2, y2)", x: x2, y: y2, tipo: "libre", variableX: "x2", variableY: "y2", carga: -2.0 });
+
+  grafo.agregarBarra({ id: "tray_1", nombre: "Deflexión Entrada", nodoA: "emisor", nodoB: "electrodo1", longitud: 35.0, color: "#38bdf8" });
+  grafo.agregarBarra({ id: "tray_2", nombre: "Acoplamiento Dipolar", nodoA: "electrodo1", nodoB: "electrodo2", longitud: 38.0, color: "#f59e0b" });
+  grafo.agregarBarra({ id: "tray_3", nombre: "Enfoque a Colector", nodoA: "electrodo2", nodoB: "colector", longitud: 34.0, color: "#10b981" });
+
+  grafo.agregarSensor({ id: "sensor_potencial", nombre: "particula", nodoId: "electrodo1", magnitudes: ["posicion", "campo_e", "trayectoria"], color: "#38bdf8" });
+  return grafo;
+}
+
+// Genera el grafo interactivo de Transferencia Orbital de Hohmann
+export function crearGrafoOrbitaTransferencia(vars = {}) {
+  const grafo = new GrafoMecanismoMultifisica();
+  const dv1T = vars.dv1T !== undefined ? Number(vars.dv1T) : 5.5;
+  const dv1R = vars.dv1R !== undefined ? Number(vars.dv1R) : 0.0;
+  const tEspera = vars.tEspera !== undefined ? Number(vars.tEspera) : 7.0;
+  const dv2T = vars.dv2T !== undefined ? Number(vars.dv2T) : 4.2;
+
+  grafo.agregarNodo({ id: "planeta", nombre: "Planeta Central (0,0)", x: 0.0, y: 0.0, tipo: "fijo", masa: 100.0 });
+  grafo.agregarNodo({ id: "periastro", nombre: "Periastro Impulso Δv₁", x: 25.0 + dv1T * 2.0, y: dv1R * 3.0, tipo: "libre", variableX: "dv1T", offsetX: 25.0, escalaX: 2.0, variableY: "dv1R", escalaY: 3.0 });
+  grafo.agregarNodo({ id: "arco_transferencia", nombre: "Arco Hohmann (tEspera)", x: 0.0, y: 30.0 + tEspera * 3.5, tipo: "libre", variableY: "tEspera", offsetY: 30.0, signoY: 1, escalaY: 3.5 });
+  grafo.agregarNodo({ id: "apoastro", nombre: "Apoastro Inserción Δv₂", x: -55.0 - dv2T * 2.5, y: 0.0, tipo: "libre", variableX: "dv2T", offsetX: -55.0, signoX: -1, escalaX: 2.5 });
+
+  grafo.agregarBarra({ id: "radio_leo", nombre: "Radio Inicial LEO", nodoA: "planeta", nodoB: "periastro", longitud: 35.0, color: "#38bdf8" });
+  grafo.agregarBarra({ id: "semieje_1", nombre: "Tramo Ascenso Elíptico", nodoA: "periastro", nodoB: "arco_transferencia", longitud: 65.0, color: "#f59e0b" });
+  grafo.agregarBarra({ id: "semieje_2", nombre: "Tramo Inserción GEO", nodoA: "arco_transferencia", nodoB: "apoastro", longitud: 85.0, color: "#10b981" });
+  grafo.agregarBarra({ id: "radio_geo", nombre: "Radio Objetivo GEO", nodoA: "planeta", nodoB: "apoastro", longitud: 75.0, color: "#6366f1" });
+
+  grafo.agregarSensor({ id: "sensor_orbita", nombre: "satelite", nodoId: "apoastro", magnitudes: ["posicion", "velocidad", "trayectoria"], color: "#10b981" });
+  return grafo;
+}
+
+// Genera el grafo interactivo de Disipación Térmica en Placa PCB 2D (4 chips móviles)
+export function crearGrafoDistribucionTermica(vars = {}) {
+  const grafo = new GrafoMecanismoMultifisica();
+  const xCPU = vars.xCPU !== undefined ? Number(vars.xCPU) : -18.0;
+  const yCPU = vars.yCPU !== undefined ? Number(vars.yCPU) : 12.0;
+  const xGPU = vars.xGPU !== undefined ? Number(vars.xGPU) : 18.0;
+  const yGPU = vars.yGPU !== undefined ? Number(vars.yGPU) : 12.0;
+  const xVRM = vars.xVRM !== undefined ? Number(vars.xVRM) : -18.0;
+  const yVRM = vars.yVRM !== undefined ? Number(vars.yVRM) : -12.0;
+  const xMEM = vars.xMEM !== undefined ? Number(vars.xMEM) : 18.0;
+  const yMEM = vars.yMEM !== undefined ? Number(vars.yMEM) : -12.0;
+
+  // Esquinas del PCB (100x80 mm)
+  grafo.agregarNodo({ id: "pcb_1", nombre: "PCB Sup-Izq", x: -50.0, y: 40.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "pcb_2", nombre: "PCB Sup-Der", x: 50.0, y: 40.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "pcb_3", nombre: "PCB Inf-Der", x: 50.0, y: -40.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "pcb_4", nombre: "PCB Inf-Izq", x: -50.0, y: -40.0, tipo: "fijo" });
+
+  // 4 Chips generadores de calor arrastrables en el CAD
+  grafo.agregarNodo({ id: "chip_cpu", nombre: "CPU 25W (xCPU,yCPU)", x: xCPU, y: yCPU, tipo: "libre", variableX: "xCPU", variableY: "yCPU", temperaturaFuente: 95.0 });
+  grafo.agregarNodo({ id: "chip_gpu", nombre: "GPU 18W (xGPU,yGPU)", x: xGPU, y: yGPU, tipo: "libre", variableX: "xGPU", variableY: "yGPU", temperaturaFuente: 85.0 });
+  grafo.agregarNodo({ id: "chip_vrm", nombre: "VRM 12W (xVRM,yVRM)", x: xVRM, y: yVRM, tipo: "libre", variableX: "xVRM", variableY: "yVRM", temperaturaFuente: 72.0 });
+  grafo.agregarNodo({ id: "chip_mem", nombre: "MEM 10W (xMEM,yMEM)", x: xMEM, y: yMEM, tipo: "libre", variableX: "xMEM", variableY: "yMEM", temperaturaFuente: 65.0 });
+
+  grafo.agregarBarra({ id: "borde_sup", nombre: "Disipador Norte", nodoA: "pcb_1", nodoB: "pcb_2", longitud: 100.0, color: "#475569" });
+  grafo.agregarBarra({ id: "borde_der", nombre: "Disipador Este", nodoA: "pcb_2", nodoB: "pcb_3", longitud: 80.0, color: "#475569" });
+  grafo.agregarBarra({ id: "borde_inf", nombre: "Disipador Sur", nodoA: "pcb_3", nodoB: "pcb_4", longitud: 100.0, color: "#475569" });
+  grafo.agregarBarra({ id: "borde_izq", nombre: "Disipador Oeste", nodoA: "pcb_4", nodoB: "pcb_1", longitud: 80.0, color: "#475569" });
+  grafo.agregarBarra({ id: "heatpipe_1", nombre: "Conducto Térmico CPU-GPU", nodoA: "chip_cpu", nodoB: "chip_gpu", longitud: 36.0, color: "#ef4444" });
+  grafo.agregarBarra({ id: "heatpipe_2", nombre: "Conducto Térmico VRM-MEM", nodoA: "chip_vrm", nodoB: "chip_mem", longitud: 36.0, color: "#f97316" });
+
+  grafo.agregarCuerpoRigido({ id: "placa_pcb", nombre: "Sustrato PCB FR4", nodos: ["pcb_1", "pcb_2", "pcb_3", "pcb_4"], color: "rgba(16, 185, 129, 0.08)" });
+  grafo.agregarSensor({ id: "sensor_termico", nombre: "hotspot", nodoId: "chip_cpu", magnitudes: ["posicion", "temperatura"], color: "#ef4444" });
+  return grafo;
+}
+
+// Genera el grafo interactivo de Arreglo Acústico y Beamforming (6 transductores Phased Array)
+export function crearGrafoAcusticaBeamforming(vars = {}) {
+  const grafo = new GrafoMecanismoMultifisica();
+  grafo.agregarNodo({ id: "foco_acustico", nombre: "Foco Haz Ultrasónico (25°)", x: 18.0, y: 42.0, tipo: "fijo" });
+
+  const xs = [-37.5, -22.5, -7.5, 7.5, 22.5, 37.5];
+  xs.forEach((xPos, i) => {
+    const fase = vars[`fase${i}`] !== undefined ? Number(vars[`fase${i}`]) : 0.0;
+    const amp = vars[`amp${i}`] !== undefined ? Number(vars[`amp${i}`]) : 0.6;
+    const idNodo = `T${i}`;
+    grafo.agregarNodo({
+      id: idNodo,
+      nombre: `T${i} (fase${i}, amp${i})`,
+      x: xPos + fase * 1.5,
+      y: amp * 12.0,
+      tipo: "libre",
+      variableX: `fase${i}`,
+      offsetX: xPos,
+      escalaX: 1.5,
+      variableY: `amp${i}`,
+      signoY: 1,
+      escalaY: 12.0
+    });
+    grafo.agregarBarra({
+      id: `rayo_${i}`,
+      nombre: `Frente Onda T${i}`,
+      nodoA: idNodo,
+      nodoB: "foco_acustico",
+      longitud: 45.0,
+      color: "#00e5ff",
+      grosor: 2.0
+    });
+  });
+
+  grafo.agregarSensor({ id: "sensor_acustico", nombre: "hidrofono", nodoId: "foco_acustico", magnitudes: ["posicion", "trayectoria"], color: "#00e676" });
+  return grafo;
+}
+
+// Genera el grafo interactivo de Superficie Fonoabsorbente (Cuñas Acústicas Anicóicas)
+export function crearGrafoSuperficieFonoabsorbente(vars = {}) {
+  const grafo = new GrafoMecanismoMultifisica();
+  const hCuna = vars.alturaCuna !== undefined ? Number(vars.alturaCuna) : 70.0;
+  const hBase = vars.alturaBase !== undefined ? Number(vars.alturaBase) : 30.0;
+  const wPeriodo = vars.periodoCuna !== undefined ? Number(vars.periodoCuna) : 50.0;
+  const camara = vars.camaraAire !== undefined ? Number(vars.camaraAire) : 15.0;
+
+  grafo.agregarNodo({ id: "pared_rigida", nombre: "Pared Rígida (0, -camara)", x: 0.0, y: -camara, tipo: "libre", variableY: "camaraAire", signoY: -1 });
+  grafo.agregarNodo({ id: "base_izq", nombre: "Base Porosa Izq", x: -wPeriodo, y: 0.0, tipo: "libre", variableX: "periodoCuna", signoX: -1 });
+  grafo.agregarNodo({ id: "base_der", nombre: "Base Porosa Der", x: wPeriodo, y: 0.0, tipo: "libre", variableX: "periodoCuna", signoX: 1 });
+  grafo.agregarNodo({ id: "valle_central", nombre: "Valle Base (alturaBase)", x: 0.0, y: hBase, tipo: "libre", variableY: "alturaBase", signoY: 1 });
+  grafo.agregarNodo({ id: "punta_1", nombre: "Vértice Cuña 1 (alturaCuna)", x: -wPeriodo * 0.5, y: hBase + hCuna * 0.5, tipo: "libre", variableY: "alturaCuna", offsetY: hBase, signoY: 1, escalaY: 0.5 });
+  grafo.agregarNodo({ id: "punta_2", nombre: "Vértice Cuña 2 (alturaCuna)", x: wPeriodo * 0.5, y: hBase + hCuna * 0.5, tipo: "libre", variableY: "alturaCuna", offsetY: hBase, signoY: 1, escalaY: 0.5 });
+
+  grafo.agregarBarra({ id: "b_camara", nombre: "Plenum Aire", nodoA: "pared_rigida", nodoB: "valle_central", longitud: camara + hBase, color: "#64748b" });
+  grafo.agregarBarra({ id: "b_base", nombre: " Ancho Período", nodoA: "base_izq", nodoB: "base_der", longitud: wPeriodo * 2, color: "#475569" });
+  grafo.agregarBarra({ id: "b_flanco1", nombre: "Flanco Cuña 1", nodoA: "base_izq", nodoB: "punta_1", longitud: 60.0, color: "#8b5cf6", grosor: 3.0 });
+  grafo.agregarBarra({ id: "b_flanco2", nombre: "Flanco Interior 1", nodoA: "punta_1", nodoB: "valle_central", longitud: 55.0, color: "#8b5cf6", grosor: 3.0 });
+  grafo.agregarBarra({ id: "b_flanco3", nombre: "Flanco Interior 2", nodoA: "valle_central", nodoB: "punta_2", longitud: 55.0, color: "#a855f7", grosor: 3.0 });
+  grafo.agregarBarra({ id: "b_flanco4", nombre: "Flanco Cuña 2", nodoA: "punta_2", nodoB: "base_der", longitud: 60.0, color: "#a855f7", grosor: 3.0 });
+
+  grafo.agregarCuerpoRigido({ id: "cuerpo_cuna_1", nombre: "Cuña Fonoabsorbente", nodos: ["base_izq", "punta_1", "valle_central", "punta_2", "base_der"], color: "rgba(139, 92, 246, 0.14)" });
+  grafo.agregarSensor({ id: "sensor_cuna", nombre: "microfono", nodoId: "punta_1", magnitudes: ["posicion"], color: "#f59e0b" });
+  return grafo;
+}
+
+// Genera el grafo interactivo de Línea de Transmisión RF y Stub Paralelo
+export function crearGrafoLineaRF(vars = {}) {
+  const grafo = new GrafoMecanismoMultifisica();
+  const lLinea = vars.longitudLinea !== undefined ? Number(vars.longitudLinea) : 0.05;
+  const z0Sec = vars.z0Seccion !== undefined ? Number(vars.z0Seccion) : 70.0;
+  const lStub = vars.longitudStub !== undefined ? Number(vars.longitudStub) : 0.025;
+  const z0St = vars.z0Stub !== undefined ? Number(vars.z0Stub) : 50.0;
+
+  grafo.agregarNodo({ id: "gen_rf", nombre: "Generador RF 50Ω", x: -45.0, y: 0.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "nodo_stub", nombre: "Unión Stub (z0Stub)", x: -15.0, y: (z0St - 50.0) * 0.3, tipo: "libre", variableY: "z0Stub", offsetY: -15.0, escalaY: 0.3 });
+  grafo.agregarNodo({ id: "punta_stub", nombre: "Extremo Stub (longitudStub)", x: -15.0, y: -lStub * 600.0, tipo: "libre", variableY: "longitudStub", signoY: -1, escalaY: 600.0 });
+  grafo.agregarNodo({ id: "carga_rf", nombre: "Antena Carga (longitudLinea, z0Seccion)", x: -15.0 + lLinea * 500.0, y: (z0Sec - 50.0) * 0.3, tipo: "libre", variableX: "longitudLinea", offsetX: -15.0, signoX: 1, escalaX: 500.0, variableY: "z0Seccion", offsetY: -15.0, escalaY: 0.3 });
+
+  grafo.agregarBarra({ id: "linea_alimentacion", nombre: "Línea 50Ω", nodoA: "gen_rf", nodoB: "nodo_stub", longitud: 30.0, color: "#38bdf8", grosor: 3.5 });
+  grafo.agregarBarra({ id: "stub_paralelo", nombre: "Stub Reactivo Paralelo", nodoA: "nodo_stub", nodoB: "punta_stub", longitud: lStub * 600.0, color: "#f59e0b", grosor: 3.5 });
+  grafo.agregarBarra({ id: "seccion_adaptadora", nombre: "Transformador Impedancia Z0", nodoA: "nodo_stub", nodoB: "carga_rf", longitud: lLinea * 500.0, color: "#10b981", grosor: 4.5 });
+
+  grafo.agregarSensor({ id: "sensor_rf", nombre: "puerto_rf", nodoId: "carga_rf", magnitudes: ["posicion"], color: "#10b981" });
+  return grafo;
+}
+
+// Genera el grafo interactivo de Corte de Chapa y Anidado 2D (Nesting)
+export function crearGrafoCorteChapaNesting(vars = {}) {
+  const grafo = new GrafoMecanismoMultifisica();
+  grafo.agregarNodo({ id: "chapa_1", nombre: "Chapa (0,0)", x: -50.0, y: -35.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "chapa_2", nombre: "Chapa (500,0)", x: 50.0, y: -35.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "chapa_3", nombre: "Chapa (500,350)", x: 50.0, y: 35.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "chapa_4", nombre: "Chapa (0,350)", x: -50.0, y: 35.0, tipo: "fijo" });
+
+  grafo.agregarBarra({ id: "marco_1", nombre: "Borde Inferior Chapa", nodoA: "chapa_1", nodoB: "chapa_2", longitud: 100.0, color: "#475569" });
+  grafo.agregarBarra({ id: "marco_2", nombre: "Borde Derecho Chapa", nodoA: "chapa_2", nodoB: "chapa_3", longitud: 70.0, color: "#475569" });
+  grafo.agregarBarra({ id: "marco_3", nombre: "Borde Superior Chapa", nodoA: "chapa_3", nodoB: "chapa_4", longitud: 100.0, color: "#475569" });
+  grafo.agregarBarra({ id: "marco_4", nombre: "Borde Izquierdo Chapa", nodoA: "chapa_4", nodoB: "chapa_1", longitud: 70.0, color: "#475569" });
+
+  const baseCoords = [
+    [-30, 15], [0, 15], [30, 15],
+    [-30, -15], [0, -15], [30, -15]
+  ];
+  baseCoords.forEach(([bx, by], idx) => {
+    const i = idx + 1;
+    const prio = vars[`prioridad${i}`] !== undefined ? Number(vars[`prioridad${i}`]) : 5.0;
+    const rot = vars[`rotacion${i}`] !== undefined ? Number(vars[`rotacion${i}`]) : 0.5;
+    grafo.agregarNodo({
+      id: `pieza_${i}`,
+      nombre: `Pieza ${i} (Prio ${i}, Rot ${i})`,
+      x: bx + (prio - 5.0) * 1.5,
+      y: by + (rot - 0.5) * 12.0,
+      tipo: "libre",
+      variableX: `prioridad${i}`,
+      offsetX: bx - 7.5,
+      escalaX: 1.5,
+      variableY: `rotacion${i}`,
+      offsetY: by - 6.0,
+      escalaY: 12.0
+    });
+  });
+
+  grafo.agregarCuerpoRigido({ id: "plancha_acero", nombre: "Chapa Matriz 500x350", nodos: ["chapa_1", "chapa_2", "chapa_3", "chapa_4"], color: "rgba(56, 189, 248, 0.08)" });
+  grafo.agregarSensor({ id: "sensor_nesting", nombre: "cabezal_laser", nodoId: "pieza_1", magnitudes: ["posicion"], color: "#f59e0b" });
+  return grafo;
+}
+
+// Genera el grafo interactivo para el Sintonizador PID (Lazo de Control Realimentado)
+export function crearGrafoControladorPID(vars = {}) {
+  const grafo = new GrafoMecanismoMultifisica();
+  const Kp = vars.Kp !== undefined ? Number(vars.Kp) : 12.0;
+  const Ki = vars.Ki !== undefined ? Number(vars.Ki) : 8.0;
+  const Kd = vars.Kd !== undefined ? Number(vars.Kd) : 3.0;
+
+  grafo.agregarNodo({ id: "sumador", nombre: "Sumador Error e(t)", x: -40.0, y: 0.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "rama_p", nombre: "Rama Proporcional (Kp)", x: 0.0, y: 10.0 + Kp, tipo: "libre", variableY: "Kp", offsetY: 10.0, signoY: 1 });
+  grafo.agregarNodo({ id: "rama_i", nombre: "Rama Integral (Ki)", x: 0.0, y: Ki * 0.4, tipo: "libre", variableY: "Ki", signoY: 1, escalaY: 0.4 });
+  grafo.agregarNodo({ id: "rama_d", nombre: "Rama Derivativa (Kd)", x: 0.0, y: -10.0 - Kd * 2.0, tipo: "libre", variableY: "Kd", offsetY: -10.0, signoY: -1, escalaY: 2.0 });
+  grafo.agregarNodo({ id: "planta", nombre: "Planta 2do Orden y(t)", x: 40.0, y: 0.0, tipo: "fijo" });
+
+  ["rama_p", "rama_i", "rama_d"].forEach((idRama, idx) => {
+    const colores = ["#3b82f6", "#10b981", "#f59e0b"];
+    grafo.agregarBarra({ id: `in_${idRama}`, nombre: `Entrada ${idRama.toUpperCase()}`, nodoA: "sumador", nodoB: idRama, longitud: 42.0, color: colores[idx] });
+    grafo.agregarBarra({ id: `out_${idRama}`, nombre: `Acción ${idRama.toUpperCase()}`, nodoA: idRama, nodoB: "planta", longitud: 42.0, color: colores[idx] });
+  });
+
+  grafo.agregarSensor({ id: "sensor_pid", nombre: "salida_y", nodoId: "planta", magnitudes: ["posicion"], color: "#10b981" });
+  return grafo;
+}
+
+// Genera el grafo interactivo para Síntesis de Filtro Analógico RLC
+export function crearGrafoFiltroRLC(vars = {}) {
+  const grafo = new GrafoMecanismoMultifisica();
+  const logR = vars.logR !== undefined ? Number(vars.logR) : 2.5;
+  const logL = vars.logL !== undefined ? Number(vars.logL) : -2.0;
+  const logC = vars.logC !== undefined ? Number(vars.logC) : -6.5;
+
+  grafo.agregarNodo({ id: "vin", nombre: "Entrada Vin(f)", x: -45.0, y: 0.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "nodo_r", nombre: "Resistor R (logR)", x: -15.0, y: logR * 8.0, tipo: "libre", variableY: "logR", escalaY: 8.0 });
+  grafo.agregarNodo({ id: "nodo_l", nombre: "Inductor L (logL)", x: 15.0, y: logL * 6.0, tipo: "libre", variableY: "logL", escalaY: 6.0 });
+  grafo.agregarNodo({ id: "nodo_c", nombre: "Capacitor C (logC)", x: 45.0, y: logC * 3.0, tipo: "libre", variableY: "logC", escalaY: 3.0 });
+
+  grafo.agregarBarra({ id: "rama_r", nombre: "Impedancia R", nodoA: "vin", nodoB: "nodo_r", longitud: 32.0, color: "#ef4444", grosor: 3.2 });
+  grafo.agregarBarra({ id: "rama_l", nombre: "Reactancia ωL", nodoA: "nodo_r", nodoB: "nodo_l", longitud: 32.0, color: "#3b82f6", grosor: 3.2 });
+  grafo.agregarBarra({ id: "rama_c", nombre: "Reactancia 1/ωC", nodoA: "nodo_l", nodoB: "nodo_c", longitud: 32.0, color: "#10b981", grosor: 3.2 });
+
+  grafo.agregarSensor({ id: "sensor_rlc", nombre: "vout_bode", nodoId: "nodo_c", magnitudes: ["posicion"], color: "#38bdf8" });
+  return grafo;
+}
+
+// Genera el grafo interactivo de Estrella Fasorial para Balanceo de Fases Trifásico (R, S, T)
+export function crearGrafoBalanceoFases(vars = {}) {
+  const grafo = new GrafoMecanismoMultifisica();
+  grafo.agregarNodo({ id: "neutro", nombre: "Centro Estrella Neutro (0,0)", x: 0.0, y: 0.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "fase_R", nombre: "Fase R (0°)", x: 38.0, y: 0.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "fase_S", nombre: "Fase S (120°)", x: -19.0, y: 33.0, tipo: "fijo" });
+  grafo.agregarNodo({ id: "fase_T", nombre: "Fase T (240°)", x: -19.0, y: -33.0, tipo: "fijo" });
+
+  grafo.agregarBarra({ id: "vector_R", nombre: "Vector Fase R", nodoA: "neutro", nodoB: "fase_R", longitud: 38.0, color: "#ef4444", grosor: 3.8 });
+  grafo.agregarBarra({ id: "vector_S", nombre: "Vector Fase S", nodoA: "neutro", nodoB: "fase_S", longitud: 38.0, color: "#eab308", grosor: 3.8 });
+  grafo.agregarBarra({ id: "vector_T", nombre: "Vector Fase T", nodoA: "neutro", nodoB: "fase_T", longitud: 38.0, color: "#3b82f6", grosor: 3.8 });
+
+  for (let i = 1; i <= 8; i++) {
+    const ang = ((i - 1) * Math.PI) / 4;
+    const fVal = vars[`fase${i}`] !== undefined ? Number(vars[`fase${i}`]) : (i % 3);
+    grafo.agregarNodo({
+      id: `circuito_${i}`,
+      nombre: `C${i} (fase${i})`,
+      x: parseFloat((18.0 * Math.cos(ang)).toFixed(1)),
+      y: parseFloat((18.0 * Math.sin(ang) + fVal * 2.0).toFixed(1)),
+      tipo: "libre",
+      variableY: `fase${i}`,
+      offsetY: parseFloat((18.0 * Math.sin(ang)).toFixed(1)),
+      escalaY: 2.0
+    });
+  }
+
+  grafo.agregarSensor({ id: "sensor_neutro", nombre: "corriente_neutro", nodoId: "neutro", magnitudes: ["posicion"], color: "#10b981" });
+  return grafo;
+}
+
+// Factoría unificada que construye el grafo CAD 2D correspondiente a cualquier identificador de modelo
+export function crearGrafoPorModelo(id, vars = {}) {
+  const clave = String(id || "").replace(/_/g, "-");
+  switch (clave) {
+    case "brazo-robotico":
+      return crearGrafoBrazoRobotico(vars);
+    case "pata-caminante":
+      return crearGrafoPataCaminante(vars);
+    case "armadura-puente":
+      return crearGrafoArmaduraPuente(vars);
+    case "cohete-landing":
+      return crearGrafoCoheteLanding(vars);
+    case "confinamiento-em":
+      return crearGrafoConfinamientoEM(vars);
+    case "campo-potencial":
+      return crearGrafoCampoPotencial(vars);
+    case "orbita-transferencia":
+      return crearGrafoOrbitaTransferencia(vars);
+    case "distribucion-termica":
+      return crearGrafoDistribucionTermica(vars);
+    case "acustica-beamforming":
+      return crearGrafoAcusticaBeamforming(vars);
+    case "superficie-fonoabsorbente":
+      return crearGrafoSuperficieFonoabsorbente(vars);
+    case "linea-transmision-rf":
+      return crearGrafoLineaRF(vars);
+    case "corte-chapa-nesting":
+      return crearGrafoCorteChapaNesting(vars);
+    case "controlador-pid":
+      return crearGrafoControladorPID(vars);
+    case "filtro-rlc":
+      return crearGrafoFiltroRLC(vars);
+    case "balanceo-fases-trifasico":
+      return crearGrafoBalanceoFases(vars);
+    case "engranajes":
+      return crearGrafoTrenEngranajes();
+    default:
+      return new GrafoMecanismoMultifisica();
+  }
 }

@@ -2,7 +2,7 @@
 export default {
   nombre: "Aterrizaje de Cohete (Falcon Landing)",
   descripcion: "Control de empuje vectorial de un cohete en descenso retro-propulsado para tocar una plataforma marina con velocidad nula minimizando combustible.",
-  tipoVisualizacion: "calibracion",
+  tipoVisualizacion: "cohete_landing",
   variables: [
     { nombre: "F1", etiqueta: "Empuje fase 1 (N)", tipo: "continuo", min: 0, max: 20000 },
     { nombre: "F2", etiqueta: "Empuje fase 2 (N)", tipo: "continuo", min: 0, max: 20000 },

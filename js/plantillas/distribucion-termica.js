@@ -2,7 +2,7 @@
 export default {
   nombre: "Disipación Térmica en Placa 2D",
   descripcion: "Optimiza la disposición de 4 chips generadores de calor en una placa PCB con disipador perimetral para minimizar el punto caliente máximo (Tmax).",
-  tipoVisualizacion: "calibracion",
+  tipoVisualizacion: "distribucion_termica",
   variables: [
     { nombre: "xCPU", etiqueta: "xCPU: CPU X (mm)", tipo: "continuo", min: -38, max: 38 },
     { nombre: "yCPU", etiqueta: "yCPU: CPU Y (mm)", tipo: "continuo", min: -28, max: 28 },

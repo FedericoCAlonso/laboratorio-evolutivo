@@ -3,18 +3,19 @@
 // ARQUITECTURA MVVM - VISTA DEDICADA DE EDICIÓN LOW-CODE CON PREVIEW EN VIVO
 // =========================================================================
 
-import { VisualizadorDinamico } from "./visualizers.js?v=2.7";
-import { obtenerPlantillaSimulacion } from "../builder.js?v=2.7";
-import { PLANTILLAS_FIELES } from "../plantillas/index.js?v=2.7";
-import { HINTS_VISUALIZACION, mostrarAlerta } from "../ui.js?v=2.7";
-import { MotorCamposUnificados } from "../engines/campos.js?v=2.7";
-import { MotorEstructurasCinematica } from "../engines/estructuras.js?v=2.7";
-import { MotorOndasAcustica } from "../engines/ondas.js?v=2.7";
-import { MotorFuncionalTopologico } from "../engines/topologia.js?v=2.7";
-import { EditorGraficoView } from "./editor-grafico-view.js?v=2.7";
+import { VisualizadorDinamico } from "./visualizers.js?v=2.8";
+import { obtenerPlantillaSimulacion } from "../builder.js?v=2.8";
+import { PLANTILLAS_FIELES } from "../plantillas/index.js?v=2.8";
+import { HINTS_VISUALIZACION, mostrarAlerta } from "../ui.js?v=2.8";
+import { MotorCamposUnificados } from "../engines/campos.js?v=2.8";
+import { MotorEstructurasCinematica } from "../engines/estructuras.js?v=2.8";
+import { MotorOndasAcustica } from "../engines/ondas.js?v=2.8";
+import { MotorFuncionalTopologico } from "../engines/topologia.js?v=2.8";
+import { EditorGraficoView } from "./editor-grafico-view.js?v=2.8";
 import {
-  GrafoMecanismoMultifisica
-} from "../engines/mecanismos.js?v=2.7";
+  GrafoMecanismoMultifisica,
+  crearGrafoPorModelo
+} from "../engines/mecanismos.js?v=2.8";
 
 // Vista de pantalla completa para el diseño, edición y prueba interactiva de simulaciones evolutivas.
 export class EstudioView {
@@ -37,6 +38,17 @@ export class EstudioView {
       },
       onVariableModificada: ({ nombre, valor }) => {
         this._actualizarValorVariableDesdeCAD(nombre, valor);
+      },
+      onPresetSeleccionado: (clave) => {
+        const idNorm = String(clave).replace(/_/g, "-");
+        const plantilla = obtenerPlantillaSimulacion(idNorm);
+        if (plantilla) {
+          this.modeloIdActual = idNorm;
+          this.cargarDesdeDefinicion({ ...plantilla, id: idNorm }, false);
+          this.editorGrafico.autoEncuadrar();
+          this.editorGrafico.redibujar();
+          this.ejecutarPruebaEnVivo();
+        }
       }
     });
 
@@ -205,10 +217,12 @@ export class EstudioView {
     this.dom.selectPlantilla?.addEventListener("change", (e) => {
       const clave = e.target.value;
       if (!clave) return;
-      const plantilla = obtenerPlantillaSimulacion(clave);
+      const idNorm = String(clave).replace(/_/g, "-");
+      const plantilla = obtenerPlantillaSimulacion(idNorm) || obtenerPlantillaSimulacion(clave);
       if (!plantilla) return;
 
-      this.cargarDesdeDefinicion(plantilla, false);
+      this.modeloIdActual = idNorm;
+      this.cargarDesdeDefinicion({ ...plantilla, id: idNorm }, false);
       this.ejecutarPruebaEnVivo();
     });
 
@@ -336,6 +350,7 @@ export class EstudioView {
   abrir(datosIniciales = null, esEdicion = false) {
     try {
       this._mapearDom();
+      this._poblarSelectorPlantillas();
       this._registrarEventos();
       this.modo = esEdicion ? "edicion" : "creacion";
       this.modeloIdActual = datosIniciales?.id || null;
@@ -416,10 +431,20 @@ export class EstudioView {
 
   // Carga una definición completa en los formularios del Estudio.
   cargarDesdeDefinicion(def, esEdicion = false) {
+    const idEfectivo = def.id ? String(def.id).replace(/_/g, "-") : this.modeloIdActual;
+    if (idEfectivo) {
+      this.modeloIdActual = idEfectivo;
+    }
+    if (this.dom.selectPlantilla && idEfectivo && PLANTILLAS_FIELES[idEfectivo]) {
+      this.dom.selectPlantilla.value = idEfectivo;
+    }
+
     if (this.dom.inputNombre) this.dom.inputNombre.value = def.nombre || "";
     if (this.dom.inputDesc) this.dom.inputDesc.value = def.descripcion || "";
 
-    const tipoVis = def.tipoVisualizacion || "calibracion";
+    const tipoVis = def.tipoVisualizacion
+      || (idEfectivo && obtenerPlantillaSimulacion(idEfectivo)?.tipoVisualizacion)
+      || "calibracion";
     if (this.dom.selectTipoVisualizacion) {
       this.dom.selectTipoVisualizacion.value = tipoVis;
     }
@@ -448,9 +473,13 @@ export class EstudioView {
 
     // Carga el grafo de mecanismo multicuerpo en el editor CAD desde la definición o su plantilla asociada
     if (this.editorGrafico) {
-      const grafoDefinido = def.grafo || (def.id ? obtenerPlantillaSimulacion(def.id)?.grafo : null);
+      const grafoDefinido = def.grafo
+        || (idEfectivo ? obtenerPlantillaSimulacion(idEfectivo)?.grafo : null)
+        || (idEfectivo ? crearGrafoPorModelo(idEfectivo, this.valoresGenesPrueba) : null);
       this.editorGrafico.cargarGrafo(grafoDefinido || new GrafoMecanismoMultifisica());
       this.editorGrafico.actualizarValoresVariables(this.valoresGenesPrueba);
+      this.editorGrafico.autoEncuadrar();
+      this.editorGrafico.redibujar();
     }
 
     this._validarSintaxisCodigo();

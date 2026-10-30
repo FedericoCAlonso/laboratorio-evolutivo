@@ -1028,16 +1028,16 @@ canvas {
   align-items: stretch;
 }
 
-/* Modo Lienzo Gráfico / Mecanismo CAD a Pantalla Completa */
+/* Modo Lienzo Gráfico / Mecanismo CAD a Pantalla Completa con Vista Previa Inferior */
 .grid-estudio.modo-lienzo-completo {
   grid-template-columns: 1fr;
 }
 
-.grid-estudio.modo-lienzo-completo .panel-preview-estudio {
-  display: none !important;
+.grid-estudio.modo-lienzo-completo .panel-editor-estudio {
+  width: 100%;
 }
 
-.grid-estudio.modo-lienzo-completo .panel-editor-estudio {
+.grid-estudio.modo-lienzo-completo .panel-preview-estudio {
   width: 100%;
 }
 

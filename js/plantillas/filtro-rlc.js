@@ -2,7 +2,7 @@
 export default {
   nombre: "Síntesis de Filtro Analógico RLC",
   descripcion: "Optimiza los valores de componentes pasivos R, L y C para sintetizar un filtro pasabanda sintonizado con ancho de banda y atenuación deseados.",
-  tipoVisualizacion: "calibracion",
+  tipoVisualizacion: "filtro_rlc",
   variables: [
     { nombre: "logR", etiqueta: "log10(R) con R en Ohm (10 a 10k)", tipo: "continuo", min: 1.0, max: 4.0 },
     { nombre: "logL", etiqueta: "log10(L) con L en Henrios (0.1 mH a 1 H)", tipo: "continuo", min: -4.0, max: 0.0 },

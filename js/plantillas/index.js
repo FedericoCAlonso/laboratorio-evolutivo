@@ -15,12 +15,31 @@ import nesting from "./corte-chapa-nesting.js";
 import brazo from "./brazo-robotico.js";
 import caminante from "./pata-caminante.js";
 
+import { crearGrafoPorModelo } from "../engines/mecanismos.js";
+
 export const PLANTILLAS_FIELES = {
-  "cohete-landing": cohete, "controlador-pid": pid, "orbita-transferencia": orbita,
-  "filtro-rlc": filtro, "armadura-puente": armadura, "distribucion-termica": termico,
-  "campo-potencial": potencial, "balanceo-fases-trifasico": fases,
-  "acustica-beamforming": acustica, "confinamiento-em": em,
-  "superficie-fonoabsorbente": fono, "linea-transmision-rf": rf,
-  "corte-chapa-nesting": nesting, "brazo-robotico": brazo,
+  "brazo-robotico": brazo,
+  "cohete-landing": cohete,
+  "controlador-pid": pid,
+  "campo-potencial": potencial,
+  "orbita-transferencia": orbita,
+  "filtro-rlc": filtro,
+  "armadura-puente": armadura,
+  "distribucion-termica": termico,
+  "acustica-beamforming": acustica,
+  "confinamiento-em": em,
+  "superficie-fonoabsorbente": fono,
+  "linea-transmision-rf": rf,
+  "corte-chapa-nesting": nesting,
+  "balanceo-fases-trifasico": fases,
   "pata-caminante": caminante
 };
+
+// Asegura que todas las plantillas cuenten con su identificador y su grafo interactivo CAD 2D
+Object.entries(PLANTILLAS_FIELES).forEach(([id, plantilla]) => {
+  if (!plantilla) return;
+  plantilla.id = id;
+  if (!plantilla.grafo) {
+    plantilla.grafo = crearGrafoPorModelo(id).exportarJSON();
+  }
+});

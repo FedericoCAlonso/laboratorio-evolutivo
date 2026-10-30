@@ -3,11 +3,11 @@
 // ARQUITECTURA MVVM - ENLACE BIDIRECCIONAL ENTRE EL VIEWMODEL Y EL DOM
 // =========================================================================
 
-import { GraficoView } from "./grafico-view.js?v=2.7";
-import { ModalesView } from "./modales-view.js?v=2.7";
-import { EstudioView } from "./estudio-view.js?v=2.7";
-import { obtenerVisualizador, detenerTodosLosVisualizadores } from "./visualizers.js?v=2.7";
-import { obtenerPlantillaSimulacion } from "../builder.js?v=2.7";
+import { GraficoView } from "./grafico-view.js?v=2.8";
+import { ModalesView } from "./modales-view.js?v=2.8";
+import { EstudioView } from "./estudio-view.js?v=2.8";
+import { obtenerVisualizador, detenerTodosLosVisualizadores } from "./visualizers.js?v=2.8";
+import { obtenerPlantillaSimulacion } from "../builder.js?v=2.8";
 import {
   construirFormularioModelo,
   obtenerDatosEntradaModelo,

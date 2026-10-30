@@ -14,7 +14,11 @@ import {
   simularCicloMecanismo,
   crearGrafoPataCaminante,
   crearGrafoTrenEngranajes,
-  crearGrafoBrazoRobotico
+  crearGrafoBrazoRobotico,
+  crearGrafoArmaduraPuente,
+  crearGrafoCoheteLanding,
+  crearGrafoConfinamientoEM,
+  crearGrafoPorModelo
 } from "./mecanismos.js";
 
 // Reexporta las clases y constantes de los motores fundamentales
@@ -31,7 +35,11 @@ export {
   simularCicloMecanismo,
   crearGrafoPataCaminante,
   crearGrafoTrenEngranajes,
-  crearGrafoBrazoRobotico
+  crearGrafoBrazoRobotico,
+  crearGrafoArmaduraPuente,
+  crearGrafoCoheteLanding,
+  crearGrafoConfinamientoEM,
+  crearGrafoPorModelo
 };
 
 // Diccionario de instancias de motores fundamentales

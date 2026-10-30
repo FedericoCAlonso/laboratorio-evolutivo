@@ -2,7 +2,7 @@
 export default {
   nombre: "Transferencia Orbital (Hohmann / Kepler)",
   descripcion: "Optimiza los impulsos vectoriales Δv de un satélite en un campo gravitatorio central para transferirse a una órbita circular superior con mínimo combustible.",
-  tipoVisualizacion: "calibracion",
+  tipoVisualizacion: "orbita_transferencia",
   variables: [
     { nombre: "dv1T", etiqueta: "Δv1 tangencial: impulso prograde inicial", tipo: "continuo", min: 1.0, max: 12.0 },
     { nombre: "dv1R", etiqueta: "Δv1 radial: corrección radial inicial", tipo: "continuo", min: -3.0, max: 3.0 },

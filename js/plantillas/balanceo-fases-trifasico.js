@@ -2,7 +2,7 @@
 export default {
   nombre: "Balanceo de Fases Trifásico (R, S, T)",
   descripcion: "Distribuye cargas monofásicas entre las fases R, S y T para minimizar el desbalance de corriente y respetar fases obligatorias.",
-  tipoVisualizacion: "distribucion_recursos",
+  tipoVisualizacion: "balanceo_fases_trifasico",
   variables: [
     { nombre: "fase1", etiqueta: "fase1: Fase del circuito 1 (0=R, 1=S, 2=T)", tipo: "categorico", min: 0, max: 2 },
     { nombre: "fase2", etiqueta: "fase2: Fase del circuito 2 (0=R, 1=S, 2=T)", tipo: "categorico", min: 0, max: 2 },

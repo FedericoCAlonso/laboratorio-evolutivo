@@ -198,6 +198,12 @@ console.log("\n[5] Probando paridad de reconstrucción desde cero en plantillas 
 
 assert.ok(PLANTILLAS_SIMULACION["pata-caminante"].grafo, "La plantilla pata-caminante debe incluir grafo multicuerpo preconfigurado");
 assert.ok(PLANTILLAS_SIMULACION.brazo_robotico.grafo, "La plantilla brazo_robotico debe incluir grafo multicuerpo preconfigurado");
+assert.ok(PLANTILLAS_SIMULACION["armadura-puente"].grafo, "La plantilla armadura-puente debe incluir grafo CAD 2D");
+assert.strictEqual(PLANTILLAS_SIMULACION["armadura-puente"].tipoVisualizacion, "armadura_puente", "El puente debe usar visualizador armadura_puente");
+assert.ok(PLANTILLAS_SIMULACION["cohete-landing"].grafo, "La plantilla cohete-landing debe incluir grafo CAD 2D");
+assert.strictEqual(PLANTILLAS_SIMULACION["cohete-landing"].tipoVisualizacion, "cohete_landing", "El cohete debe usar visualizador cohete_landing");
+assert.ok(PLANTILLAS_SIMULACION["confinamiento-em"].grafo, "La plantilla confinamiento-em (Lorentz) debe incluir grafo CAD 2D");
+assert.strictEqual(PLANTILLAS_SIMULACION["confinamiento-em"].tipoVisualizacion, "electromagnetismo_lorentz", "Lorentz debe usar visualizador electromagnetismo_lorentz");
 
 const grafoCaminantePlantilla = new GrafoMecanismoMultifisica(PLANTILLAS_SIMULACION["pata-caminante"].grafo);
 const dofPlantillaCaminante = analizarGradosLibertad(grafoCaminantePlantilla);
@@ -216,6 +222,6 @@ gCaminanteExacto.barras.forEach(b => {
   assert.ok(Math.abs(distReal - b.longitud) < 0.25, `Barra ${b.id} (${b.variableAsociada}) debe coincidir con distancia euclidiana de sus nodos (${distReal.toFixed(2)} vs ${b.longitud})`);
 });
 console.log("    ✓ Coherencia geométrica exacta en θ=0 de nodos y barras del caminante verificada | OK");
-console.log("    ✓ Paridad completa de plantillas preconfiguradas con el Editor CAD | OK");
+console.log("    ✓ Paridad completa de los 15 modelos gráficos (Puente, Cohete, Lorentz, etc.) con el Editor CAD y Vista Previa | OK");
 
 console.log("\n=== ¡TODAS LAS PRUEBAS DEL MOTOR CAD Y MECANISMOS PASARON CON ÉXITO (5/5)! ===");

@@ -11,8 +11,9 @@ import {
   simularCicloMecanismo,
   crearGrafoBrazoRobotico,
   crearGrafoPataCaminante,
-  crearGrafoTrenEngranajes
-} from "../engines/mecanismos.js?v=2.7";
+  crearGrafoTrenEngranajes,
+  crearGrafoPorModelo
+} from "../engines/mecanismos.js?v=2.8";
 
 // Vista de diseño y construcción gráfica de mecanismos articulados y acoplamientos multifísica
 export class EditorGraficoView {
@@ -21,6 +22,7 @@ export class EditorGraficoView {
     this.onGrafoModificado = opciones.onGrafoModificado || null;
     this.onVariableVinculada = opciones.onVariableVinculada || null;
     this.onVariableModificada = opciones.onVariableModificada || null;
+    this.onPresetSeleccionado = opciones.onPresetSeleccionado || null;
 
     // Estado del grafo activo
     this.grafo = new GrafoMecanismoMultifisica();
@@ -175,15 +177,17 @@ export class EditorGraficoView {
         }
       });
 
-      // 2. Coordenadas de nodos vinculados a cotas dimensionales
+      // 2. Coordenadas de nodos vinculados a cotas dimensionales (con soporte de offset y escala)
       this.grafo.nodos?.forEach(n => {
         if (n.variableX === nom) {
-          const sx = n.signoX !== undefined ? n.signoX : (n.x < 0 ? -1 : 1);
-          n.x = parseFloat((sx * Math.abs(val)).toFixed(2));
+          const ox = n.offsetX || 0;
+          const ex = n.escalaX || 1;
+          n.x = parseFloat((n.signoX !== undefined ? ox + n.signoX * Math.abs(val) * ex : ox + val * ex).toFixed(2));
         }
         if (n.variableY === nom) {
-          const sy = n.signoY !== undefined ? n.signoY : (n.y < 0 ? -1 : 1);
-          n.y = parseFloat((sy * Math.abs(val)).toFixed(2));
+          const oy = n.offsetY || 0;
+          const ey = n.escalaY || 1;
+          n.y = parseFloat((n.signoY !== undefined ? oy + n.signoY * Math.abs(val) * ey : oy + val * ey).toFixed(2));
         }
       });
 
@@ -280,11 +284,24 @@ export class EditorGraficoView {
               🎯 Fitness: --
             </div>
 
-            <!-- Selector de mecanismos preconfigurados -->
+            <!-- Selector de modelos gráficos y mecanismos preconfigurados -->
             <select id="cad-select-predefinido" style="padding: 0.28rem 0.45rem; font-size: 0.75rem; border-radius: 6px; background: var(--bg-input, #0f172a); color: var(--texto-principal, #f8fafc); border: 1px solid var(--borde, #334155); cursor: pointer;">
-              <option value="">💡 Cargar Mecanismo...</option>
-              <option value="caminante">🦿 Pata Caminante (4 Barras)</option>
-              <option value="brazo">🦾 Brazo Robótico (3 GDL)</option>
+              <option value="">💡 Cargar Modelo Gráfico...</option>
+              <option value="armadura-puente">🌉 Armadura de Puente (Celosía 2D)</option>
+              <option value="cohete-landing">🚀 Aterrizaje de Cohete (Falcon Landing)</option>
+              <option value="confinamiento-em">⚡ Trampa Electromagnética (Lorentz)</option>
+              <option value="brazo-robotico">🦾 Brazo Robótico (3 GDL)</option>
+              <option value="pata-caminante">🦿 Pata Caminante (4 Barras)</option>
+              <option value="campo-potencial">🌐 Campo de Potencial y Deflexión 2D</option>
+              <option value="orbita-transferencia">🛰️ Transferencia Orbital (Hohmann)</option>
+              <option value="distribucion-termica">🔥 Disipación Térmica en Placa 2D</option>
+              <option value="acustica-beamforming">🔊 Arreglo Acústico y Beamforming</option>
+              <option value="superficie-fonoabsorbente">🔇 Superficie Fonoabsorbente (Cuñas)</option>
+              <option value="linea-transmision-rf">📶 Línea de Transmisión RF (Smith)</option>
+              <option value="corte-chapa-nesting">✂️ Corte de Chapa y Anidado 2D</option>
+              <option value="controlador-pid">📈 Sintonizador PID (Lazo Control)</option>
+              <option value="filtro-rlc">🔌 Síntesis de Filtro Analógico RLC</option>
+              <option value="balanceo-fases-trifasico">⚡ Balanceo de Fases Trifásico (R-S-T)</option>
               <option value="engranajes">⚙️ Tren Engranajes + Pistón</option>
               <option value="vacio">📄 Lienzo en Blanco (Nuevo)</option>
             </select>
@@ -437,19 +454,25 @@ export class EditorGraficoView {
       setTimeout(() => this.redibujar(), 30);
     });
 
-    // 3. Mecanismos predefinidos
+    // 3. Modelos gráficos y mecanismos predefinidos
     this.dom.selectPredefinido?.addEventListener("change", (e) => {
       const valor = e.target.value;
-      if (valor === "caminante") {
-        this.cargarGrafo(crearGrafoPataCaminante(this.valoresVariables));
-      } else if (valor === "brazo") {
-        this.cargarGrafo(crearGrafoBrazoRobotico(this.valoresVariables));
+      if (!valor) return;
+      if (valor === "vacio") {
+        this.cargarGrafo(new GrafoMecanismoMultifisica());
+        this._notificarCambioGrafo();
       } else if (valor === "engranajes") {
         this.cargarGrafo(crearGrafoTrenEngranajes());
-      } else if (valor === "vacio") {
-        this.cargarGrafo(new GrafoMecanismoMultifisica());
+        this._notificarCambioGrafo();
+      } else {
+        const clave = valor === "caminante" ? "pata-caminante" : (valor === "brazo" ? "brazo-robotico" : valor);
+        if (typeof this.onPresetSeleccionado === "function") {
+          this.onPresetSeleccionado(clave);
+        } else {
+          this.cargarGrafo(crearGrafoPorModelo(clave, this.valoresVariables));
+          this._notificarCambioGrafo();
+        }
       }
-      this._notificarCambioGrafo();
       e.target.value = "";
     });
 
@@ -782,16 +805,22 @@ export class EditorGraficoView {
         arrastrandoNodo.x = parseFloat(mundo.x.toFixed(1));
         arrastrandoNodo.y = parseFloat(mundo.y.toFixed(1));
 
-        // 1. Coordenadas de nodo si tiene variables asociadas
+        // 1. Coordenadas de nodo si tiene variables asociadas (con soporte de offset y escala)
         if (arrastrandoNodo.variableX) {
-          const valX = parseFloat(Math.abs(arrastrandoNodo.x).toFixed(1));
+          const ox = arrastrandoNodo.offsetX || 0;
+          const ex = arrastrandoNodo.escalaX || 1;
+          const rawX = (arrastrandoNodo.x - ox) / ex;
+          const valX = parseFloat((arrastrandoNodo.signoX !== undefined ? Math.abs(rawX) : rawX).toFixed(2));
           this.valoresVariables[arrastrandoNodo.variableX] = valX;
           if (typeof this.onVariableModificada === "function") {
             this.onVariableModificada({ nombre: arrastrandoNodo.variableX, valor: valX });
           }
         }
         if (arrastrandoNodo.variableY) {
-          const valY = parseFloat(Math.abs(arrastrandoNodo.y).toFixed(1));
+          const oy = arrastrandoNodo.offsetY || 0;
+          const ey = arrastrandoNodo.escalaY || 1;
+          const rawY = (arrastrandoNodo.y - oy) / ey;
+          const valY = parseFloat((arrastrandoNodo.signoY !== undefined ? Math.abs(rawY) : rawY).toFixed(2));
           this.valoresVariables[arrastrandoNodo.variableY] = valY;
           if (typeof this.onVariableModificada === "function") {
             this.onVariableModificada({ nombre: arrastrandoNodo.variableY, valor: valY });
