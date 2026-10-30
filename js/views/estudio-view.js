@@ -25,13 +25,22 @@ export class EstudioView {
       alerta: document.getElementById("alerta-estudio"),
       selectPlantilla: document.getElementById("select-plantilla-constructor"),
 
-      // Pestañas (Tabs) Material 3
+      // Pestañas (Tabs) Material 3 y Navegación de Etapas
+      tabsEstudio: document.getElementById("tabs-estudio-contenedor") || document.querySelector(".tabs-estudio"),
       tabBtnVars: document.getElementById("tab-btn-vars"),
       tabBtnCodigo: document.getElementById("tab-btn-codigo"),
       tabBtnMeta: document.getElementById("tab-btn-meta"),
       tabPanelVars: document.getElementById("tab-panel-vars"),
       tabPanelCodigo: document.getElementById("tab-panel-codigo"),
       tabPanelMeta: document.getElementById("tab-panel-meta"),
+      panelEditor: document.querySelector(".panel-editor-estudio"),
+
+      // Botones de navegación secuencial entre etapas (Workflow por pasos)
+      btnEtapaSiguienteVars: document.getElementById("btn-etapa-siguiente-vars"),
+      btnEtapaAnteriorCodigo: document.getElementById("btn-etapa-anterior-codigo"),
+      btnEtapaSiguienteCodigo: document.getElementById("btn-etapa-siguiente-codigo"),
+      btnEtapaAnteriorMeta: document.getElementById("btn-etapa-anterior-meta"),
+      btnEtapaGuardarMeta: document.getElementById("btn-etapa-guardar-meta"),
 
       // Tab 1: Variables
       tbodyVariables: document.getElementById("tbody-variables-constructor"),
@@ -81,10 +90,44 @@ export class EstudioView {
     this.dom.btnProbar?.addEventListener("click", () => this.ejecutarPruebaEnVivo());
     this.dom.btnRandomProbe?.addEventListener("click", () => this._generarValoresAleatorios());
 
-    // 2. Cambio de pestañas Material 3
-    this.dom.tabBtnVars?.addEventListener("click", () => this.cambiarTab("vars"));
-    this.dom.tabBtnCodigo?.addEventListener("click", () => this.cambiarTab("codigo"));
-    this.dom.tabBtnMeta?.addEventListener("click", () => this.cambiarTab("meta"));
+    // 2. Cambio de pestañas Material 3 y navegación por etapas
+    const manejarClickTab = (nombreTab) => {
+      this.cambiarTab(nombreTab);
+    };
+
+    this.dom.tabBtnVars?.addEventListener("click", () => manejarClickTab("vars"));
+    this.dom.tabBtnCodigo?.addEventListener("click", () => manejarClickTab("codigo"));
+    this.dom.tabBtnMeta?.addEventListener("click", () => manejarClickTab("meta"));
+
+    // Delegación sobre el contenedor de pestañas para máxima robustez ante clics e interacciones táctiles
+    this.dom.tabsEstudio?.addEventListener("click", (e) => {
+      const btn = e.target.closest(".tab-estudio-btn");
+      if (!btn) return;
+      const tabTarget = btn.dataset.tab || (btn.id === "tab-btn-vars" ? "vars" : btn.id === "tab-btn-codigo" ? "codigo" : "meta");
+      manejarClickTab(tabTarget);
+    });
+
+    // Accesibilidad por teclado en la barra de pestañas (Flechas Izquierda / Derecha)
+    this.dom.tabsEstudio?.addEventListener("keydown", (e) => {
+      const orden = ["vars", "codigo", "meta"];
+      const idx = orden.indexOf(this.tabActiva);
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        const prox = orden[(idx + 1) % orden.length];
+        this.cambiarTab(prox);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        const prev = orden[(idx - 1 + orden.length) % orden.length];
+        this.cambiarTab(prev);
+      }
+    });
+
+    // Botones de navegación secuencial entre etapas (Flujo guiado tipo Wizard)
+    this.dom.btnEtapaSiguienteVars?.addEventListener("click", () => this.cambiarTab("codigo"));
+    this.dom.btnEtapaAnteriorCodigo?.addEventListener("click", () => this.cambiarTab("vars"));
+    this.dom.btnEtapaSiguienteCodigo?.addEventListener("click", () => this.cambiarTab("meta"));
+    this.dom.btnEtapaAnteriorMeta?.addEventListener("click", () => this.cambiarTab("codigo"));
+    this.dom.btnEtapaGuardarMeta?.addEventListener("click", () => this._ejecutarGuardado());
 
     // 3. Tab 1: Agregar variable
     this.dom.btnAgregarVariable?.addEventListener("click", () => {
@@ -150,11 +193,11 @@ export class EstudioView {
     }
   }
 
-  // Cambia la pestaña activa en el editor del Estudio de Modelado.
+  // Cambia la pestaña activa en el editor del Estudio de Modelado garantizando accesibilidad y foco.
   cambiarTab(tab) {
     this.tabActiva = tab;
 
-    // Actualiza botones de pestañas
+    // Actualiza botones de pestañas y accesibilidad WAI-ARIA
     const botones = [
       { id: "vars", el: this.dom.tabBtnVars, panel: this.dom.tabPanelVars },
       { id: "codigo", el: this.dom.tabBtnCodigo, panel: this.dom.tabPanelCodigo },
@@ -163,12 +206,28 @@ export class EstudioView {
 
     botones.forEach(({ id, el, panel }) => {
       const esActivo = id === tab;
-      if (el) el.classList.toggle("activo", esActivo);
-      if (panel) panel.style.display = esActivo ? "flex" : "none";
+      if (el) {
+        el.classList.toggle("activo", esActivo);
+        if (typeof el.setAttribute === "function") {
+          el.setAttribute("aria-selected", esActivo ? "true" : "false");
+          el.setAttribute("tabindex", esActivo ? "0" : "-1");
+        }
+      }
+      if (panel) {
+        panel.style.display = esActivo ? "flex" : "none";
+      }
     });
 
+    // Enfocar automáticamente el textarea si se pasa a la etapa de código
     if (tab === "codigo" && this.dom.textareaCodigo) {
-      this.dom.textareaCodigo.focus();
+      setTimeout(() => this.dom.textareaCodigo?.focus(), 60);
+    }
+
+    // Desplazar el panel hacia arriba para orientar visualmente al usuario al inicio de la etapa
+    if (this.dom.panelEditor) {
+      try {
+        this.dom.panelEditor.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (_) {}
     }
   }
 

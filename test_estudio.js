@@ -34,6 +34,15 @@ class MockElement {
     this.value = "";
     this.textContent = "";
     this._listeners = {};
+    this._attributes = {};
+  }
+
+  setAttribute(name, val) {
+    this._attributes[name] = String(val);
+  }
+
+  getAttribute(name) {
+    return this._attributes[name] || null;
   }
 
   set className(names) {
@@ -132,6 +141,12 @@ if (typeof document === "undefined") {
     "tab-panel-vars": new MockElement("div"),
     "tab-panel-codigo": new MockElement("div"),
     "tab-panel-meta": new MockElement("div"),
+    "tabs-estudio-contenedor": new MockElement("div"),
+    "btn-etapa-siguiente-vars": new MockElement("button"),
+    "btn-etapa-anterior-codigo": new MockElement("button"),
+    "btn-etapa-siguiente-codigo": new MockElement("button"),
+    "btn-etapa-anterior-meta": new MockElement("button"),
+    "btn-etapa-guardar-meta": new MockElement("button"),
     "tbody-variables-constructor": new MockElement("tbody"),
     "btn-agregar-variable": new MockElement("button"),
     "textarea-codigo-evaluacion": new MockElement("textarea"),
@@ -189,7 +204,18 @@ assert.strictEqual(estudio.dom.tabPanelCodigo.style.display, "flex", "El panel d
 // Cambio de pestaña a Metadatos
 estudio.cambiarTab("meta");
 assert.strictEqual(estudio.tabActiva, "meta", "La pestaña activa debe ser 'meta'");
-console.log("    ✓ Apertura y navegación fluida entre pestañas M3 verificadas | OK");
+
+// Navegación guiada entre etapas con botones Anterior / Siguiente
+estudio.dom.btnEtapaAnteriorMeta.dispatchEvent({ type: "click" });
+assert.strictEqual(estudio.tabActiva, "codigo", "El botón anterior debe retroceder a 'codigo'");
+estudio.dom.btnEtapaAnteriorCodigo.dispatchEvent({ type: "click" });
+assert.strictEqual(estudio.tabActiva, "vars", "El botón anterior debe retroceder a 'vars'");
+estudio.dom.btnEtapaSiguienteVars.dispatchEvent({ type: "click" });
+assert.strictEqual(estudio.tabActiva, "codigo", "El botón siguiente debe avanzar a 'codigo'");
+estudio.dom.btnEtapaSiguienteCodigo.dispatchEvent({ type: "click" });
+assert.strictEqual(estudio.tabActiva, "meta", "El botón siguiente debe avanzar a 'meta'");
+
+console.log("    ✓ Apertura y navegación fluida entre pestañas M3 y etapas verificadas | OK");
 
 console.log("[3] Probando carga de plantilla y validación de sintaxis...");
 estudio.dom.inputNombre.value = "Filtro RLC Optimizado";

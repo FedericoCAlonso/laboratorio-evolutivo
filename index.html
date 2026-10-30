@@ -7,7 +7,7 @@
   <meta name="description" content="Laboratorio Evolutivo: Optimizador genético con modelos intercambiables, evolución multiobjetivo Pareto, diseño Google Material 3 y modos de color">
   <title>Laboratorio Evolutivo</title>
   <!-- Estilos visuales desacoplados Google Material 3 con soporte para modos de color y temas -->
-  <link rel="stylesheet" href="./styles.css?v=2.2">
+  <link rel="stylesheet" href="./styles.css?v=2.3">
 </head>
 <body>
   <div class="app-contenedor" id="contenedor-principal">
@@ -228,25 +228,28 @@
         <!-- Columna Izquierda: Panel de Edición con Pestañas Material 3 -->
         <section class="panel-editor-estudio">
           <!-- Selector de Pestañas Material 3 (Variables, Código, Metadatos) -->
-          <div class="tabs-estudio" role="tablist">
-            <button type="button" id="tab-btn-vars" class="tab-estudio-btn activo" role="tab" aria-selected="true">
-              🧬 1. Variables (Genes)
+          <div class="tabs-estudio" role="tablist" id="tabs-estudio-contenedor">
+            <button type="button" id="tab-btn-vars" class="tab-estudio-btn activo" role="tab" aria-selected="true" data-tab="vars" tabindex="0">
+              <span class="paso-num">1</span>
+              <span>🧬 Variables (Genes)</span>
             </button>
-            <button type="button" id="tab-btn-codigo" class="tab-estudio-btn" role="tab" aria-selected="false">
-              💻 2. Código de Evaluación
+            <button type="button" id="tab-btn-codigo" class="tab-estudio-btn" role="tab" aria-selected="false" data-tab="codigo" tabindex="-1">
+              <span class="paso-num">2</span>
+              <span>💻 Código de Evaluación</span>
             </button>
-            <button type="button" id="tab-btn-meta" class="tab-estudio-btn" role="tab" aria-selected="false">
-              ⚙️ 3. Metadatos & Visualizador
+            <button type="button" id="tab-btn-meta" class="tab-estudio-btn" role="tab" aria-selected="false" data-tab="meta" tabindex="-1">
+              <span class="paso-num">3</span>
+              <span>⚙️ Metadatos & Visualizador</span>
             </button>
           </div>
 
           <!-- Pestaña 1: Definición de Variables de Decisión (Genes) -->
           <div id="tab-panel-vars" class="tab-panel-estudio">
             <div class="card-guia-estudio">
-              <span>Defina los parámetros que el algoritmo genético optimizará. Cada variable tiene un rango admisible [mín, máx] y tipo de dato.</span>
+              <span><strong>Etapa 1 de 3:</strong> Defina los parámetros que el algoritmo genético optimizará. Cada variable tiene un rango admisible [mín, máx] y tipo de dato.</span>
             </div>
 
-            <div class="tabla-responsive">
+            <div class="tabla-responsive-estudio">
               <table class="tabla-datos" id="tabla-variables-constructor">
                 <thead>
                   <tr>
@@ -263,13 +266,23 @@
               </table>
             </div>
 
-            <button type="button" id="btn-agregar-variable" class="btn-m3-tonal" style="align-self: flex-start; margin-top: 0.25rem;">
-              ➕ Agregar Variable
-            </button>
+            <!-- Barra de navegación y acción de la Etapa 1 -->
+            <div class="nav-etapas-estudio">
+              <button type="button" id="btn-agregar-variable" class="btn-m3-tonal">
+                ➕ Agregar Variable
+              </button>
+              <button type="button" id="btn-etapa-siguiente-vars" class="btn-m3-filled" title="Avanzar a la función de evaluación en JavaScript">
+                Siguiente: 💻 Código de Evaluación ➔
+              </button>
+            </div>
           </div>
 
           <!-- Pestaña 2: Función de Evaluación JavaScript con snippets -->
           <div id="tab-panel-codigo" class="tab-panel-estudio" style="display: none;">
+            <div class="card-guia-estudio">
+              <span><strong>Etapa 2 de 3:</strong> Escriba la función de aptitud (fitness) en JavaScript que califica a cada individuo según las variables definidas.</span>
+            </div>
+
             <!-- Barra de inserción de snippets de código -->
             <div id="estudio-barra-snippets" class="barra-snippets">
               <span style="font-size: 0.78rem; font-weight: 600; color: var(--md-sys-color-on-surface-variant);">Snippets:</span>
@@ -291,10 +304,24 @@
               Dispone del objeto <code>vars</code> (ej: <code>vars.ancho</code>) y <code>rng</code> (pseudoaleatorio determinista).
               Retorne un <strong>número escalar</strong> a minimizar o un arreglo <strong>[f1, f2]</strong> para el Frente de Pareto NSGA-II.
             </span>
+
+            <!-- Barra de navegación de la Etapa 2 -->
+            <div class="nav-etapas-estudio">
+              <button type="button" id="btn-etapa-anterior-codigo" class="btn-m3-tonal" title="Regresar a la configuración de variables">
+                ⬅ Anterior: 🧬 Variables
+              </button>
+              <button type="button" id="btn-etapa-siguiente-codigo" class="btn-m3-filled" title="Avanzar a la configuración de metadatos y visualizador">
+                Siguiente: ⚙️ Metadatos & Visualizador ➔
+              </button>
+            </div>
           </div>
 
           <!-- Pestaña 3: Configuración de Metadatos y Motor de Renderizado -->
           <div id="tab-panel-meta" class="tab-panel-estudio" style="display: none;">
+            <div class="card-guia-estudio">
+              <span><strong>Etapa 3 de 3:</strong> Configure el nombre, descripción técnica y el motor gráfico interactivo que visualizará los resultados en tiempo real.</span>
+            </div>
+
             <div class="grupo-campo">
               <label for="input-nombre-modelo">Nombre de la Simulación</label>
               <input type="text" id="input-nombre-modelo" placeholder="Ej: Optimización de Empaque 3D">
@@ -324,6 +351,16 @@
               <span id="hint-tipo-visualizacion" class="descripcion-campo" style="color: var(--md-sys-color-primary); margin-top: 0.35rem;">
                 Muestra el estado de cada variable en indicadores visuales de rango y porcentaje.
               </span>
+            </div>
+
+            <!-- Barra de navegación y guardado de la Etapa 3 -->
+            <div class="nav-etapas-estudio">
+              <button type="button" id="btn-etapa-anterior-meta" class="btn-m3-tonal" title="Regresar al editor de código">
+                ⬅ Anterior: 💻 Código de Evaluación
+              </button>
+              <button type="button" id="btn-etapa-guardar-meta" class="btn-m3-filled" title="Compilar y guardar la simulación en el Laboratorio">
+                💾 Guardar y Aplicar Simulación
+              </button>
             </div>
           </div>
         </section>
@@ -520,6 +557,6 @@
   <div id="modal-constructor-modelo" style="display: none;" aria-hidden="true"></div>
 
   <!-- Carga del punto de entrada modular con ES Modules nativos -->
-  <script type="module" src="./js/main.js?v=2.2"></script>
+  <script type="module" src="./js/main.js?v=2.3"></script>
 </body>
 </html>
