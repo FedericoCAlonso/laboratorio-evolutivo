@@ -3,13 +3,13 @@
 // ARQUITECTURA MVVM - VISTA DEDICADA DE EDICIÓN LOW-CODE CON PREVIEW EN VIVO
 // =========================================================================
 
-import { VisualizadorDinamico } from "./visualizers.js?v=2.4";
-import { obtenerPlantillaSimulacion } from "../builder.js?v=2.4";
-import { HINTS_VISUALIZACION, mostrarAlerta } from "../ui.js?v=2.4";
-import { MotorCamposUnificados } from "../engines/campos.js?v=2.4";
-import { MotorEstructurasCinematica } from "../engines/estructuras.js?v=2.4";
-import { MotorOndasAcustica } from "../engines/ondas.js?v=2.4";
-import { MotorFuncionalTopologico } from "../engines/topologia.js?v=2.4";
+import { VisualizadorDinamico } from "./visualizers.js?v=2.5";
+import { obtenerPlantillaSimulacion } from "../builder.js?v=2.5";
+import { HINTS_VISUALIZACION, mostrarAlerta } from "../ui.js?v=2.5";
+import { MotorCamposUnificados } from "../engines/campos.js?v=2.5";
+import { MotorEstructurasCinematica } from "../engines/estructuras.js?v=2.5";
+import { MotorOndasAcustica } from "../engines/ondas.js?v=2.5";
+import { MotorFuncionalTopologico } from "../engines/topologia.js?v=2.5";
 import { EditorGraficoView } from "./editor-grafico-view.js?v=2.5";
 import {
   GrafoMecanismoMultifisica,
