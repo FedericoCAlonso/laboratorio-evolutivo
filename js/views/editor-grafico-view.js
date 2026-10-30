@@ -18,6 +18,7 @@ export class EditorGraficoView {
     this.contenedor = opciones.contenedor || null;
     this.onGrafoModificado = opciones.onGrafoModificado || null;
     this.onVariableVinculada = opciones.onVariableVinculada || null;
+    this.onVariableModificada = opciones.onVariableModificada || null;
 
     // Estado del grafo activo
     this.grafo = new GrafoMecanismoMultifisica();
@@ -25,6 +26,7 @@ export class EditorGraficoView {
     this.elementoSeleccionado = null; // { tipo: 'nodo'|'barra'|'motor'|'sensor', id: string }
     this.nodoInicioConexion = null;
     this.nodosCuerpoTemporal = [];
+    this._nodoArrastradoActivo = null;
 
     // Estado de simulación en vivo del mecanismo
     this.animando = true;
@@ -83,8 +85,42 @@ export class EditorGraficoView {
   // Actualiza los valores de las variables de optimización y recalcula la cinemática
   actualizarValoresVariables(vars = {}) {
     this.valoresVariables = { ...this.valoresVariables, ...vars };
+
+    // Sincroniza geometría del grafo CAD según los valores provistos
+    for (const nom in vars) {
+      const val = Number(vars[nom]);
+      if (isNaN(val)) continue;
+
+      // 1. Longitud de barras vinculadas
+      this.grafo.barras?.forEach(b => {
+        if (b.variableAsociada === nom || b.longitudVinculada === nom) {
+          b.longitud = val;
+        }
+      });
+
+      // 2. Coordenadas de nodos vinculados a cotas dimensionales
+      this.grafo.nodos?.forEach(n => {
+        if (n.variableX === nom) {
+          const sx = n.signoX !== undefined ? n.signoX : (n.id === "X_fijo" ? -1 : 1);
+          n.x = parseFloat((sx * Math.abs(val)).toFixed(1));
+        }
+        if (n.variableY === nom) {
+          const sy = n.signoY !== undefined ? n.signoY : (n.id === "X_fijo" ? -1 : 1);
+          n.y = parseFloat((sy * Math.abs(val)).toFixed(1));
+        }
+      });
+
+      // 3. Radio de motores vinculados
+      this.grafo.motores?.forEach(m => {
+        if (m.variableAsociada === nom || m.amplitudVinculada === nom) {
+          m.longitudManivela = val;
+        }
+      });
+    }
+
     this._ejecutarSimulacionEnLienzo();
     this._actualizarInspector();
+    this.redibujar();
   }
 
   // Obtiene el diccionario de telemetría de sensores para los valores de variables provistos
@@ -431,17 +467,62 @@ export class EditorGraficoView {
         arrastrandoNodo.x = parseFloat(mundo.x.toFixed(1));
         arrastrandoNodo.y = parseFloat(mundo.y.toFixed(1));
 
-        // Actualiza longitudes de barras conectadas
+        // 1. Coordenadas de nodo si tiene variables asociadas (ej. 'a' y 'l' en frame Jansen)
+        if (arrastrandoNodo.variableX) {
+          const valX = parseFloat(Math.abs(arrastrandoNodo.x).toFixed(1));
+          this.valoresVariables[arrastrandoNodo.variableX] = valX;
+          if (typeof this.onVariableModificada === "function") {
+            this.onVariableModificada({ nombre: arrastrandoNodo.variableX, valor: valX });
+          }
+        }
+        if (arrastrandoNodo.variableY) {
+          const valY = parseFloat(Math.abs(arrastrandoNodo.y).toFixed(1));
+          this.valoresVariables[arrastrandoNodo.variableY] = valY;
+          if (typeof this.onVariableModificada === "function") {
+            this.onVariableModificada({ nombre: arrastrandoNodo.variableY, valor: valY });
+          }
+        }
+
+        // 2. Actualiza longitudes de todas las barras conectadas a este nodo y sus variables asociadas
         this.grafo.barras.forEach(b => {
           if (b.nodoA === arrastrandoNodo.id || b.nodoB === arrastrandoNodo.id) {
             const nA = this.grafo.nodos.find(n => n.id === b.nodoA);
             const nB = this.grafo.nodos.find(n => n.id === b.nodoB);
-            if (nA && nB && !b.variableAsociada) {
-              b.longitud = parseFloat(Math.hypot(nA.x - nB.x, nA.y - nB.y).toFixed(1));
+            if (nA && nB) {
+              const nuevaLong = parseFloat(Math.hypot(nA.x - nB.x, nA.y - nB.y).toFixed(1));
+              b.longitud = nuevaLong;
+
+              const varNom = b.variableAsociada || b.longitudVinculada;
+              if (varNom) {
+                this.valoresVariables[varNom] = nuevaLong;
+                if (typeof this.onVariableModificada === "function") {
+                  this.onVariableModificada({ nombre: varNom, valor: nuevaLong });
+                }
+              }
             }
           }
         });
 
+        // 3. Motores conectados al nodo (ej. manivela motriz K)
+        this.grafo.motores?.forEach(m => {
+          if (m.tipo === "rotativo" && (m.nodoExtremo === arrastrandoNodo.id || m.nodoPivote === arrastrandoNodo.id)) {
+            const piv = this.grafo.nodos.find(n => n.id === m.nodoPivote);
+            const ext = this.grafo.nodos.find(n => n.id === m.nodoExtremo);
+            if (piv && ext) {
+              const nuevoRadio = parseFloat(Math.hypot(ext.x - piv.x, ext.y - piv.y).toFixed(1));
+              m.longitudManivela = nuevoRadio;
+              const varNom = m.variableAsociada || m.amplitudVinculada;
+              if (varNom) {
+                this.valoresVariables[varNom] = nuevoRadio;
+                if (typeof this.onVariableModificada === "function") {
+                  this.onVariableModificada({ nombre: varNom, valor: nuevoRadio });
+                }
+              }
+            }
+          }
+        });
+
+        this._nodoArrastradoActivo = arrastrandoNodo;
         this._actualizarInspector();
         this._ejecutarSimulacionEnLienzo();
         this.redibujar();
@@ -451,6 +532,7 @@ export class EditorGraficoView {
     const finInteraccion = () => {
       if (arrastrandoNodo) {
         arrastrandoNodo = null;
+        this._nodoArrastradoActivo = null;
         this._notificarCambioGrafo();
       }
       this.viewport.arrastrandoPan = false;
@@ -574,6 +656,15 @@ export class EditorGraficoView {
       const nodo = this.grafo.nodos.find(n => n.id === id);
       if (!nodo) return;
 
+      const inpXExistente = this.dom.inspectorContenido.querySelector("#insp-nodo-x");
+      const inpYExistente = this.dom.inspectorContenido.querySelector("#insp-nodo-y");
+      if (inpXExistente && inpYExistente && this._inspectorIdActual === id) {
+        if (document.activeElement !== inpXExistente) inpXExistente.value = nodo.x;
+        if (document.activeElement !== inpYExistente) inpYExistente.value = nodo.y;
+        return;
+      }
+      this._inspectorIdActual = id;
+
       this.dom.inspectorContenido.innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 0.6rem;">
           <div>
@@ -613,10 +704,24 @@ export class EditorGraficoView {
       });
       this.dom.inspectorContenido.querySelector("#insp-nodo-x")?.addEventListener("input", (e) => {
         nodo.x = parseFloat(e.target.value) || 0;
+        if (nodo.variableX) {
+          const valX = parseFloat(Math.abs(nodo.x).toFixed(1));
+          this.valoresVariables[nodo.variableX] = valX;
+          if (typeof this.onVariableModificada === "function") {
+            this.onVariableModificada({ nombre: nodo.variableX, valor: valX });
+          }
+        }
         this._notificarCambioGrafo();
       });
       this.dom.inspectorContenido.querySelector("#insp-nodo-y")?.addEventListener("input", (e) => {
         nodo.y = parseFloat(e.target.value) || 0;
+        if (nodo.variableY) {
+          const valY = parseFloat(Math.abs(nodo.y).toFixed(1));
+          this.valoresVariables[nodo.variableY] = valY;
+          if (typeof this.onVariableModificada === "function") {
+            this.onVariableModificada({ nombre: nodo.variableY, valor: valY });
+          }
+        }
         this._notificarCambioGrafo();
       });
       this.dom.inspectorContenido.querySelector("#insp-nodo-tipo")?.addEventListener("change", (e) => {
@@ -640,6 +745,13 @@ export class EditorGraficoView {
     else if (tipo === "barra") {
       const barra = this.grafo.barras.find(b => b.id === id);
       if (!barra) return;
+
+      const inpLongExistente = this.dom.inspectorContenido.querySelector("#insp-barra-long");
+      if (inpLongExistente && this._inspectorIdActual === id) {
+        if (document.activeElement !== inpLongExistente) inpLongExistente.value = barra.longitud;
+        return;
+      }
+      this._inspectorIdActual = id;
 
       this.dom.inspectorContenido.innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 0.6rem;">
@@ -673,6 +785,13 @@ export class EditorGraficoView {
       });
       this.dom.inspectorContenido.querySelector("#insp-barra-long")?.addEventListener("input", (e) => {
         barra.longitud = parseFloat(e.target.value) || 0;
+        const varNom = barra.variableAsociada || barra.longitudVinculada;
+        if (varNom) {
+          this.valoresVariables[varNom] = barra.longitud;
+          if (typeof this.onVariableModificada === "function") {
+            this.onVariableModificada({ nombre: varNom, valor: barra.longitud });
+          }
+        }
         this._notificarCambioGrafo();
       });
       this.dom.inspectorContenido.querySelector("#insp-barra-var")?.addEventListener("input", (e) => {
@@ -857,11 +976,12 @@ export class EditorGraficoView {
       const pA = this.mundoAPantalla(nA.x, nA.y);
       const pB = this.mundoAPantalla(nB.x, nB.y);
       const esSel = this.elementoSeleccionado?.tipo === "barra" && this.elementoSeleccionado?.id === b.id;
+      const estaConectadaAArrastre = this._nodoArrastradoActivo && (b.nodoA === this._nodoArrastradoActivo.id || b.nodoB === this._nodoArrastradoActivo.id);
 
       // Barra con aspecto de ingeniería / viga
       ctx.beginPath();
-      ctx.strokeStyle = esSel ? "#38bdf8" : (b.color || "#3b82f6");
-      ctx.lineWidth = esSel ? 4.5 : (b.grosor || 2.5);
+      ctx.strokeStyle = estaConectadaAArrastre ? "#06b6d4" : (esSel ? "#38bdf8" : (b.color || "#3b82f6"));
+      ctx.lineWidth = estaConectadaAArrastre ? 4.0 : (esSel ? 4.5 : (b.grosor || 2.5));
       ctx.lineCap = "round";
       ctx.moveTo(pA.x, pA.y);
       ctx.lineTo(pB.x, pB.y);
@@ -871,13 +991,13 @@ export class EditorGraficoView {
       const mx = (pA.x + pB.x) / 2;
       const my = (pA.y + pB.y) / 2;
       const texto = b.variableAsociada ? `${b.variableAsociada}: ${b.longitud.toFixed(1)}` : `${b.longitud.toFixed(1)}`;
-      ctx.font = "bold 9px system-ui";
-      const tw = ctx.measureText(texto).width + 8;
-      ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+      ctx.font = estaConectadaAArrastre ? "bold 10px monospace" : "bold 9px system-ui";
+      const tw = ctx.measureText(texto).width + (estaConectadaAArrastre ? 12 : 8);
+      ctx.fillStyle = estaConectadaAArrastre ? "rgba(6, 182, 212, 0.95)" : "rgba(15, 23, 42, 0.85)";
       ctx.beginPath();
-      ctx.roundRect(mx - tw / 2, my - 7, tw, 14, 3);
+      ctx.roundRect(mx - tw / 2, my - 8, tw, 16, 4);
       ctx.fill();
-      ctx.fillStyle = esSel ? "#38bdf8" : "#f8fafc";
+      ctx.fillStyle = "#ffffff";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(texto, mx, my);
@@ -957,6 +1077,26 @@ export class EditorGraficoView {
       ctx.textAlign = "left";
       ctx.fillText(n.nombre, sc.x + 8, sc.y - 4);
     });
+
+    // 8. Tooltip HUD dinámico para el nodo en arrastre con sus cotas de posición
+    if (this._nodoArrastradoActivo) {
+      const nAct = this._nodoArrastradoActivo;
+      const sc = this.mundoAPantalla(nAct.x, nAct.y);
+      let infoTxt = `${nAct.nombre}: (${nAct.x.toFixed(1)}, ${nAct.y.toFixed(1)})`;
+      if (nAct.variableX && nAct.variableY) {
+        infoTxt = `${nAct.variableX}=${Math.abs(nAct.x).toFixed(1)}, ${nAct.variableY}=${Math.abs(nAct.y).toFixed(1)}`;
+      }
+      ctx.font = "bold 10px monospace";
+      const wTip = ctx.measureText(infoTxt).width + 14;
+      ctx.fillStyle = "rgba(14, 165, 233, 0.95)";
+      ctx.beginPath();
+      ctx.roundRect(sc.x + 12, sc.y - 24, wTip, 20, 4);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(infoTxt, sc.x + 12 + wTip / 2, sc.y - 14);
+    }
   }
 
   // Dibuja una cuadrícula milimétrica suave en el fondo del canvas

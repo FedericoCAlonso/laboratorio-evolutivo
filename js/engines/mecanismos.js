@@ -368,8 +368,14 @@ export function resolverPasoMecanismo(grafo, theta, vars = {}) {
     let x = n.x;
     let y = n.y;
     // Permite sobreescribir coordenadas fijas mediante variables vinculadas
-    if (n.variableX && vars[n.variableX] !== undefined) x = Number(vars[n.variableX]);
-    if (n.variableY && vars[n.variableY] !== undefined) y = Number(vars[n.variableY]);
+    if (n.variableX && vars[n.variableX] !== undefined) {
+      const sx = n.signoX !== undefined ? n.signoX : (n.id === "X_fijo" ? -1 : 1);
+      x = sx * Math.abs(Number(vars[n.variableX]));
+    }
+    if (n.variableY && vars[n.variableY] !== undefined) {
+      const sy = n.signoY !== undefined ? n.signoY : (n.id === "X_fijo" ? -1 : 1);
+      y = sy * Math.abs(Number(vars[n.variableY]));
+    }
     mapaNodos[n.id] = { id: n.id, nombre: n.nombre, x, y, resuelto: n.tipo === "fijo", tipo: n.tipo };
   });
 
@@ -458,12 +464,37 @@ export function simularCicloMecanismo(grafo, vars = {}, opciones = {}) {
   const pasos = [];
   let pasosInvalidos = 0;
 
+  // Fusiona variables explícitas con las dimensiones geométricas actuales del grafo
+  const varsEfectivas = { ...vars };
+  if (grafo) {
+    grafo.barras?.forEach(b => {
+      const varNom = b.variableAsociada || b.longitudVinculada;
+      if (varNom && varsEfectivas[varNom] === undefined) {
+        varsEfectivas[varNom] = b.longitud;
+      }
+    });
+    grafo.nodos?.forEach(n => {
+      if (n.variableX && varsEfectivas[n.variableX] === undefined) {
+        varsEfectivas[n.variableX] = Math.abs(n.x);
+      }
+      if (n.variableY && varsEfectivas[n.variableY] === undefined) {
+        varsEfectivas[n.variableY] = Math.abs(n.y);
+      }
+    });
+    grafo.motores?.forEach(m => {
+      const varNom = m.variableAsociada || m.amplitudVinculada;
+      if (varNom && varsEfectivas[varNom] === undefined) {
+        varsEfectivas[varNom] = m.longitudManivela;
+      }
+    });
+  }
+
   // Si el mecanismo es Pata Jansen canónico, utiliza el solver analítico hiperoptimizado
   const esJansen = (grafo.motores || []).some(m => m.id === "motor_manivela_jansen") ||
                    grafo.nodos.some(n => n.id === "X_fijo" || n.id === "H_pie");
 
   if (esJansen) {
-    const simJansen = MotorEstructurasCinematica.evaluarJansen(vars, opciones);
+    const simJansen = MotorEstructurasCinematica.evaluarJansen(varsEfectivas, opciones);
     const telemetriaSensores = {};
 
     if (simJansen.esValido && simJansen.pasos) {
@@ -606,10 +637,10 @@ export function crearGrafoPataJansen(vars = {}) {
 
   // Nodos fijos a tierra (Bancada)
   grafo.agregarNodo({ id: "Y_fijo", nombre: "Y: Centro Manivela (0,0)", x: 0.0, y: 0.0, tipo: "fijo" });
-  grafo.agregarNodo({ id: "X_fijo", nombre: "X: Pivote Fijo Frame (-a, -l)", x: -a, y: -l, tipo: "fijo", variableX: "a", variableY: "l" });
+  grafo.agregarNodo({ id: "X_fijo", nombre: "X: Pivote Fijo Frame (-a, -l)", x: -a, y: -l, tipo: "fijo", variableX: "a", variableY: "l", signoX: -1, signoY: -1 });
 
   // Nodos móviles
-  grafo.agregarNodo({ id: "K_manivela", nombre: "K: Pin de Manivela Motriz", x: 15.0, y: 0.0, tipo: "libre" });
+  grafo.agregarNodo({ id: "K_manivela", nombre: "K: Pin de Manivela Motriz", x: (vars.m !== undefined ? Number(vars.m) : 15.0), y: 0.0, tipo: "libre" });
   grafo.agregarNodo({ id: "D_nodo", nombre: "D: Nodo Triángulo Superior", x: -a + 25, y: -l + 30, tipo: "libre" });
   grafo.agregarNodo({ id: "E_nodo", nombre: "E: Nodo Balancín Posterior", x: -a + 5, y: -l + 38, tipo: "libre" });
   grafo.agregarNodo({ id: "F_nodo", nombre: "F: Nodo Biela Inferior", x: -a + 30, y: -l - 25, tipo: "libre" });
@@ -623,7 +654,8 @@ export function crearGrafoPataJansen(vars = {}) {
     tipo: "rotativo",
     nodoPivote: "Y_fijo",
     nodoExtremo: "K_manivela",
-    longitudManivela: 15.0,
+    longitudManivela: vars.m !== undefined ? Number(vars.m) : 15.0,
+    variableAsociada: "m",
     velocidadAngular: 1.0
   });
 

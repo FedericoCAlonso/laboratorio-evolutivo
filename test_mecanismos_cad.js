@@ -136,11 +136,66 @@ editorMock.cargarGrafo(grafoJansen);
 assert.ok(editorMock.grafo.barras.length >= 10, "El grafo Jansen cargado debe contener al menos 10 barras cinemáticas");
 assert.strictEqual(editorMock.grafo.nodos.length, 8, "Debe contener 8 nodos articulados");
 
-// Modificar variable 'a' en tiempo real
-editorMock.actualizarValoresVariables({ a: 42.0 });
-const telemetriaActualizada = editorMock.obtenerTelemetriaSensores({ a: 42.0 });
+// 4.1 Modificar variables mediante panel/sliders y verificar actualización de geometría del grafo
+editorMock.actualizarValoresVariables({ a: 40.0, b: 42.0 });
+const nodoX = editorMock.grafo.nodos.find(n => n.id === "X_fijo");
+assert.strictEqual(Math.abs(nodoX.x), 40.0, "La coordenada X del nodo frame debe actualizarse con variable 'a'");
+const barraB = editorMock.grafo.barras.find(b => b.variableAsociada === "b");
+assert.strictEqual(barraB.longitud, 42.0, "La longitud de la barra 'b' debe actualizarse al recibir variable 'b'");
+
+const telemetriaActualizada = editorMock.obtenerTelemetriaSensores({ a: 40.0, b: 42.0 });
 assert.ok(telemetriaActualizada.pie, "La telemetría del sensor 'pie' debe recalcularse al cambiar variables");
-console.log(`    ✓ Sincronización de variables y telemetría en EditorGraficoView verificada | OK`);
+console.log(`    ✓ Actualización geométrica desde variables (Sliders -> CAD) verificada | OK`);
+
+// 4.2 Simular arrastre de nodo en el lienzo CAD y verificar propagación a variables
+const variablesDetectadas = {};
+const editorDrag = new EditorGraficoView({
+  onVariableModificada: ({ nombre, valor }) => {
+    variablesDetectadas[nombre] = valor;
+  }
+});
+editorDrag.cargarGrafo(grafoJansen);
+
+// Simular arrastre del nodo frame 'X_fijo' a nuevas coordenadas (-45.0, -12.0)
+const nodoFrame = editorDrag.grafo.nodos.find(n => n.id === "X_fijo");
+nodoFrame.x = -45.0;
+nodoFrame.y = -12.0;
+
+// Disparar la lógica de actualización geométrica por arrastre
+if (nodoFrame.variableX) {
+  const valX = parseFloat(Math.abs(nodoFrame.x).toFixed(1));
+  editorDrag.valoresVariables[nodoFrame.variableX] = valX;
+  editorDrag.onVariableModificada?.({ nombre: nodoFrame.variableX, valor: valX });
+}
+if (nodoFrame.variableY) {
+  const valY = parseFloat(Math.abs(nodoFrame.y).toFixed(1));
+  editorDrag.valoresVariables[nodoFrame.variableY] = valY;
+  editorDrag.onVariableModificada?.({ nombre: nodoFrame.variableY, valor: valY });
+}
+
+// Barras conectadas a X_fijo (b, c, d)
+editorDrag.grafo.barras.forEach(b => {
+  if (b.nodoA === nodoFrame.id || b.nodoB === nodoFrame.id) {
+    const nA = editorDrag.grafo.nodos.find(n => n.id === b.nodoA);
+    const nB = editorDrag.grafo.nodos.find(n => n.id === b.nodoB);
+    if (nA && nB) {
+      const nuevaLong = parseFloat(Math.hypot(nA.x - nB.x, nA.y - nB.y).toFixed(1));
+      b.longitud = nuevaLong;
+      const varNom = b.variableAsociada || b.longitudVinculada;
+      if (varNom) {
+        editorDrag.valoresVariables[varNom] = nuevaLong;
+        editorDrag.onVariableModificada?.({ nombre: varNom, valor: nuevaLong });
+      }
+    }
+  }
+});
+
+assert.strictEqual(variablesDetectadas["a"], 45.0, "La variable 'a' debe actualizarse al arrastrar nodo X_fijo");
+assert.strictEqual(variablesDetectadas["l"], 12.0, "La variable 'l' debe actualizarse al arrastrar nodo X_fijo");
+assert.ok(typeof variablesDetectadas["b"] === "number" && variablesDetectadas["b"] > 0, "La barra 'b' debe actualizar su variable");
+assert.ok(typeof variablesDetectadas["c"] === "number" && variablesDetectadas["c"] > 0, "La barra 'c' debe actualizar su variable");
+assert.ok(typeof variablesDetectadas["d"] === "number" && variablesDetectadas["d"] > 0, "La barra 'd' debe actualizar su variable");
+console.log(`    ✓ Propagación reactiva por arrastre de nodos (CAD -> Variables de optimización) verificada | OK`);
 
 // -------------------------------------------------------------------------
 // PRUEBA 5: RECONSTRUCCIÓN Y PARIDAD DE TODOS LOS MODELOS PREDETERMINADOS

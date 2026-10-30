@@ -35,6 +35,9 @@ export class EstudioView {
       },
       onVariableVinculada: (variable) => {
         this._asegurarVariableEnTabla(variable);
+      },
+      onVariableModificada: ({ nombre, valor }) => {
+        this._actualizarValorVariableDesdeCAD(nombre, valor);
       }
     });
 
@@ -430,6 +433,7 @@ export class EstudioView {
       } else {
         this.editorGrafico.cargarGrafo(new GrafoMecanismoMultifisica());
       }
+      this.editorGrafico.actualizarValoresVariables(this.valoresGenesPrueba);
     }
 
     this._validarSintaxisCodigo();
@@ -888,29 +892,116 @@ return [suavidad, errZancada];`;
     }
   }
 
-  // Sincroniza variables de todas las barras y motores del grafo CAD
+  // Sincroniza variables de todas las barras, nodos y motores del grafo CAD
   sincronizarVariablesDesdeGrafo(grafo) {
     if (!grafo) return;
+    // 1. Barras articuladas
     grafo.barras?.forEach(b => {
-      if (b.longitudVinculada) {
+      const varNom = b.variableAsociada || b.longitudVinculada;
+      if (varNom) {
         this._asegurarVariableEnTabla({
-          nombre: b.longitudVinculada,
+          nombre: varNom,
           valor: b.longitud,
           min: Math.max(0.1, Number((b.longitud * 0.7).toFixed(1))),
           max: Number((b.longitud * 1.3).toFixed(1))
         });
       }
     });
-    grafo.motores?.forEach(m => {
-      if (m.amplitudVinculada) {
+
+    // 2. Nodos con variables de posición (como a y l en X_fijo)
+    grafo.nodos?.forEach(n => {
+      if (n.variableX) {
+        const valX = parseFloat(Math.abs(n.x).toFixed(1));
         this._asegurarVariableEnTabla({
-          nombre: m.amplitudVinculada,
-          valor: m.amplitud || 30,
-          min: 0,
-          max: 180
+          nombre: n.variableX,
+          valor: valX,
+          min: Math.max(0.1, Number((valX * 0.7).toFixed(1))),
+          max: Number((valX * 1.3).toFixed(1))
+        });
+      }
+      if (n.variableY) {
+        const valY = parseFloat(Math.abs(n.y).toFixed(1));
+        this._asegurarVariableEnTabla({
+          nombre: n.variableY,
+          valor: valY,
+          min: Math.max(0.1, Number((valY * 0.7).toFixed(1))),
+          max: Number((valY * 1.3).toFixed(1))
         });
       }
     });
+
+    // 3. Motores y actuadores
+    grafo.motores?.forEach(m => {
+      const varNom = m.variableAsociada || m.amplitudVinculada;
+      if (varNom) {
+        this._asegurarVariableEnTabla({
+          nombre: varNom,
+          valor: m.longitudManivela || m.amplitud || 15,
+          min: 1,
+          max: 100
+        });
+      }
+    });
+  }
+
+  // Actualiza en tiempo real los valores de variables modificadas arrastrando en el lienzo CAD
+  _actualizarValorVariableDesdeCAD(nombre, valor) {
+    if (!nombre || valor === undefined) return;
+    const numVal = Number(valor);
+    if (isNaN(numVal)) return;
+
+    this.valoresGenesPrueba[nombre] = numVal;
+
+    // 1. Actualizar el slider y el texto numérico en el HUD de pruebas
+    const slider = this.dom.slidersGenesContenedor?.querySelector(`input[data-gen="${nombre}"]`);
+    const spanVal = this.dom.slidersGenesContenedor?.querySelector(`#val-gen-${nombre}`);
+
+    if (slider) {
+      if (numVal < parseFloat(slider.min)) {
+        slider.min = (numVal * 0.8).toFixed(1);
+      }
+      if (numVal > parseFloat(slider.max)) {
+        slider.max = (numVal * 1.2).toFixed(1);
+      }
+      slider.value = numVal;
+    }
+    if (spanVal) {
+      spanVal.textContent = numVal.toFixed(2);
+    }
+
+    // 2. Actualizar la tabla de variables (Etapa 1)
+    if (this.dom.tbodyVariables) {
+      const filas = Array.from(this.dom.tbodyVariables.querySelectorAll("tr"));
+      const fila = filas.find(tr => {
+        const inp = tr.querySelector(".var-nombre");
+        return inp && inp.value.trim() === nombre;
+      });
+
+      if (fila) {
+        const inpMin = fila.querySelector(".var-min");
+        const inpMax = fila.querySelector(".var-max");
+        if (inpMin && numVal < parseFloat(inpMin.value)) {
+          inpMin.value = Math.max(0.1, Number((numVal * 0.7).toFixed(1)));
+        }
+        if (inpMax && numVal > parseFloat(inpMax.value)) {
+          inpMax.value = Number((numVal * 1.3).toFixed(1));
+        }
+      } else {
+        this._asegurarVariableEnTabla({
+          nombre,
+          valor: numVal,
+          min: Math.max(0.1, Number((numVal * 0.7).toFixed(1))),
+          max: Number((numVal * 1.3).toFixed(1))
+        });
+      }
+    }
+
+    // 3. Ejecución en vivo debounced para sincronía visual en tiempo real
+    if (this._debouncePruebaCadTimer) clearTimeout(this._debouncePruebaCadTimer);
+    this._debouncePruebaCadTimer = setTimeout(() => {
+      this.ejecutarPruebaEnVivo();
+      this._debouncePruebaCadTimer = null;
+    }, 40);
   }
 
   // Ejecuta la validación final y despacha el callback onGuardar hacia el ViewModel.
