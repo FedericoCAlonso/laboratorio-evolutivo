@@ -115,9 +115,9 @@ export const ModeloControladorPID = {
   // 3 genes continuos: Kp en [0.1, 35], Ki en [0, 25], Kd en [0, 10].
   crearGenoma() {
     return [
-      { tipo: "continuo", min: 0.1, max: 35.0 },
-      { tipo: "continuo", min: 0.0, max: 25.0 },
-      { tipo: "continuo", min: 0.0, max: 10.0 }
+      { nombre: "Kp", etiqueta: "Kp: Ganancia proporcional del lazo", tipo: "continuo", min: 0.1, max: 35.0 },
+      { nombre: "Ki", etiqueta: "Ki: Ganancia integral (eliminación de error de estado estacionario)", tipo: "continuo", min: 0.0, max: 25.0 },
+      { nombre: "Kd", etiqueta: "Kd: Ganancia derivativa (amortiguamiento transitorio)", tipo: "continuo", min: 0.0, max: 10.0 }
     ];
   },
 

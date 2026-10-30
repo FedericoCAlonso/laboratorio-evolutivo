@@ -70,9 +70,9 @@ export const ModeloBrazoRobotico = {
   // Define los 3 genes correspondientes a los ángulos theta1, theta2 y theta3 en grados [-180, 180].
   crearGenoma() {
     return [
-      { tipo: "continuo", min: -180, max: 180 },
-      { tipo: "continuo", min: -180, max: 180 },
-      { tipo: "continuo", min: -180, max: 180 }
+      { nombre: "theta1", etiqueta: "theta1: Ángulo eslabón base θ₁ (-180° a 180°)", tipo: "continuo", min: -180, max: 180 },
+      { nombre: "theta2", etiqueta: "theta2: Ángulo eslabón codo θ₂ (-180° a 180°)", tipo: "continuo", min: -180, max: 180 },
+      { nombre: "theta3", etiqueta: "theta3: Ángulo efector muñeca θ₃ (-180° a 180°)", tipo: "continuo", min: -180, max: 180 }
     ];
   },
 

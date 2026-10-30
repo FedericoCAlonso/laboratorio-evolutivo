@@ -17,7 +17,8 @@ export const HINTS_VISUALIZACION = {
   "electromagnetismo_lorentz": "Muestra el flujo magnético Bz, bobinas de electroimanes y la trayectoria del haz de iones bajo la fuerza de Lorentz.",
   "fonoabsorbente_acustico": "Ilustra el corte transversal de cuñas o capas estratificadas con atenuación espectral dBA y rebotes acústicos.",
   "linea_transmision_smith": "Traza el coeficiente de reflexión Gamma sobre la Carta de Smith polar y calcula la Relación de Onda Estacionaria (ROE).",
-  "corte_chapa_nesting": "Visualiza el plano de corte 2D con aprovechamiento de chapa matriz y minimización de retazos residuales."
+  "corte_chapa_nesting": "Visualiza el plano de corte 2D con aprovechamiento de chapa matriz y minimización de retazos residuales.",
+  "mecanismo_jansen": "Simula el mecanismo de 13 barras de Theo Jansen con lazo cinemático cerrado, curva del pie, aceleración y manipulación interactiva directa."
 };
 
 // Muestra u oculta la barra superior de alerta con mensajes de error o validación.

@@ -2,8 +2,74 @@
 // MÓDULO: CONSTRUCTOR DE MODELOS DINÁMICOS LOW-CODE (COMPILACIÓN Y VISUALIZADOR)
 // =========================================================================
 
+import { MotorCamposUnificados } from "./engines/campos.js";
+import { MotorEstructurasCinematica } from "./engines/estructuras.js";
+import { MotorOndasAcustica } from "./engines/ondas.js";
+import { MotorFuncionalTopologico } from "./engines/topologia.js";
+
 // Plantillas preconfiguradas para inspirar y servir de base a nuevas simulaciones de diversas naturalezas.
 export const PLANTILLAS_SIMULACION = {
+  "pata_jansen": {
+    nombre: "Pata Cinemática de Theo Jansen (13 Barras)",
+    descripcion: "Optimización mecatrónica multiobjetivo de las 12 barras del mecanismo caminante de Theo Jansen para maximizar suavidad inercial y precisión de zancada superando obstáculos.",
+    tipoVisualizacion: "mecanismo_jansen",
+    variables: [
+      { nombre: "a", etiqueta: "a: Offset horizontal al pivote fijo X (-a, -l)", tipo: "continuo", min: 26.6, max: 49.4, valorNominal: 38.0 },
+      { nombre: "l", etiqueta: "l: Offset vertical al pivote fijo X (-a, -l)", tipo: "continuo", min: 5.46, max: 10.14, valorNominal: 7.8 },
+      { nombre: "b", etiqueta: "b: Eslabón superior pivote X a nodo D", tipo: "continuo", min: 29.0, max: 54.0, valorNominal: 41.5 },
+      { nombre: "c", etiqueta: "c: Biela motriz inferior pivote X a nodo F", tipo: "continuo", min: 27.5, max: 51.1, valorNominal: 39.3 },
+      { nombre: "d", etiqueta: "d: Balancín pivote X a nodo E", tipo: "continuo", min: 28.0, max: 52.1, valorNominal: 40.1 },
+      { nombre: "e", etiqueta: "e: Eslabón de cierre superior nodo D a E", tipo: "continuo", min: 39.0, max: 72.5, valorNominal: 55.8 },
+      { nombre: "f", etiqueta: "f: Muslo superior nodo E a nodo G", tipo: "continuo", min: 27.5, max: 51.2, valorNominal: 39.4 },
+      { nombre: "g", etiqueta: "g: Muslo inferior nodo F a nodo G", tipo: "continuo", min: 25.7, max: 47.7, valorNominal: 36.7 },
+      { nombre: "h", etiqueta: "h: Pierna inferior de apoyo nodo G a pie H", tipo: "continuo", min: 46.0, max: 85.4, valorNominal: 65.7 },
+      { nombre: "i", etiqueta: "i: Tirante de talón nodo F a pie H", tipo: "continuo", min: 34.3, max: 63.7, valorNominal: 49.0 },
+      { nombre: "j", etiqueta: "j: Biela de manivela K a balancín D", tipo: "continuo", min: 35.0, max: 65.0, valorNominal: 50.0 },
+      { nombre: "k", etiqueta: "k: Biela de manivela K a guía F", tipo: "continuo", min: 43.3, max: 80.5, valorNominal: 61.9 }
+    ],
+    codigoEvaluacion: `// Simulación cinemática cerrada de Theo Jansen (180 pasos)
+// Motores inyectados: 'estructuras' / 'cinematica' (MotorEstructurasCinematica)
+const sim = estructuras.evaluarJansen(vars, {
+  longitudManivela: 15,
+  zancadaObjetivo: 60,
+  obstaculoAlto: 15,
+  limitePico: 30
+});
+
+// En caso de bloqueo geométrico o incapacidad de cerrar lazo:
+if (!sim.esValido) {
+  return [1000 + 10 * sim.pasosInvalidos, 1000 + 10 * sim.pasosInvalidos];
+}
+
+// Retorna Frente de Pareto NSGA-II:
+// f1: Aceleración pico e inercia dinámica del pie
+// f2: Error de zancada respecto al objetivo con despeje de obstáculo
+return [sim.f5_suavidad, sim.errorZancada];`
+  },
+  "brazo_robotico": {
+    nombre: "Brazo Robótico Articulado (3 Eslabones)",
+    descripcion: "Cinemática de 3 grados de libertad para alcanzar el objetivo (55, 40) eludiendo un obstáculo circular con mínimo esfuerzo angular.",
+    tipoVisualizacion: "mecanismo_barras_2d",
+    variables: [
+      { nombre: "theta1", etiqueta: "theta1: Ángulo base θ₁ (-180° a 180°)", tipo: "continuo", min: -180, max: 180 },
+      { nombre: "theta2", etiqueta: "theta2: Ángulo codo θ₂ (-180° a 180°)", tipo: "continuo", min: -180, max: 180 },
+      { nombre: "theta3", etiqueta: "theta3: Ángulo muñeca θ₃ (-180° a 180°)", tipo: "continuo", min: -180, max: 180 }
+    ],
+    codigoEvaluacion: `const t1 = (vars.theta1 * Math.PI) / 180;
+const t2 = t1 + (vars.theta2 * Math.PI) / 180;
+const t3 = t2 + (vars.theta3 * Math.PI) / 180;
+
+const x1 = 35 * Math.cos(t1), y1 = 35 * Math.sin(t1);
+const x2 = x1 + 30 * Math.cos(t2), y2 = y1 + 30 * Math.sin(t2);
+const x3 = x2 + 25 * Math.cos(t3), y3 = y2 + 25 * Math.sin(t3);
+
+const distObjetivo = Math.hypot(x3 - 55, y3 - 40);
+const distObs = Math.hypot(x2 - 30, y2 - 20);
+const penColision = distObs < 16 ? 150 : 0;
+const esfuerzo = (Math.abs(vars.theta1) + Math.abs(vars.theta2) + Math.abs(vars.theta3)) * 0.05;
+
+return [distObjetivo + penColision, esfuerzo];`
+  },
   "campo_potencial": {
     nombre: "Campo de Potencial Electrostático 2D",
     descripcion: "Optimiza la posición y polaridad de electrodos deflectores para guiar partículas minimizando la energía del campo y evitando barreras.",
@@ -157,18 +223,42 @@ export const PLANTILLAS_SIMULACION = {
   }
 };
 
-// Obtiene una copia profunda de una plantilla predefinida a partir de su clave.
+// Aliases canónicos para vincular identificadores de modelos nativos (con guiones) a plantillas
+PLANTILLAS_SIMULACION["pata-jansen"] = PLANTILLAS_SIMULACION["pata_jansen"];
+PLANTILLAS_SIMULACION["brazo-robotico"] = PLANTILLAS_SIMULACION["brazo_robotico"];
+PLANTILLAS_SIMULACION["campo-potencial"] = PLANTILLAS_SIMULACION["campo_potencial"];
+PLANTILLAS_SIMULACION["acustica-beamforming"] = PLANTILLAS_SIMULACION["acustica_beamforming"];
+PLANTILLAS_SIMULACION["confinamiento-em"] = PLANTILLAS_SIMULACION["confinamiento_em"];
+PLANTILLAS_SIMULACION["superficie-fonoabsorbente"] = PLANTILLAS_SIMULACION["fonoabsorbente"];
+PLANTILLAS_SIMULACION["linea-transmision-rf"] = PLANTILLAS_SIMULACION["linea_rf"];
+PLANTILLAS_SIMULACION["corte-chapa-nesting"] = PLANTILLAS_SIMULACION["corte_chapa"];
+
+// Obtiene una copia profunda de una plantilla predefinida a partir de su clave o identificador de modelo.
 export function obtenerPlantillaSimulacion(clave) {
-  if (PLANTILLAS_SIMULACION[clave]) {
-    return JSON.parse(JSON.stringify(PLANTILLAS_SIMULACION[clave]));
+  if (!clave) return null;
+  const normalizada = String(clave).toLowerCase().trim();
+  const conGuion = normalizada.replace(/_/g, "-");
+  const conSubguion = normalizada.replace(/-/g, "_");
+  const p = PLANTILLAS_SIMULACION[normalizada] || PLANTILLAS_SIMULACION[conGuion] || PLANTILLAS_SIMULACION[conSubguion];
+  if (p) {
+    return JSON.parse(JSON.stringify(p));
   }
   return null;
 }
 
-// Compila de forma segura la función de evaluación ingresada por el usuario utilizando new Function envuelto en try/catch.
+// Compila de forma segura la función de evaluación inyectando los 4 motores físicos fundamentales.
 export function compilarFuncionEvaluacion(codigoFuente) {
   try {
-    const fn = new Function("vars", "rng", codigoFuente);
+    const fn = new Function(
+      "vars",
+      "rng",
+      "estructuras",
+      "cinematica",
+      "campos",
+      "ondas",
+      "topologia",
+      codigoFuente
+    );
     return { ok: true, fn };
   } catch (error) {
     return { ok: false, error: error.message };
@@ -247,7 +337,15 @@ export function validarDefinicionModelo(definicion) {
   });
 
   try {
-    const resPrueba = compilacion.fn(varsPrueba, Math.random);
+    const resPrueba = compilacion.fn(
+      varsPrueba,
+      Math.random,
+      MotorEstructurasCinematica,
+      MotorEstructurasCinematica,
+      MotorCamposUnificados,
+      MotorOndasAcustica,
+      MotorFuncionalTopologico
+    );
     const esNumeroValido = typeof resPrueba === "number" && !isNaN(resPrueba);
     const esArregloValido = Array.isArray(resPrueba) && resPrueba.length >= 2 && resPrueba.every(v => typeof v === "number" && !isNaN(v));
     if (!esNumeroValido && !esArregloValido) {
@@ -267,9 +365,11 @@ export function compilarModeloDinamico(definicionCruda) {
   const { fn: funcionEvaluacion } = compilarFuncionEvaluacion(definicionCruda.codigoEvaluacion);
   const varsDef = definicionCruda.variables.map(v => ({
     nombre: v.nombre.trim(),
+    etiqueta: v.etiqueta || v.nombre.trim(),
     tipo: v.tipo === "entero" ? "entero" : "continuo",
     min: Number(v.min),
-    max: Number(v.max)
+    max: Number(v.max),
+    valorNominal: v.valorNominal !== undefined ? Number(v.valorNominal) : undefined
   }));
 
   const modeloId = definicionCruda.id || generarIdModelo(definicionCruda.nombre);
@@ -294,9 +394,12 @@ export function compilarModeloDinamico(definicionCruda) {
     // Genera la especificación de los genes a optimizar a partir de las variables definidas.
     crearGenoma() {
       return varsDef.map(v => ({
+        nombre: v.nombre,
+        etiqueta: v.etiqueta,
         tipo: v.tipo,
         min: v.min,
-        max: v.max
+        max: v.max,
+        valorNominal: v.valorNominal
       }));
     },
 
@@ -308,7 +411,15 @@ export function compilarModeloDinamico(definicionCruda) {
       }
 
       try {
-        const puntaje = funcionEvaluacion(vars, rng || Math.random);
+        const puntaje = funcionEvaluacion(
+          vars,
+          rng || Math.random,
+          MotorEstructurasCinematica,
+          MotorEstructurasCinematica,
+          MotorCamposUnificados,
+          MotorOndasAcustica,
+          MotorFuncionalTopologico
+        );
         if (Array.isArray(puntaje)) {
           if (puntaje.length >= 2 && puntaje.every(v => typeof v === "number" && !isNaN(v))) {
             return puntaje;
@@ -333,7 +444,15 @@ export function compilarModeloDinamico(definicionCruda) {
 
       let fitness = 0;
       try {
-        fitness = funcionEvaluacion(vars, Math.random);
+        fitness = funcionEvaluacion(
+          vars,
+          Math.random,
+          MotorEstructurasCinematica,
+          MotorEstructurasCinematica,
+          MotorCamposUnificados,
+          MotorOndasAcustica,
+          MotorFuncionalTopologico
+        );
       } catch (e) {
         fitness = 999999;
       }
@@ -376,8 +495,21 @@ export function clonarModeloExistente(modeloOriginal, nuevoNombre = null) {
   if (modeloOriginal.esDinamico && modeloOriginal.definicionCruda) {
     return clonarModeloDinamico(modeloOriginal.definicionCruda, nuevoNombre);
   }
+  const plantilla = obtenerPlantillaSimulacion(modeloOriginal.id);
   const genes = modeloOriginal.crearGenoma ? modeloOriginal.crearGenoma() : [];
   const nombreCopia = (nuevoNombre || `${modeloOriginal.nombre} (Copia)`).trim();
+
+  if (plantilla) {
+    return {
+      id: `dinamico-${modeloOriginal.id}-${Math.floor(Math.random() * 9000 + 1000)}`,
+      nombre: nombreCopia,
+      descripcion: `Variante personalizada basada en ${modeloOriginal.nombre}.`,
+      tipoVisualizacion: plantilla.tipoVisualizacion || modeloOriginal.tipoVisualizacion || "calibracion",
+      variables: plantilla.variables,
+      codigoEvaluacion: plantilla.codigoEvaluacion
+    };
+  }
+
   return {
     id: `dinamico-${modeloOriginal.id}-${Math.floor(Math.random() * 9000 + 1000)}`,
     nombre: nombreCopia,
@@ -385,9 +517,11 @@ export function clonarModeloExistente(modeloOriginal, nuevoNombre = null) {
     tipoVisualizacion: modeloOriginal.tipoVisualizacion || "calibracion",
     variables: genes.map((g, i) => ({
       nombre: g.nombre || `var${i + 1}`,
+      etiqueta: g.etiqueta || g.nombre || `Variable ${i + 1}`,
       tipo: g.tipo || "continuo",
       min: g.min !== undefined ? g.min : 0,
-      max: g.max !== undefined ? g.max : 100
+      max: g.max !== undefined ? g.max : 100,
+      valorNominal: g.valorNominal
     })),
     codigoEvaluacion: `// Definición basada en ${modeloOriginal.nombre}\n// Variables disponibles en 'vars':\nlet coste = 0;\nfor (const k in vars) {\n  coste += Math.pow(vars[k], 2);\n}\nreturn Math.sqrt(coste);`
   };

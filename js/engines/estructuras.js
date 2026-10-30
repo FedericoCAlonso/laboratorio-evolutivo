@@ -97,6 +97,140 @@ export class MotorEstructurasCinematica {
     };
   }
 
+  // Resuelve la posición cinemática de los puntos del mecanismo de Theo Jansen (13 barras)
+  static resolverJansen(theta, genoma, longitudManivela = 15.0) {
+    const a = typeof genoma?.a === "number" ? genoma.a : (Array.isArray(genoma) ? genoma[0] : 38.0);
+    const l = typeof genoma?.l === "number" ? genoma.l : (Array.isArray(genoma) ? genoma[1] : 7.8);
+    const b = typeof genoma?.b === "number" ? genoma.b : (Array.isArray(genoma) ? genoma[2] : 41.5);
+    const c = typeof genoma?.c === "number" ? genoma.c : (Array.isArray(genoma) ? genoma[3] : 39.3);
+    const d = typeof genoma?.d === "number" ? genoma.d : (Array.isArray(genoma) ? genoma[4] : 40.1);
+    const e = typeof genoma?.e === "number" ? genoma.e : (Array.isArray(genoma) ? genoma[5] : 55.8);
+    const f = typeof genoma?.f === "number" ? genoma.f : (Array.isArray(genoma) ? genoma[6] : 39.4);
+    const g = typeof genoma?.g === "number" ? genoma.g : (Array.isArray(genoma) ? genoma[7] : 36.7);
+    const h = typeof genoma?.h === "number" ? genoma.h : (Array.isArray(genoma) ? genoma[8] : 65.7);
+    const i = typeof genoma?.i === "number" ? genoma.i : (Array.isArray(genoma) ? genoma[9] : 49.0);
+    const j = typeof genoma?.j === "number" ? genoma.j : (Array.isArray(genoma) ? genoma[10] : 50.0);
+    const k = typeof genoma?.k === "number" ? genoma.k : (Array.isArray(genoma) ? genoma[11] : 61.9);
+
+    const m = longitudManivela;
+    const Y = { x: 0.0, y: 0.0 };
+    const X = { x: -a, y: -l };
+    const K = { x: m * Math.cos(theta), y: m * Math.sin(theta) };
+
+    const D = MotorEstructurasCinematica.resolverTrilateracion(X, K, b, j, -1);
+    if (!D) return null;
+
+    const E = MotorEstructurasCinematica.resolverTrilateracion(X, D, d, e, -1);
+    if (!E) return null;
+
+    const F = MotorEstructurasCinematica.resolverTrilateracion(X, K, c, k, 1);
+    if (!F) return null;
+
+    const G = MotorEstructurasCinematica.resolverTrilateracion(E, F, f, g, 1);
+    if (!G) return null;
+
+    const H = MotorEstructurasCinematica.resolverTrilateracion(G, F, h, i, 1);
+    if (!H) return null;
+
+    return { theta, Y, X, K, D, E, F, G, H };
+  }
+
+  // Evalúa la marcha completa de Theo Jansen (180 pasos) y calcula zancada, aceleración y despeje
+  static evaluarJansen(genoma, opciones = {}) {
+    const N = opciones.pasos || 180;
+    const m = opciones.longitudManivela || 15.0;
+    const zancadaObj = opciones.zancadaObjetivo || 60.0;
+    const obstaculoAlto = opciones.obstaculoAlto || 15.0;
+    const limitePico = opciones.limitePico || 30.0;
+
+    const pasos = [];
+    let pasosInvalidos = 0;
+
+    for (let s = 0; s < N; s++) {
+      const theta = (2 * Math.PI * s) / N;
+      const res = MotorEstructurasCinematica.resolverJansen(theta, genoma, m);
+      if (!res) pasosInvalidos++;
+      else pasos.push({ idx: s, ...res });
+    }
+
+    if (pasosInvalidos > 0 || pasos.length < N * 0.8) {
+      return {
+        esValido: false,
+        pasosInvalidos,
+        errorZancada: 999.0,
+        f5_suavidad: 999.0,
+        fitnessPareto: [999.0, 999.0]
+      };
+    }
+
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    for (let s = 0; s < pasos.length; s++) {
+      const pt = pasos[s].H;
+      if (pt.x < minX) minX = pt.x;
+      if (pt.x > maxX) maxX = pt.x;
+      if (pt.y < minY) minY = pt.y;
+      if (pt.y > maxY) maxY = pt.y;
+    }
+
+    const anchoTotal = maxX - minX;
+    const alturaTotal = maxY - minY;
+
+    // Fase de apoyo: menor 35% de puntos en Y (pie apoyado sobre el terreno)
+    const numApoyo = Math.max(2, Math.round(pasos.length * 0.35));
+    const ordenadosY = [...pasos].sort((p1, p2) => p1.H.y - p2.H.y);
+    const apoyo = ordenadosY.slice(0, numApoyo);
+
+    let minXApoyo = Infinity, maxXApoyo = -Infinity;
+    let maxYApoyo = -Infinity;
+    let sumaYApoyo = 0;
+    for (let s = 0; s < apoyo.length; s++) {
+      const pt = apoyo[s].H;
+      if (pt.x < minXApoyo) minXApoyo = pt.x;
+      if (pt.x > maxXApoyo) maxXApoyo = pt.x;
+      if (pt.y > maxYApoyo) maxYApoyo = pt.y;
+      sumaYApoyo += pt.y;
+    }
+
+    const anchoApoyo = maxXApoyo - minXApoyo;
+    const mediaYApoyo = sumaYApoyo / numApoyo;
+    const despejeReal = maxY - mediaYApoyo;
+
+    // Error de zancada relativa respecto al objetivo
+    const errorZancada = Math.abs(anchoApoyo - zancadaObj) / (zancadaObj || 1.0);
+
+    // Cálculo de aceleración y suavidad inercial de la trayectoria del pie
+    const dTheta = (2 * Math.PI) / pasos.length;
+    const dTheta2 = dTheta * dTheta;
+    let maxA = 0;
+    for (let t = 0; t < pasos.length; t++) {
+      const pSig = pasos[(t + 1) % pasos.length].H;
+      const pAct = pasos[t].H;
+      const pAnt = pasos[(t - 1 + pasos.length) % pasos.length].H;
+      const ax = (pSig.x - 2 * pAct.x + pAnt.x) / dTheta2;
+      const ay = (pSig.y - 2 * pAct.y + pAnt.y) / dTheta2;
+      const magA = Math.hypot(ax, ay) / m;
+      if (magA > maxA) maxA = magA;
+    }
+
+    const f5_suavidad = Math.min(1.0, maxA / (limitePico || 30.0));
+    const penalizacionDespeje = despejeReal < obstaculoAlto ? (obstaculoAlto - despejeReal) * 0.2 : 0;
+
+    return {
+      esValido: true,
+      pasosInvalidos: 0,
+      anchoTotal,
+      alturaTotal,
+      anchoApoyo,
+      despejeReal,
+      aceleracionPico: maxA,
+      f5_suavidad,
+      errorZancada: errorZancada + penalizacionDespeje,
+      fitnessPareto: [f5_suavidad, errorZancada + penalizacionDespeje],
+      pasos
+    };
+  }
+
   // Resuelve la estática analítica de barras axiales (tracción y compresión) en celosías planas
   resolverEstaticaCelosia() {
     const n = this.nudos.length;

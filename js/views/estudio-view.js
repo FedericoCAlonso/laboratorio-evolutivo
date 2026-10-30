@@ -6,6 +6,10 @@
 import { VisualizadorDinamico } from "./visualizers.js?v=2.4";
 import { obtenerPlantillaSimulacion } from "../builder.js?v=2.4";
 import { HINTS_VISUALIZACION, mostrarAlerta } from "../ui.js?v=2.4";
+import { MotorCamposUnificados } from "../engines/campos.js?v=2.4";
+import { MotorEstructurasCinematica } from "../engines/estructuras.js?v=2.4";
+import { MotorOndasAcustica } from "../engines/ondas.js?v=2.4";
+import { MotorFuncionalTopologico } from "../engines/topologia.js?v=2.4";
 
 // Vista de pantalla completa para el diseño, edición y prueba interactiva de simulaciones evolutivas.
 export class EstudioView {
@@ -397,6 +401,18 @@ export class EstudioView {
     inpNom.addEventListener("input", () => this.sincronizarSlidersGenes());
     tdNom.appendChild(inpNom);
 
+    if (v.etiqueta || v.valorNominal !== undefined) {
+      const hint = document.createElement("div");
+      hint.className = "var-etiqueta-hint";
+      hint.style.fontSize = "0.72rem";
+      hint.style.color = "var(--md-sys-color-on-surface-variant)";
+      hint.style.marginTop = "3px";
+      hint.style.opacity = "0.85";
+      const textoNominal = v.valorNominal !== undefined ? ` [Nominal: ${v.valorNominal}]` : "";
+      hint.textContent = (v.etiqueta || v.nombre) + textoNominal;
+      tdNom.appendChild(hint);
+    }
+
     // Columna 2: Tipo de variable (continuo / entero)
     const tdTipo = document.createElement("td");
     const selTipo = document.createElement("select");
@@ -508,6 +524,7 @@ export class EstudioView {
       const selTipo = tr.querySelector(".var-tipo");
       const inpMin = tr.querySelector(".var-min");
       const inpMax = tr.querySelector(".var-max");
+      const hintEl = tr.querySelector(".var-etiqueta-hint");
 
       const nombre = inpNom ? inpNom.value.trim() : "";
       if (!nombre) return;
@@ -524,19 +541,26 @@ export class EstudioView {
         this.valoresGenesPrueba[nombre] = valActual;
       }
 
+      let etiquetaLimpia = "";
+      if (hintEl) {
+        etiquetaLimpia = hintEl.textContent.replace(/^.*?:\s*/, "").replace(/\s*\[Nominal:.*?\]/, "");
+      }
+
       const item = document.createElement("div");
       item.className = "item-slider-gen";
 
       const header = document.createElement("div");
       header.className = "header-slider-gen";
+      const subtitulo = etiquetaLimpia ? `<span style="font-size: 0.72rem; opacity: 0.75; font-weight: normal; margin-left: 4px;">(${etiquetaLimpia})</span>` : "";
       header.innerHTML = `
-        <span class="gen-nombre">${nombre}</span>
+        <span class="gen-nombre" title="${nombre}">${nombre}${subtitulo}</span>
         <span class="gen-valor" id="val-gen-${nombre}">${valActual.toFixed(esEntero ? 0 : 2)}</span>
       `;
 
       const inputSlider = document.createElement("input");
       inputSlider.type = "range";
       inputSlider.className = "slider-m3";
+      inputSlider.dataset.gen = nombre;
       inputSlider.min = min;
       inputSlider.max = max;
       inputSlider.step = esEntero ? "1" : ((max - min) / 200).toString();
@@ -589,7 +613,7 @@ export class EstudioView {
 
     try {
       // eslint-disable-next-line no-new-func
-      new Function("vars", "rng", codigo);
+      new Function("vars", "rng", "estructuras", "cinematica", "campos", "ondas", "topologia", codigo);
       this.dom.statusCodigo.textContent = "✓ Sintaxis JavaScript válida";
       this.dom.statusCodigo.className = "status-codigo status-valido";
       return true;
@@ -606,7 +630,7 @@ export class EstudioView {
 
     try {
       const def = this.extraerDatos();
-      const fnEval = new Function("vars", "rng", def.codigoEvaluacion);
+      const fnEval = new Function("vars", "rng", "estructuras", "cinematica", "campos", "ondas", "topologia", def.codigoEvaluacion);
 
       // Arma el objeto vars con los valores de prueba activos
       const vars = {};
@@ -614,7 +638,7 @@ export class EstudioView {
       def.variables.forEach((v) => {
         let val = this.valoresGenesPrueba[v.nombre];
         if (val === undefined) {
-          val = (v.min + v.max) / 2;
+          val = v.valorNominal !== undefined ? v.valorNominal : (v.min + v.max) / 2;
           if (v.tipo === "entero") val = Math.round(val);
           this.valoresGenesPrueba[v.nombre] = val;
         }
@@ -624,7 +648,15 @@ export class EstudioView {
 
       // Medición de rendimiento de la función
       const t0 = performance.now();
-      const resultadoFitness = fnEval(vars, Math.random);
+      const resultadoFitness = fnEval(
+        vars,
+        Math.random,
+        MotorEstructurasCinematica,
+        MotorEstructurasCinematica,
+        MotorCamposUnificados,
+        MotorOndasAcustica,
+        MotorFuncionalTopologico
+      );
       const t1 = performance.now();
       const tiempoMs = (t1 - t0).toFixed(2);
 
@@ -667,7 +699,18 @@ export class EstudioView {
           {},
           {
             modelo: modeloMock,
-            fitness: resultadoFitness
+            fitness: resultadoFitness,
+            esEstudio: true,
+            onParamChange: (nuevosValores) => {
+              for (const [k, v] of Object.entries(nuevosValores)) {
+                this.valoresGenesPrueba[k] = v;
+                const spanVal = document.getElementById(`val-gen-${k}`);
+                if (spanVal) spanVal.textContent = v.toFixed(2);
+                const slider = this.dom.slidersGenesContenedor?.querySelector(`input[data-gen="${k}"]`);
+                if (slider) slider.value = v;
+              }
+              this.ejecutarPruebaEnVivo();
+            }
           }
         );
 
@@ -703,6 +746,9 @@ export class EstudioView {
         break;
       case "estructuras":
         snippet = `\n// Motor de Estructuras: cinemática y esfuerzo mecánico\nconst radioTotal = vars.longitud1 + vars.longitud2;\nconst errorAlcance = Math.abs(radioTotal - 60);\nreturn [errorAlcance, vars.longitud1 * 0.1];`;
+        break;
+      case "jansen":
+        snippet = `\n// Simulación cinemática cerrada de Theo Jansen (180 pasos)\nconst sim = estructuras.evaluarJansen(vars, { longitudManivela: 15, zancadaObjetivo: 60, obstaculoAlto: 15 });\nif (!sim.esValido) return [1000 + 10 * sim.pasosInvalidos, 1000 + 10 * sim.pasosInvalidos];\nreturn [sim.f5_suavidad, sim.errorZancada];`;
         break;
       case "ondas":
         snippet = `\n// Motor de Ondas: absorción acústica y directividad\nconst absorcion = Math.sin((vars.frecuencia || 1000) * 0.001);\nreturn 1.0 - Math.min(1.0, Math.max(0.0, absorcion));`;

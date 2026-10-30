@@ -187,11 +187,28 @@ export function calcularTrayectoriaJansenReferencia() {
 // Datos estáticos precalculados de la trayectoria de referencia original de Theo Jansen.
 export const TRAYECTORIA_JANSEN_ORIGINAL = calcularTrayectoriaJansenReferencia();
 
+// Descripciones técnicas de ingeniería mecatrónica de las 12 barras del mecanismo de Theo Jansen.
+export const JANSEN_DESCRIPCIONES_GENES = {
+  a: "Offset horizontal manivela Y al pivote fijo X (-a, -l)",
+  l: "Offset vertical manivela Y al pivote fijo X (-a, -l)",
+  b: "Eslabón superior de acople pivote fijo X al nodo D",
+  c: "Biela motriz inferior desde pivote fijo X al nodo F",
+  d: "Balancín de transferencia pivote fijo X al nodo E",
+  e: "Eslabón superior de cierre nodo D al nodo E",
+  f: "Eslabón del muslo superior nodo E al nodo G",
+  g: "Eslabón del muslo inferior nodo F al nodo G",
+  h: "Pierna inferior de apoyo desde nodo G al pie H",
+  i: "Tirante de talón desde nodo F al pie de contacto H",
+  j: "Biela de manivela K al nodo de balancín D",
+  k: "Biela de manivela K al nodo de guía inferior F"
+};
+
 // Objeto que implementa el contrato del Modelo 3: Mecanismo cinemático de Theo Jansen de 13 barras.
 export const ModeloPataJansen = {
   id: "pata-jansen",
   nombre: "Pata Jansen (13 barras)",
   descripcion: "Optimiza los 12 parámetros de eslabonamiento de Theo Jansen con restricciones físicas de gálibo máximo y despeje para superar obstáculos.",
+  tipoVisualizacion: "mecanismo_jansen",
   usaWasm: true,
   usaRuido: false,
   // Nombres descriptivos de los objetivos para optimización multiobjetivo Pareto.
@@ -225,19 +242,37 @@ export const ModeloPataJansen = {
     { clave: "w9", etiqueta: "Peso w9 (Eficiencia espacial)", tipo: "numero", min: 0, max: 20, paso: 0.5, valorDefecto: 1.0 }
   ],
 
-  // Define los rangos continuos de los 12 genes en función del porcentaje de amplitud sobre los valores de Jansen.
+  // Define los rangos continuos de los 12 genes con etiquetas semánticas y cotas nominales canónicas de Jansen.
   crearGenoma(entrada) {
     const amp = Number(entrada?.amplitud !== undefined ? entrada.amplitud : 0.30);
-    return JANSEN_VALORES_REFERENCIA.map(val => ({
-      tipo: "continuo",
-      min: Math.max(0.1, val * (1 - amp)),
-      max: val * (1 + amp)
-    }));
+    return JANSEN_VALORES_REFERENCIA.map((val, idx) => {
+      const clave = JANSEN_CLAVES_GENES[idx];
+      return {
+        nombre: clave,
+        etiqueta: `${clave}: ${JANSEN_DESCRIPCIONES_GENES[clave] || 'Barra ' + clave}`,
+        tipo: "continuo",
+        min: Math.max(0.1, parseFloat((val * (1 - amp)).toFixed(2))),
+        max: parseFloat((val * (1 + amp)).toFixed(2)),
+        valorNominal: val
+      };
+    });
   },
 
   // Resuelve las posiciones de las articulaciones del mecanismo de Jansen para un ángulo theta dado.
   resolverCinematica(theta, genoma) {
-    const [a, l, b, c, d, e, f, g, h, i, j, k] = genoma;
+    const a = typeof genoma?.a === "number" ? genoma.a : (Array.isArray(genoma) ? genoma[0] : 38.0);
+    const l = typeof genoma?.l === "number" ? genoma.l : (Array.isArray(genoma) ? genoma[1] : 7.8);
+    const b = typeof genoma?.b === "number" ? genoma.b : (Array.isArray(genoma) ? genoma[2] : 41.5);
+    const c = typeof genoma?.c === "number" ? genoma.c : (Array.isArray(genoma) ? genoma[3] : 39.3);
+    const d = typeof genoma?.d === "number" ? genoma.d : (Array.isArray(genoma) ? genoma[4] : 40.1);
+    const e = typeof genoma?.e === "number" ? genoma.e : (Array.isArray(genoma) ? genoma[5] : 55.8);
+    const f = typeof genoma?.f === "number" ? genoma.f : (Array.isArray(genoma) ? genoma[6] : 39.4);
+    const g = typeof genoma?.g === "number" ? genoma.g : (Array.isArray(genoma) ? genoma[7] : 36.7);
+    const h = typeof genoma?.h === "number" ? genoma.h : (Array.isArray(genoma) ? genoma[8] : 65.7);
+    const i = typeof genoma?.i === "number" ? genoma.i : (Array.isArray(genoma) ? genoma[9] : 49.0);
+    const j = typeof genoma?.j === "number" ? genoma.j : (Array.isArray(genoma) ? genoma[10] : 50.0);
+    const k = typeof genoma?.k === "number" ? genoma.k : (Array.isArray(genoma) ? genoma[11] : 61.9);
+
     const m = LONGITUD_MANIVELA_JANSEN;
     const Y = { x: 0, y: 0 };
     const X = { x: -a, y: -l };

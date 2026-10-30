@@ -620,23 +620,27 @@ export class AppView {
     }
 
     const plantilla = obtenerPlantillaSimulacion(modelo.id) || {};
-    const nombresJansen = ["a", "l", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"];
     const genomaCrudo = modelo.variables || (modelo.crearGenoma ? modelo.crearGenoma() : []);
-    const varsLista = genomaCrudo.map((v, i) => ({
-      nombre: v.nombre || (modelo.id === "pata-jansen" ? nombresJansen[i] : `var${i + 1}`),
-      tipo: v.tipo || "continuo",
-      min: v.min !== undefined ? v.min : 0,
-      max: v.max !== undefined ? v.max : 100
-    }));
+
+    const varsLista = (plantilla.variables && plantilla.variables.length > 0)
+      ? plantilla.variables
+      : genomaCrudo.map((v, i) => ({
+          nombre: v.nombre || `var${i + 1}`,
+          etiqueta: v.etiqueta || v.nombre || `Variable ${i + 1}`,
+          tipo: v.tipo || "continuo",
+          min: v.min !== undefined ? v.min : 0,
+          max: v.max !== undefined ? v.max : 100,
+          valorNominal: v.valorNominal !== undefined ? v.valorNominal : undefined
+        }));
 
     const def = {
       id: modelo.id,
-      nombre: `${modelo.nombre} (Copia Editable)`,
-      descripcion: modelo.descripcion,
-      tipoVisualizacion: modelo.tipoVisualizacion || plantilla.tipoVisualizacion || "calibracion",
-      variables: varsLista.length > 0 ? varsLista : (plantilla.variables || [
+      nombre: plantilla.nombre || `${modelo.nombre} (Copia Editable)`,
+      descripcion: plantilla.descripcion || modelo.descripcion,
+      tipoVisualizacion: plantilla.tipoVisualizacion || modelo.tipoVisualizacion || "calibracion",
+      variables: varsLista.length > 0 ? varsLista : [
         { nombre: "var1", tipo: "continuo", min: 0, max: 100 }
-      ]),
+      ],
       codigoEvaluacion: plantilla.codigoEvaluacion || `// Función de aptitud para ${modelo.nombre}\n// Variables disponibles: ${varsLista.map(v => 'vars.' + v.nombre).join(', ')}\nreturn Math.abs(vars.${varsLista[0]?.nombre || 'var1'} - 50);`
     };
 

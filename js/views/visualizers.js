@@ -21,6 +21,12 @@ if (typeof CanvasRenderingContext2D !== "undefined" && !CanvasRenderingContext2D
   };
 }
 
+// Polyfill de animación para entornos headless y pruebas unitarias
+if (typeof globalThis.requestAnimationFrame === "undefined") {
+  globalThis.requestAnimationFrame = (cb) => setTimeout(cb, 16);
+  globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
+}
+
 import { JANSEN_VALORES_REFERENCIA, TRAYECTORIA_JANSEN_ORIGINAL, ModeloPataJansen } from "../models/jansen.js";
 import { resolverCinematicaBrazo, distanciaPuntoASegmento } from "../models/brazo.js";
 import { simularDescensoCohete } from "../models/cohete.js";
@@ -38,11 +44,13 @@ import { simularLineaTransmisionRF } from "../models/linea-rf.js";
 import { simularCorteChapaNesting } from "../models/nesting.js";
 import { LienzoFuncionalRenderer, LienzoTopologicoRenderer } from "./renderers/index.js";
 
-// Estado checkbox para superponer la curva original de Theo Jansen en el lienzo Canvas.
+// Estado global interactivo del visualizador de Theo Jansen
 let mostrarReferenciaJansen = true;
+let mostrarCotasJansen = true;
+let jansenPausado = false;
 
 // -------------------------------------------------------------------------
-// 1. VISUALIZADOR DE PATA JANSEN (13 BARRAS CINETICAS)
+// 1. VISUALIZADOR DE PATA JANSEN (13 BARRAS CINEMÁTICAS INTERACTIVAS)
 // -------------------------------------------------------------------------
 export class VisualizadorJansen {
   constructor() {
@@ -60,76 +68,91 @@ export class VisualizadorJansen {
     if (!contenedor) return;
     this.detener();
 
-    const mMet = ModeloPataJansen.obtenerMetricasDetalladas(genoma, entrada);
-    const mRef = ModeloPataJansen.obtenerMetricasDetalladas(JANSEN_VALORES_REFERENCIA, entrada);
+    const a = typeof genoma?.a === "number" ? genoma.a : (Array.isArray(genoma) ? genoma[0] : 38.0);
+    const l = typeof genoma?.l === "number" ? genoma.l : (Array.isArray(genoma) ? genoma[1] : 7.8);
+    const b = typeof genoma?.b === "number" ? genoma.b : (Array.isArray(genoma) ? genoma[2] : 41.5);
+    const c = typeof genoma?.c === "number" ? genoma.c : (Array.isArray(genoma) ? genoma[3] : 39.3);
+    const d = typeof genoma?.d === "number" ? genoma.d : (Array.isArray(genoma) ? genoma[4] : 40.1);
+    const e = typeof genoma?.e === "number" ? genoma.e : (Array.isArray(genoma) ? genoma[5] : 55.8);
+    const f = typeof genoma?.f === "number" ? genoma.f : (Array.isArray(genoma) ? genoma[6] : 39.4);
+    const g = typeof genoma?.g === "number" ? genoma.g : (Array.isArray(genoma) ? genoma[7] : 36.7);
+    const h = typeof genoma?.h === "number" ? genoma.h : (Array.isArray(genoma) ? genoma[8] : 65.7);
+    const i = typeof genoma?.i === "number" ? genoma.i : (Array.isArray(genoma) ? genoma[9] : 49.0);
+    const j = typeof genoma?.j === "number" ? genoma.j : (Array.isArray(genoma) ? genoma[10] : 50.0);
+    const k = typeof genoma?.k === "number" ? genoma.k : (Array.isArray(genoma) ? genoma[11] : 61.9);
+    const arregloGenoma = [a, l, b, c, d, e, f, g, h, i, j, k];
 
-    if (!mMet.valido || mMet.pasos.length === 0) {
-      contenedor.innerHTML = `
-        <div class="comparativa-azar">
-          <div class="tarjeta-stat">
-            <div class="stat-etiqueta">Estado Físico</div>
-            <div class="stat-valor" style="color: var(--peligro);">${mMet.fitness.toFixed(0)}</div>
-            <div class="stat-sub">Violación de barreras duras de entorno</div>
-          </div>
-          <div class="tarjeta-stat">
-            <div class="stat-etiqueta">Ancho / Límite</div>
-            <div class="stat-valor" style="color: ${mMet.anchoTotal > mMet.maxAncho ? 'var(--peligro)' : 'var(--texto-principal)'};">${mMet.anchoTotal.toFixed(1)} / ${mMet.maxAncho}</div>
-            <div class="stat-sub">Gálibo horizontal</div>
-          </div>
-          <div class="tarjeta-stat">
-            <div class="stat-etiqueta">Alto / Límite</div>
-            <div class="stat-valor" style="color: ${mMet.alturaTotal > mMet.maxAlto ? 'var(--peligro)' : 'var(--texto-principal)'};">${mMet.alturaTotal.toFixed(1)} / ${mMet.maxAlto}</div>
-            <div class="stat-sub">Gálibo vertical</div>
-          </div>
-          <div class="tarjeta-stat">
-            <div class="stat-etiqueta">Despeje / Obstáculo</div>
-            <div class="stat-valor" style="color: ${mMet.despejeReal < mMet.obstaculoAlto ? 'var(--peligro)' : 'var(--texto-principal)'};">${mMet.despejeReal.toFixed(1)} / ${mMet.obstaculoAlto}</div>
-            <div class="stat-sub">Superación de escalón</div>
-          </div>
-        </div>
-        <div style="padding: 2rem; text-align: center; color: var(--texto-secundario);">
-          El diseño actual viola los límites de gálibo o no alcanza el despeje mínimo exigido para el obstáculo. El motor genético continuará refinando dimensiones.
+    const mMet = ModeloPataJansen.obtenerMetricasDetalladas(arregloGenoma, entrada);
+    const mRef = ModeloPataJansen.obtenerMetricasDetalladas(JANSEN_VALORES_REFERENCIA, entrada);
+    const esValido = mMet.valido && mMet.pasos && mMet.pasos.length > 0;
+
+    let bannerAlerta = "";
+    if (!esValido) {
+      bannerAlerta = `
+        <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid var(--peligro, #ef4444); border-radius: var(--radio-sm, 8px); padding: 0.5rem 0.75rem; margin-bottom: 0.6rem; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+          <span style="font-size: 0.82rem; font-weight: 600; color: var(--peligro, #ef4444);">
+            ⚠️ Bloqueo cinemático: no se puede cerrar el lazo cerrado de 13 barras en ${mMet.pasosInvalidos || 180} de 180 pasos.
+          </span>
+          <span style="font-size: 0.75rem; color: var(--texto-secundario, #94a3b8);">
+            Ajuste barras b, j, c o k para restaurar el giro completo.
+          </span>
         </div>
       `;
-      return;
     }
 
     contenedor.innerHTML = `
+      ${bannerAlerta}
       <div class="comparativa-azar">
         <div class="tarjeta-stat">
           <div class="stat-etiqueta">Fitness Óptimo / Jansen</div>
-          <div class="stat-valor" style="color: ${mMet.fitness <= mRef.fitness ? 'var(--exito)' : 'var(--primario)'};">
-            ${mMet.fitness.toFixed(3)} <span style="font-size: 0.85rem; color: var(--texto-secundario);">/ ${mRef.fitness.toFixed(3)}</span>
+          <div class="stat-valor" style="color: ${esValido && mMet.fitness <= mRef.fitness ? 'var(--exito, #10b981)' : 'var(--primario, #3b82f6)'};">
+            ${mMet.fitness.toFixed(3)} <span style="font-size: 0.85rem; color: var(--texto-secundario, #94a3b8);">/ ${mRef.fitness.toFixed(3)}</span>
           </div>
-          <div class="stat-sub">${mMet.fitness <= mRef.fitness ? '✓ Supera a Theo Jansen' : 'Cercano al óptimo histórico'}</div>
+          <div class="stat-sub">${esValido && mMet.fitness <= mRef.fitness ? '✓ Supera a Theo Jansen' : (esValido ? 'Cercano al óptimo histórico' : 'Penalización activa')}</div>
         </div>
         <div class="tarjeta-stat">
           <div class="stat-etiqueta">Dimensiones (Ancho / Alto)</div>
-          <div class="stat-valor">${mMet.anchoTotal.toFixed(1)} / ${mMet.alturaTotal.toFixed(1)} u</div>
+          <div class="stat-valor">${(mMet.anchoTotal || 0).toFixed(1)} / ${(mMet.alturaTotal || 0).toFixed(1)} u</div>
           <div class="stat-sub">Límites: ${mMet.maxAncho} / ${mMet.maxAlto} u</div>
         </div>
         <div class="tarjeta-stat">
           <div class="stat-etiqueta">Despeje / Obstáculo</div>
-          <div class="stat-valor" style="color: var(--exito);">${mMet.despejeReal.toFixed(1)} u</div>
-          <div class="stat-sub">Exigido: ${mMet.obstaculoAlto} u (✓ Superado)</div>
+          <div class="stat-valor" style="color: ${(mMet.despejeReal || 0) >= mMet.obstaculoAlto ? 'var(--exito, #10b981)' : 'var(--aviso, #f59e0b)'};">${(mMet.despejeReal || 0).toFixed(1)} u</div>
+          <div class="stat-sub">Exigido: ${mMet.obstaculoAlto} u (${(mMet.despejeReal || 0) >= mMet.obstaculoAlto ? '✓ Superado' : 'Inferior'})</div>
         </div>
         <div class="tarjeta-stat">
           <div class="stat-etiqueta">Ataque f7 / Eficiencia f9</div>
-          <div class="stat-valor" style="color: ${mMet.f7 <= mRef.f7 ? 'var(--exito)' : 'var(--aviso)'};">${mMet.f7.toFixed(3)} / ${mMet.f9.toFixed(3)}</div>
-          <div class="stat-sub">Ataque: ${mMet.dxAtaque.toFixed(1)} u | Efic: ${(mMet.f9 * 100).toFixed(1)}%</div>
+          <div class="stat-valor" style="color: ${(mMet.f7 || 1) <= mRef.f7 ? 'var(--exito, #10b981)' : 'var(--aviso, #f59e0b)'};">${(mMet.f7 || 1).toFixed(3)} / ${(mMet.f9 || 0).toFixed(3)}</div>
+          <div class="stat-sub">Ataque: ${(mMet.dxAtaque || 0).toFixed(1)} u | Efic: ${((mMet.f9 || 0) * 100).toFixed(1)}%</div>
         </div>
       </div>
 
-      <div style="position: relative; width: 100%; border-radius: var(--radio-sm); overflow: hidden; border: 1px solid var(--borde); background: var(--bg-input);">
+      <div style="position: relative; width: 100%; border-radius: var(--radio-sm, 8px); overflow: hidden; border: 1px solid var(--borde, rgba(148,163,184,0.2)); background: var(--bg-input, #0f172a);">
         <canvas id="canvas-jansen" width="850" height="420" style="width: 100%; height: 380px; display: block;"></canvas>
       </div>
 
-      <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-top: 0.65rem; gap: 0.5rem;">
-        <label style="display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; user-select: none;">
-          <input type="checkbox" id="check-jansen-referencia" ${mostrarReferenciaJansen ? "checked" : ""} style="width: 18px; height: 18px; min-height: 18px; cursor: pointer;">
-          <span>Mostrar diseño original de Jansen como referencia (curva gris punteada)</span>
-        </label>
-        <span style="font-size: 0.8rem; color: var(--texto-secundario);">Manivela m=15 (centro Y en 0,0)</span>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-top: 0.65rem; gap: 0.5rem; background: var(--bg-tarjeta, rgba(30,41,59,0.7)); padding: 0.5rem 0.75rem; border-radius: var(--radio-sm, 8px); border: 1px solid var(--borde, rgba(148,163,184,0.2));">
+        <div style="display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap;">
+          <button type="button" id="btn-jansen-play" class="btn-m3-tonal" style="padding: 0.25rem 0.65rem; font-size: 0.78rem; cursor: pointer; border-radius: 6px;">
+            ${jansenPausado ? "▶ Reanudar" : "⏸ Pausar"}
+          </button>
+          <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem;">
+            <label for="slider-jansen-theta" style="font-weight: 600;">θ Manivela:</label>
+            <input type="range" id="slider-jansen-theta" min="0" max="359" value="0" style="width: 105px; cursor: pointer;">
+            <span id="label-jansen-theta" style="font-family: monospace; font-size: 0.8rem; min-width: 32px;">0°</span>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap;">
+          <label style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; user-select: none;">
+            <input type="checkbox" id="check-jansen-cotas" ${mostrarCotasJansen ? "checked" : ""} style="cursor: pointer;">
+            <span>🏷️ Cotas y Nombres (a..k)</span>
+          </label>
+          <label style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; user-select: none;">
+            <input type="checkbox" id="check-jansen-referencia" ${mostrarReferenciaJansen ? "checked" : ""} style="cursor: pointer;">
+            <span>Theo Jansen canónico (gris)</span>
+          </label>
+        </div>
       </div>
     `;
 
@@ -137,51 +160,178 @@ export class VisualizadorJansen {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
 
+    // Enlace de controles interactivos del toolbar
+    const btnPlay = contenedor.querySelector("#btn-jansen-play");
+    const sliderTheta = contenedor.querySelector("#slider-jansen-theta");
+    const labelTheta = contenedor.querySelector("#label-jansen-theta");
+    const chkCotas = contenedor.querySelector("#check-jansen-cotas");
     const chkReferencia = contenedor.querySelector("#check-jansen-referencia");
+
+    let indicePasoAnimacion = 0;
+
+    if (btnPlay) {
+      btnPlay.addEventListener("click", () => {
+        jansenPausado = !jansenPausado;
+        btnPlay.textContent = jansenPausado ? "▶ Reanudar" : "⏸ Pausar";
+      });
+    }
+
+    if (sliderTheta) {
+      sliderTheta.addEventListener("input", (e) => {
+        const ang = parseInt(e.target.value, 10);
+        jansenPausado = true;
+        if (btnPlay) btnPlay.textContent = "▶ Reanudar";
+        if (labelTheta) labelTheta.textContent = `${ang}°`;
+        const totalP = pasosParaDibujar.length || 180;
+        indicePasoAnimacion = Math.floor((ang / 360) * totalP) % totalP;
+      });
+    }
+
+    if (chkCotas) {
+      chkCotas.addEventListener("change", (e) => {
+        mostrarCotasJansen = e.target.checked;
+      });
+    }
+
     if (chkReferencia) {
       chkReferencia.addEventListener("change", (e) => {
         mostrarReferenciaJansen = e.target.checked;
       });
     }
 
-    const [a, l] = genoma;
+    // Pasos cinemáticos para dibujar
+    let pasosParaDibujar = esValido ? mMet.pasos : [];
+    if (pasosParaDibujar.length === 0) {
+      const pZero = ModeloPataJansen.resolverCinematica(0, arregloGenoma);
+      if (pZero) {
+        pasosParaDibujar = [pZero];
+      } else {
+        pasosParaDibujar = [{
+          theta: 0,
+          Y: { x: 0, y: 0 },
+          X: { x: -a, y: -l },
+          K: { x: 15, y: 0 },
+          D: { x: -a + b * 0.7, y: -l + b * 0.7 },
+          E: { x: -a, y: -l + d },
+          F: { x: -a + c * 0.7, y: -l - c * 0.7 },
+          G: { x: -a, y: -l - 30 },
+          H: { x: -a, y: -l - 70 }
+        }];
+      }
+    }
+
     let minX = Math.min(0, -a, -JANSEN_VALORES_REFERENCIA[0], TRAYECTORIA_JANSEN_ORIGINAL.minX);
     let maxX = Math.max(0, -a, -JANSEN_VALORES_REFERENCIA[0], TRAYECTORIA_JANSEN_ORIGINAL.maxX);
     let minY = Math.min(0, -l, -JANSEN_VALORES_REFERENCIA[1], TRAYECTORIA_JANSEN_ORIGINAL.minY);
     let maxY = Math.max(0, -l, -JANSEN_VALORES_REFERENCIA[1], TRAYECTORIA_JANSEN_ORIGINAL.maxY);
 
-    for (let s = 0; s < mMet.pasos.length; s++) {
-      const p = mMet.pasos[s];
-      minX = Math.min(minX, p.K.x, p.D.x, p.E.x, p.F.x, p.G.x, p.H.x);
-      maxX = Math.max(maxX, p.K.x, p.D.x, p.E.x, p.F.x, p.G.x, p.H.x);
-      minY = Math.min(minY, p.K.y, p.D.y, p.E.y, p.F.y, p.G.y, p.H.y);
-      maxY = Math.max(maxY, p.K.y, p.D.y, p.E.y, p.F.y, p.G.y, p.H.y);
+    for (let s = 0; s < pasosParaDibujar.length; s++) {
+      const p = pasosParaDibujar[s];
+      [p.K, p.D, p.E, p.F, p.G, p.H].forEach(pt => {
+        if (pt) {
+          minX = Math.min(minX, pt.x);
+          maxX = Math.max(maxX, pt.x);
+          minY = Math.min(minY, pt.y);
+          maxY = Math.max(maxY, pt.y);
+        }
+      });
     }
 
-    const margenMundo = 6.0;
-    minX -= margenMundo;
-    maxX += margenMundo;
-    minY -= margenMundo;
-    maxY += margenMundo;
+    const margenMundo = 8.0;
+    minX -= margenMundo; maxX += margenMundo;
+    minY -= margenMundo; maxY += margenMundo;
 
     const rangoX = maxX - minX || 1;
     const rangoY = maxY - minY || 1;
     const centroMundoX = (minX + maxX) / 2;
     const centroMundoY = (minY + maxY) / 2;
 
-    let indicePasoAnimacion = 0;
-
     const aCanvas = (x, y, anchoCSS, altoCSS, escala) => ({
       x: anchoCSS / 2 + (x - centroMundoX) * escala,
       y: altoCSS / 2 - (y - centroMundoY) * escala
     });
 
-    let minANorm = Infinity, maxANorm = -Infinity;
-    for (let s = 0; s < mMet.aNorm.length; s++) {
-      const v = mMet.aNorm[s];
-      if (v < minANorm) minANorm = v;
-      if (v > maxANorm) maxANorm = v;
-    }
+    const aMundo = (cx, cy, anchoCSS, altoCSS, escala) => ({
+      x: centroMundoX + (cx - anchoCSS / 2) / escala,
+      y: centroMundoY - (cy - altoCSS / 2) / escala
+    });
+
+    // Control de arrastre interactivo en el lienzo (Manipulación Directa de Manivela y Pivote X)
+    let nodoArrastrado = null;
+    let escalaActual = 1;
+
+    canvas.addEventListener("mousedown", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      const pasoAct = pasosParaDibujar[indicePasoAnimacion % pasosParaDibujar.length];
+      if (!pasoAct) return;
+
+      const anchoCSS = canvas.clientWidth || 850;
+      const altoCSS = canvas.clientHeight || 380;
+      const ptKCanv = pasoAct.K ? aCanvas(pasoAct.K.x, pasoAct.K.y, anchoCSS, altoCSS, escalaActual) : null;
+      const ptXCanv = pasoAct.X ? aCanvas(pasoAct.X.x, pasoAct.X.y, anchoCSS, altoCSS, escalaActual) : null;
+
+      if (ptKCanv && Math.hypot(cx - ptKCanv.x, cy - ptKCanv.y) <= 15) {
+        nodoArrastrado = "K";
+        jansenPausado = true;
+        if (btnPlay) btnPlay.textContent = "▶ Reanudar";
+      } else if (ptXCanv && Math.hypot(cx - ptXCanv.x, cy - ptXCanv.y) <= 15) {
+        nodoArrastrado = "X";
+      }
+    });
+
+    canvas.addEventListener("mousemove", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      const pasoAct = pasosParaDibujar[indicePasoAnimacion % pasosParaDibujar.length];
+      const anchoCSS = canvas.clientWidth || 850;
+      const altoCSS = canvas.clientHeight || 380;
+
+      if (!nodoArrastrado) {
+        if (pasoAct) {
+          const ptKCanv = pasoAct.K ? aCanvas(pasoAct.K.x, pasoAct.K.y, anchoCSS, altoCSS, escalaActual) : null;
+          const ptXCanv = pasoAct.X ? aCanvas(pasoAct.X.x, pasoAct.X.y, anchoCSS, altoCSS, escalaActual) : null;
+          const cercaK = ptKCanv && Math.hypot(cx - ptKCanv.x, cy - ptKCanv.y) <= 15;
+          const cercaX = ptXCanv && Math.hypot(cx - ptXCanv.x, cy - ptXCanv.y) <= 15;
+          canvas.style.cursor = (cercaK || cercaX) ? "grab" : "default";
+        }
+        return;
+      }
+
+      canvas.style.cursor = "grabbing";
+
+      if (nodoArrastrado === "K") {
+        const ptOCanv = aCanvas(0, 0, anchoCSS, altoCSS, escalaActual);
+        const dx = cx - ptOCanv.x;
+        const dy = -(cy - ptOCanv.y);
+        let angRad = Math.atan2(dy, dx);
+        if (angRad < 0) angRad += 2 * Math.PI;
+        const angGrados = Math.round((angRad * 180) / Math.PI) % 360;
+        const totalP = pasosParaDibujar.length || 180;
+        indicePasoAnimacion = Math.floor((angGrados / 360) * totalP) % totalP;
+        if (sliderTheta) sliderTheta.value = angGrados;
+        if (labelTheta) labelTheta.textContent = `${angGrados}°`;
+      } else if (nodoArrastrado === "X") {
+        const posMundo = aMundo(cx, cy, anchoCSS, altoCSS, escalaActual);
+        const nuevoA = Math.max(10.0, Math.min(80.0, -posMundo.x));
+        const nuevoL = Math.max(1.0, Math.min(40.0, -posMundo.y));
+        if (typeof contexto.onParamChange === "function") {
+          contexto.onParamChange({
+            a: parseFloat(nuevoA.toFixed(1)),
+            l: parseFloat(nuevoL.toFixed(1))
+          });
+        }
+      }
+    });
+
+    const finArrastre = () => {
+      nodoArrastrado = null;
+      canvas.style.cursor = "default";
+    };
+    canvas.addEventListener("mouseup", finArrastre);
+    canvas.addEventListener("mouseleave", finArrastre);
 
     const animar = () => {
       if (!canvas.isConnected) {
@@ -202,10 +352,12 @@ export class VisualizadorJansen {
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, anchoCSS, altoCSS);
 
-      const escala = Math.min((anchoCSS - 60) / rangoX, (altoCSS - 60) / rangoY);
+      escalaActual = Math.min((anchoCSS - 60) / rangoX, (altoCSS - 60) / rangoY);
+      const escala = escalaActual;
 
       // Línea de suelo
-      const ptSuelo = aCanvas(0, mMet.minYTotal, anchoCSS, altoCSS, escala);
+      const ySueloRef = esValido ? mMet.minYTotal : -92;
+      const ptSuelo = aCanvas(0, ySueloRef, anchoCSS, altoCSS, escala);
       ctx.beginPath();
       ctx.strokeStyle = "rgba(100, 116, 139, 0.4)";
       ctx.lineWidth = 1.5;
@@ -215,8 +367,9 @@ export class VisualizadorJansen {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Cota visual del obstáculo
-      const ptObstaculo = aCanvas(0, mMet.minYApoyo + mMet.obstaculoAlto, anchoCSS, altoCSS, escala);
+      // Cota del obstáculo
+      const yApoyoRef = esValido ? mMet.minYApoyo : -90;
+      const ptObstaculo = aCanvas(0, yApoyoRef + (mMet.obstaculoAlto || 15), anchoCSS, altoCSS, escala);
       ctx.beginPath();
       ctx.strokeStyle = "rgba(239, 68, 68, 0.5)";
       ctx.lineWidth = 1.2;
@@ -228,8 +381,9 @@ export class VisualizadorJansen {
 
       ctx.fillStyle = "rgba(239, 68, 68, 0.85)";
       ctx.font = "10px system-ui";
-      ctx.fillText(`Obstáculo mínimo (${mMet.obstaculoAlto} u)`, 12, ptObstaculo.y - 4);
+      ctx.fillText(`Obstáculo mínimo (${mMet.obstaculoAlto || 15} u)`, 12, ptObstaculo.y - 4);
 
+      // Trazo de referencia histórica de Jansen (curva gris punteada)
       if (mostrarReferenciaJansen) {
         ctx.beginPath();
         ctx.strokeStyle = "rgba(148, 163, 184, 0.75)";
@@ -245,78 +399,89 @@ export class VisualizadorJansen {
         ctx.setLineDash([]);
       }
 
-      for (let s = 0; s < mMet.pasos.length; s++) {
-        const p1 = aCanvas(mMet.pasos[s].H.x, mMet.pasos[s].H.y, anchoCSS, altoCSS, escala);
-        const sigIdx = (s + 1) % mMet.pasos.length;
-        const p2 = aCanvas(mMet.pasos[sigIdx].H.x, mMet.pasos[sigIdx].H.y, anchoCSS, altoCSS, escala);
-        const esApoyo = mMet.apoyoSet.has(s) && mMet.apoyoSet.has(sigIdx);
+      // Trazo de la curva del pie activo
+      if (esValido) {
+        for (let s = 0; s < mMet.pasos.length; s++) {
+          const p1 = aCanvas(mMet.pasos[s].H.x, mMet.pasos[s].H.y, anchoCSS, altoCSS, escala);
+          const sigIdx = (s + 1) % mMet.pasos.length;
+          const p2 = aCanvas(mMet.pasos[sigIdx].H.x, mMet.pasos[sigIdx].H.y, anchoCSS, altoCSS, escala);
+          const esApoyo = mMet.apoyoSet.has(s) && mMet.apoyoSet.has(sigIdx);
 
-        ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
-        if (esApoyo) {
-          ctx.strokeStyle = "#f59e0b";
-          ctx.lineWidth = 3.5;
-        } else {
-          ctx.strokeStyle = "#10b981";
-          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          if (esApoyo) {
+            ctx.strokeStyle = "#f59e0b";
+            ctx.lineWidth = 3.5;
+          } else {
+            ctx.strokeStyle = "#10b981";
+            ctx.lineWidth = 1.5;
+          }
+          ctx.stroke();
         }
-        ctx.stroke();
       }
 
-      const paso = mMet.pasos[indicePasoAnimacion];
+      const paso = pasosParaDibujar[indicePasoAnimacion % pasosParaDibujar.length];
       const ptO = aCanvas(0, 0, anchoCSS, altoCSS, escala);
-      const ptK = aCanvas(paso.K.x, paso.K.y, anchoCSS, altoCSS, escala);
-      const ptX = aCanvas(paso.X.x, paso.X.y, anchoCSS, altoCSS, escala);
-      const ptD = aCanvas(paso.D.x, paso.D.y, anchoCSS, altoCSS, escala);
-      const ptE = aCanvas(paso.E.x, paso.E.y, anchoCSS, altoCSS, escala);
-      const ptF = aCanvas(paso.F.x, paso.F.y, anchoCSS, altoCSS, escala);
-      const ptG = aCanvas(paso.G.x, paso.G.y, anchoCSS, altoCSS, escala);
-      const ptH = aCanvas(paso.H.x, paso.H.y, anchoCSS, altoCSS, escala);
+      const ptK = paso.K ? aCanvas(paso.K.x, paso.K.y, anchoCSS, altoCSS, escala) : ptO;
+      const ptX = paso.X ? aCanvas(paso.X.x, paso.X.y, anchoCSS, altoCSS, escala) : ptO;
+      const ptD = paso.D ? aCanvas(paso.D.x, paso.D.y, anchoCSS, altoCSS, escala) : null;
+      const ptE = paso.E ? aCanvas(paso.E.x, paso.E.y, anchoCSS, altoCSS, escala) : null;
+      const ptF = paso.F ? aCanvas(paso.F.x, paso.F.y, anchoCSS, altoCSS, escala) : null;
+      const ptG = paso.G ? aCanvas(paso.G.x, paso.G.y, anchoCSS, altoCSS, escala) : null;
+      const ptH = paso.H ? aCanvas(paso.H.x, paso.H.y, anchoCSS, altoCSS, escala) : null;
 
       // Triángulo superior D-E-X
-      ctx.beginPath();
-      ctx.moveTo(ptD.x, ptD.y);
-      ctx.lineTo(ptE.x, ptE.y);
-      ctx.lineTo(ptX.x, ptX.y);
-      ctx.closePath();
-      ctx.fillStyle = "rgba(59, 130, 246, 0.12)";
-      ctx.fill();
+      if (ptD && ptE && ptX) {
+        ctx.beginPath();
+        ctx.moveTo(ptD.x, ptD.y);
+        ctx.lineTo(ptE.x, ptE.y);
+        ctx.lineTo(ptX.x, ptX.y);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(59, 130, 246, 0.12)";
+        ctx.fill();
+      }
 
       // Triángulo medio E-F-G
-      ctx.beginPath();
-      ctx.moveTo(ptE.x, ptE.y);
-      ctx.lineTo(ptF.x, ptF.y);
-      ctx.lineTo(ptG.x, ptG.y);
-      ctx.closePath();
-      ctx.fillStyle = "rgba(16, 185, 129, 0.12)";
-      ctx.fill();
+      if (ptE && ptF && ptG) {
+        ctx.beginPath();
+        ctx.moveTo(ptE.x, ptE.y);
+        ctx.lineTo(ptF.x, ptF.y);
+        ctx.lineTo(ptG.x, ptG.y);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(16, 185, 129, 0.12)";
+        ctx.fill();
+      }
 
       // Triángulo inferior de contacto F-G-H
-      ctx.beginPath();
-      ctx.moveTo(ptF.x, ptF.y);
-      ctx.lineTo(ptG.x, ptG.y);
-      ctx.lineTo(ptH.x, ptH.y);
-      ctx.closePath();
-      ctx.fillStyle = "rgba(245, 158, 11, 0.14)";
-      ctx.fill();
+      if (ptF && ptG && ptH) {
+        ctx.beginPath();
+        ctx.moveTo(ptF.x, ptF.y);
+        ctx.lineTo(ptG.x, ptG.y);
+        ctx.lineTo(ptH.x, ptH.y);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(245, 158, 11, 0.14)";
+        ctx.fill();
+      }
 
-      const barras = [
-        [ptO, ptK, "#ef4444", 3],
-        [ptO, ptX, "#94a3b8", 1.5, true],
-        [ptK, ptD, "#3b82f6", 2.2],
-        [ptK, ptF, "#3b82f6", 2.2],
-        [ptX, ptD, "#0284c7", 2.2],
-        [ptX, ptF, "#0284c7", 2.2],
-        [ptX, ptE, "#0284c7", 2.2],
-        [ptD, ptE, "#065f46", 2.2],
-        [ptE, ptG, "#059669", 2.2],
-        [ptF, ptG, "#059669", 2.2],
-        [ptG, ptH, "#d97706", 2.6],
-        [ptF, ptH, "#d97706", 2.6]
+      // 12 Barras del mecanismo de Theo Jansen con metadatos de cotas
+      const barrasConInfo = [
+        { pA: ptO, pB: ptK, color: "#ef4444", ancho: 3, id: "m", cota: 15.0 },
+        { pA: ptO, pB: ptX, color: "#94a3b8", ancho: 1.5, punteado: true, id: "X", cota: Math.hypot(a, l) },
+        { pA: ptK, pB: ptD, color: "#3b82f6", ancho: 2.2, id: "j", cota: j },
+        { pA: ptK, pB: ptF, color: "#3b82f6", ancho: 2.2, id: "k", cota: k },
+        { pA: ptX, pB: ptD, color: "#0284c7", ancho: 2.2, id: "b", cota: b },
+        { pA: ptX, pB: ptF, color: "#0284c7", ancho: 2.2, id: "c", cota: c },
+        { pA: ptX, pB: ptE, color: "#0284c7", ancho: 2.2, id: "d", cota: d },
+        { pA: ptD, pB: ptE, color: "#065f46", ancho: 2.2, id: "e", cota: e },
+        { pA: ptE, pB: ptG, color: "#059669", ancho: 2.2, id: "f", cota: f },
+        { pA: ptF, pB: ptG, color: "#059669", ancho: 2.2, id: "g", cota: g },
+        { pA: ptG, pB: ptH, color: "#d97706", ancho: 2.6, id: "h", cota: h },
+        { pA: ptF, pB: ptH, color: "#d97706", ancho: 2.6, id: "i", cota: i }
       ];
 
-      barras.forEach(([pA, pB, color, ancho, punteado]) => {
+      barrasConInfo.forEach(({ pA, pB, color, ancho, punteado }) => {
+        if (!pA || !pB) return;
         ctx.beginPath();
         ctx.strokeStyle = color;
         ctx.lineWidth = ancho;
@@ -327,10 +492,31 @@ export class VisualizadorJansen {
         if (punteado) ctx.setLineDash([]);
       });
 
+      // Dibujo de cotas y etiquetas de barras sobre el mecanismo
+      if (mostrarCotasJansen) {
+        ctx.font = "bold 9px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        barrasConInfo.forEach(bInfo => {
+          if (!bInfo.pA || !bInfo.pB || bInfo.id === "X") return;
+          const mx = (bInfo.pA.x + bInfo.pB.x) / 2;
+          const my = (bInfo.pA.y + bInfo.pB.y) / 2;
+          const texto = `${bInfo.id}: ${typeof bInfo.cota === "number" ? bInfo.cota.toFixed(1) : bInfo.cota}`;
+          const w = ctx.measureText(texto).width + 6;
+          ctx.fillStyle = "rgba(15, 23, 42, 0.78)";
+          ctx.beginPath();
+          ctx.roundRect(mx - w / 2, my - 7, w, 14, 3);
+          ctx.fill();
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(texto, mx, my);
+        });
+      }
+
+      // Nodos articulados
       const nodos = [
         { pt: ptO, nombre: "Y(0,0)", fija: true },
-        { pt: ptX, nombre: `X(-${a.toFixed(0)},-${l.toFixed(0)})`, fija: true },
-        { pt: ptK, nombre: "K", fija: false },
+        { pt: ptX, nombre: `X(-${a.toFixed(1)},-${l.toFixed(1)})`, fija: true, interactiva: true },
+        { pt: ptK, nombre: "K", fija: false, interactiva: true },
         { pt: ptD, nombre: "D", fija: false },
         { pt: ptE, nombre: "E", fija: false },
         { pt: ptF, nombre: "F", fija: false },
@@ -338,6 +524,18 @@ export class VisualizadorJansen {
       ];
 
       nodos.forEach(n => {
+        if (!n.pt) return;
+        // Halo interactivo en nodos manipulables K y X
+        if (n.interactiva) {
+          ctx.beginPath();
+          ctx.arc(n.pt.x, n.pt.y, 9, 0, 2 * Math.PI);
+          ctx.strokeStyle = n.pt === ptK ? "rgba(239, 68, 68, 0.55)" : "rgba(59, 130, 246, 0.55)";
+          ctx.lineWidth = 1.8;
+          ctx.setLineDash([2, 2]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
         ctx.beginPath();
         ctx.arc(n.pt.x, n.pt.y, n.fija ? 5.5 : 4, 0, 2 * Math.PI);
         ctx.fillStyle = n.fija ? "#1e293b" : "#ffffff";
@@ -348,16 +546,26 @@ export class VisualizadorJansen {
       });
 
       // Pie dinámico
-      const enApoyo = mMet.apoyoSet.has(indicePasoAnimacion);
-      ctx.beginPath();
-      ctx.arc(ptH.x, ptH.y, 6.5, 0, 2 * Math.PI);
-      ctx.fillStyle = enApoyo ? "#f59e0b" : "#10b981";
-      ctx.fill();
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      if (ptH) {
+        const enApoyo = esValido && mMet.apoyoSet.has(indicePasoAnimacion % (mMet.pasos?.length || 180));
+        ctx.beginPath();
+        ctx.arc(ptH.x, ptH.y, 6.5, 0, 2 * Math.PI);
+        ctx.fillStyle = enApoyo ? "#f59e0b" : "#10b981";
+        ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
 
-      indicePasoAnimacion = (indicePasoAnimacion + 1) % mMet.pasos.length;
+      // Actualización de ángulo y avance de ciclo si no está pausado
+      if (!jansenPausado && !nodoArrastrado && pasosParaDibujar.length > 1) {
+        indicePasoAnimacion = (indicePasoAnimacion + 1) % pasosParaDibujar.length;
+        const totalP = pasosParaDibujar.length || 180;
+        const angAct = Math.round((indicePasoAnimacion / totalP) * 360) % 360;
+        if (sliderTheta) sliderTheta.value = angAct;
+        if (labelTheta) labelTheta.textContent = `${angAct}°`;
+      }
+
       this.animId = requestAnimationFrame(animar);
     };
 
@@ -3479,12 +3687,17 @@ export class VisualizadorNesting {
 export class VisualizadorDinamico {
   constructor() {
     this.animId = null;
+    this.subVisualizadorActivo = null;
   }
 
   detener() {
     if (this.animId !== null) {
       cancelAnimationFrame(this.animId);
       this.animId = null;
+    }
+    if (this.subVisualizadorActivo && typeof this.subVisualizadorActivo.detener === "function") {
+      this.subVisualizadorActivo.detener();
+      this.subVisualizadorActivo = null;
     }
   }
 
@@ -3495,6 +3708,13 @@ export class VisualizadorDinamico {
     const modelo = contexto.modelo;
     const tipo = modelo?.tipoVisualizacion || modelo?.definicionCruda?.tipoVisualizacion || "calibracion";
     const varsDef = modelo?.variables || (modelo?.crearGenoma ? modelo.crearGenoma() : []);
+
+    // 0. Cinemática del mecanismo de Theo Jansen (13 barras)
+    if (tipo === "mecanismo_jansen" || tipo === "pata_jansen" || modelo?.id === "pata-jansen" || (modelo?.id && modelo.id.includes("jansen"))) {
+      this.subVisualizadorActivo = new VisualizadorJansen();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+      return;
+    }
 
     // 1. Representación de Campo de Potencial 2D
     if (tipo === "campo_potencial_2d") {
@@ -3528,31 +3748,36 @@ export class VisualizadorDinamico {
 
     // 6. Representación de Arreglo Acústico y Ondas 2D
     if (tipo === "acustica_ondas_2d") {
-      new VisualizadorAcustica().render(contenedor, genoma, entrada, contexto);
+      this.subVisualizadorActivo = new VisualizadorAcustica();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
       return;
     }
 
     // 7. Representación de Campo Electromagnético / Fuerza de Lorentz
     if (tipo === "electromagnetismo_lorentz" || tipo === "campo_electromagnetico") {
-      new VisualizadorElectromagnetismo().render(contenedor, genoma, entrada, contexto);
+      this.subVisualizadorActivo = new VisualizadorElectromagnetismo();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
       return;
     }
 
     // 8. Representación de Perfil Fonoabsorbente y Multimaterial
     if (tipo === "fonoabsorbente_acustico") {
-      new VisualizadorFonoabsorbente().render(contenedor, genoma, entrada, contexto);
+      this.subVisualizadorActivo = new VisualizadorFonoabsorbente();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
       return;
     }
 
     // 9. Representación de Línea de Transmisión RF y Carta de Smith
     if (tipo === "linea_transmision_smith" || tipo === "carta_smith") {
-      new VisualizadorLineaRF().render(contenedor, genoma, entrada, contexto);
+      this.subVisualizadorActivo = new VisualizadorLineaRF();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
       return;
     }
 
     // 10. Representación de Corte de Chapa y Anidado 2D (Nesting)
     if (tipo === "corte_chapa_nesting" || tipo === "nesting_2d") {
-      new VisualizadorNesting().render(contenedor, genoma, entrada, contexto);
+      this.subVisualizadorActivo = new VisualizadorNesting();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
       return;
     }
 
