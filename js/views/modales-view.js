@@ -43,13 +43,19 @@ export {
 // Controlador centralizado de ventanas modales y notificaciones en la interfaz de usuario.
 export class ModalesView {
   // Inicializa el controlador asociando los grupos de elementos DOM de cada modal.
-  constructor(elementos = {}) {
+  constructor(elementos = {}, estudioView = null) {
     this.elementosConstructor = elementos.constructor || {};
     this.elementosBiblioteca = elementos.biblioteca || {};
     this.elementosRenombrar = elementos.renombrar || {};
     this.elementosImportar = elementos.importar || {};
     this.elementosPreset = elementos.preset || {};
     this.elementosConfiguracion = elementos.configuracion || {};
+    this.estudioView = estudioView;
+  }
+
+  // Asigna la instancia del Estudio de Modelado de pantalla completa.
+  asignarEstudioView(estudioView) {
+    this.estudioView = estudioView;
   }
 
   // Muestra una notificación flotante estilo Snackbar de Material 3.
@@ -76,24 +82,37 @@ export class ModalesView {
     }
   }
 
-  // Abre el constructor de simulaciones en modo creación o edición.
+  // Abre el constructor/estudio de simulaciones en modo creación o edición.
   abrirConstructor(datosIniciales = null, esEdicion = false) {
-    abrirModalConstructor(this.elementosConstructor, datosIniciales, esEdicion);
+    if (this.estudioView) {
+      this.estudioView.abrir(datosIniciales, esEdicion);
+    } else {
+      abrirModalConstructor(this.elementosConstructor, datosIniciales, esEdicion);
+    }
   }
 
-  // Cierra el constructor de simulaciones.
+  // Cierra el constructor/estudio de simulaciones.
   cerrarConstructor() {
-    cerrarModalConstructor(this.elementosConstructor);
+    if (this.estudioView) {
+      this.estudioView.cerrar();
+    } else {
+      cerrarModalConstructor(this.elementosConstructor);
+    }
   }
 
   // Extrae los datos ingresados en el formulario del constructor low-code.
   extraerDatosConstructor() {
+    if (this.estudioView) {
+      return this.estudioView.extraerDatos();
+    }
     return extraerDefinicionModeloDesdeUI(this.elementosConstructor);
   }
 
   // Agrega una fila de variable al formulario del constructor.
   agregarVariableConstructor(datosVariable = {}) {
-    if (this.elementosConstructor.tbody) {
+    if (this.estudioView) {
+      this.estudioView.agregarVariable(datosVariable);
+    } else if (this.elementosConstructor.tbody) {
       agregarFilaVariableConstructor(this.elementosConstructor.tbody, datosVariable);
     }
   }

@@ -5,6 +5,7 @@
 
 import { GraficoView } from "./grafico-view.js";
 import { ModalesView } from "./modales-view.js";
+import { EstudioView } from "./estudio-view.js";
 import { obtenerVisualizador, detenerTodosLosVisualizadores } from "./visualizers.js";
 import {
   construirFormularioModelo,
@@ -82,7 +83,7 @@ export class AppView {
     // Subvista de gráficos (Canvas 2D para convergencia y Pareto).
     this.graficoView = new GraficoView(this.dom.canvasFitness, this.dom.leyendaGrafico);
 
-    // Subvista de modales (Constructor, Biblioteca, Configuración, etc.).
+    // Subvista de modales (Biblioteca, Configuración, Renombrar, etc.).
     this.modalesView = new ModalesView({
       constructor: {
         modal: document.getElementById("modal-constructor-modelo"),
@@ -119,6 +120,25 @@ export class AppView {
         modal: document.getElementById("modal-configuracion")
       }
     });
+
+    // Subvista de Estudio de Modelado (Workspace a pantalla completa)
+    this.estudioView = new EstudioView({
+      onGuardar: (def, esEdicion, idExistente) => {
+        try {
+          const compilado = this.vm.guardarModeloDinamico(def, esEdicion, idExistente);
+          this.estudioView.cerrar();
+          this.modalesView.notificar(`💾 Simulación '${compilado.nombre}' guardada y activada con éxito`);
+        } catch (err) {
+          if (this.estudioView.dom.alerta) {
+            this.modalesView.alerta(err.message, this.estudioView.dom.alerta);
+          }
+        }
+      },
+      onCerrar: () => {}
+    });
+
+    // Enlaza la vista de Estudio al controlador modal para retrocompatibilidad
+    this.modalesView.asignarEstudioView(this.estudioView);
 
     // Estado local para recordar datos de dibujo de Pareto.
     this.ultimoDatosMulti = null;
@@ -357,12 +377,12 @@ export class AppView {
 
     // Acciones de Toolbar
     this.dom.btnAbrirConstructor.addEventListener("click", () => {
-      this.modalesView.abrirConstructor(null, false);
+      this.estudioView.abrir(null, false);
     });
 
     this.dom.btnEditarModelo.addEventListener("click", () => {
       if (!this.vm.modeloActual.esDinamico) return;
-      this.modalesView.abrirConstructor(this.vm.modeloActual.definicionCruda, true);
+      this.estudioView.abrir(this.vm.modeloActual.definicionCruda, true);
     });
 
     this.dom.btnCopiarModelo.addEventListener("click", () => {
@@ -518,7 +538,7 @@ export class AppView {
     document.getElementById("btn-cerrar-biblioteca-pie")?.addEventListener("click", () => this.modalesView.cerrarBiblioteca());
     document.getElementById("btn-nuevo-desde-biblioteca")?.addEventListener("click", () => {
       this.modalesView.cerrarBiblioteca();
-      this.modalesView.abrirConstructor(null, false);
+      this.estudioView.abrir(null, false);
     });
     document.getElementById("btn-importar-desde-biblioteca")?.addEventListener("click", () => {
       this.modalesView.cerrarBiblioteca();
@@ -544,7 +564,7 @@ export class AppView {
           } else if (accion === "editar") {
             const mod = this.vm.obtenerModelos().find(m => m.id === id);
             this.modalesView.cerrarBiblioteca();
-            if (mod?.esDinamico) this.modalesView.abrirConstructor(mod.definicionCruda, true);
+            if (mod?.esDinamico) this.estudioView.abrir(mod.definicionCruda, true);
           } else if (accion === "renombrar") {
             const mod = this.vm.obtenerModelos().find(m => m.id === id);
             this.modalesView.cerrarBiblioteca();

@@ -1,0 +1,59 @@
+name: Compilación Automatizada de WebAssembly (WASM)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src-wasm/**'
+      - 'Makefile'
+      - '.github/workflows/wasm-build.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src-wasm/**'
+      - 'Makefile'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-wasm:
+    name: Compilar y Empaquetar C++ a WebAssembly
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar código fuente
+        uses: actions/checkout@v4
+
+      - name: Configurar Emscripten SDK oficial
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+
+      - name: Verificar entorno emcc
+        run: emcc -v
+
+      - name: Compilar sim_core.wasm con optimizaciones -O3
+        run: |
+          make clean
+          make all
+
+      - name: Verificar binario WASM generado
+        run: |
+          ls -lh js/core/sim_core.wasm
+          test -s js/core/sim_core.wasm
+
+      - name: Almacenar binario compilado como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-core-wasm
+          path: js/core/sim_core.wasm
+          retention-days: 30
+
+      - name: Publicar y sincronizar binario en el repositorio
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add js/core/sim_core.wasm
+          git diff --staged --quiet || (git commit -m "chore(wasm): actualizar binario precompilado sim_core.wasm [skip ci]" && git push)

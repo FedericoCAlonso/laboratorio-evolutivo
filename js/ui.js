@@ -5,7 +5,7 @@
 import { obtenerPlantillaSimulacion } from "./builder.js";
 
 // Textos de ayuda descriptivos para cada naturaleza de representación gráfica en el diseñador.
-const HINTS_VISUALIZACION = {
+export const HINTS_VISUALIZACION = {
   "calibracion": "Muestra el estado y magnitud de cada variable en indicadores visuales de barra y porcentaje de rango.",
   "campo_potencial_2d": "Genera un mapa de calor 2D continuo con curvas de nivel (isolíneas equipotenciales), gradiente de fuerza y ubicación de partículas.",
   "campo_vectorial_2d": "Muestra una grilla de vectores direccionales de velocidad y líneas de flujo con rotación de vórtices.",
