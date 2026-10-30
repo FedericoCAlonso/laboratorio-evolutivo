@@ -119,4 +119,25 @@ if (!resultadoImport) {
 }
 console.log(`    ✓ Exportación e importación completada: tipo '${resultadoImport.tipo}'`);
 
-console.log("\n=== TODAS LAS PRUEBAS DEL VIEWMODEL PASARON EXITOSAMENTE (5/5) ===");
+// 6. Verificación de Resumen de Genoma para M3 Chips y Sincronización Bidireccional
+console.log("\n[6] Verificando resumen de genoma M3 y sincronización de configMotor...");
+vm.seleccionarModelo("pata-jansen");
+const resumenChips = vm.obtenerResumenGenomaActual();
+if (!Array.isArray(resumenChips) || resumenChips.length !== 12 || resumenChips[0].nombre !== "a") {
+  throw new Error("obtenerResumenGenomaActual() no devolvió los 12 genes estructurados de Theo Jansen.");
+}
+vm.actualizarConfigMotor({ tamPoblacion: 120, probMutacion: 0.08, torneoK: 5, replicasRuido: 4 });
+if (vm.configMotor.tamanoPoblacion !== 120 || vm.configMotor.tasaMutacion !== 0.08 || vm.configMotor.tamanoTorneo !== 5 || vm.configMotor.nReplicasRuido !== 4) {
+  throw new Error("actualizarConfigMotor() no sincronizó los alias requeridos por Motor/Worker.");
+}
+let inicializadoEmitido = false;
+vm.on("estado:inicializado", ({ configMotor }) => {
+  if (configMotor && configMotor.tamPoblacion === 120) inicializadoEmitido = true;
+});
+vm.restaurarEstadoInicial();
+if (!inicializadoEmitido) {
+  throw new Error("restaurarEstadoInicial() no emitió estado:inicializado con configMotor.");
+}
+console.log(`    ✓ Resumen de genoma (${resumenChips.length} chips) y estado:inicializado verificados | OK`);
+
+console.log("\n=== TODAS LAS PRUEBAS DEL VIEWMODEL PASARON EXITOSAMENTE (6/6) ===");

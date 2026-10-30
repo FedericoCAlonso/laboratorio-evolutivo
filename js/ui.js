@@ -253,13 +253,17 @@ export function obtenerDatosEntradaModelo(modelo) {
 
 // Extrae y valida los parámetros de configuración del motor genético desde el DOM.
 export function obtenerParametrosMotor() {
-  const poblacion = parseInt(document.getElementById("param-poblacion").value, 10);
-  const generaciones = parseInt(document.getElementById("param-generaciones").value, 10);
-  const mutacion = parseFloat(document.getElementById("param-mutacion").value);
-  const elitismo = parseInt(document.getElementById("param-elitismo").value, 10);
-  const torneo = parseInt(document.getElementById("param-torneo").value, 10);
-  const replicas = parseInt(document.getElementById("param-replicas-ruido").value, 10);
-  const semilla = parseInt(document.getElementById("param-semilla").value, 10);
+  const poblacion = parseInt(document.getElementById("param-poblacion")?.value || "80", 10);
+  const generaciones = parseInt(document.getElementById("param-generaciones")?.value || "100", 10);
+  const mutacion = parseFloat(document.getElementById("param-mutacion")?.value || "0.12");
+  const elitismo = parseInt(document.getElementById("param-elitismo")?.value || "2", 10);
+  const torneo = parseInt(document.getElementById("param-torneo")?.value || "3", 10);
+  const replicas = parseInt(document.getElementById("param-replicas-ruido")?.value || "3", 10);
+  const semilla = parseInt(document.getElementById("param-semilla")?.value || "123456", 10);
+  const cruzamientoEl = document.getElementById("param-cruzamiento");
+  const probCruzamiento = cruzamientoEl ? parseFloat(cruzamientoEl.value) : 0.85;
+  const esquemaSeleccion = document.getElementById("param-seleccion-esquema")?.value || "torneo";
+  const crossover = document.getElementById("param-crossover-tipo")?.value || "sbx";
 
   if (isNaN(poblacion) || poblacion < 4) throw new Error("La población debe ser al menos de 4 individuos.");
   if (isNaN(generaciones) || generaciones < 1) throw new Error("Las generaciones deben ser al menos 1.");
@@ -268,15 +272,47 @@ export function obtenerParametrosMotor() {
   if (isNaN(torneo) || torneo < 1 || torneo > poblacion) throw new Error("El torneo debe estar entre 1 y el tamaño de población.");
   if (isNaN(semilla)) throw new Error("La semilla debe ser un número entero válido.");
 
+  const repValidas = isNaN(replicas) || replicas < 1 ? 3 : replicas;
+
   return {
+    tamPoblacion: poblacion,
     tamanoPoblacion: poblacion,
     generaciones: generaciones,
+    probMutacion: mutacion,
     tasaMutacion: mutacion,
+    probCruzamiento: isNaN(probCruzamiento) ? 0.85 : Math.max(0, Math.min(1, probCruzamiento)),
     elitismo: elitismo,
+    torneoK: torneo,
     tamanoTorneo: torneo,
-    nReplicasRuido: isNaN(replicas) || replicas < 1 ? 5 : replicas,
+    esquemaSeleccion,
+    crossover,
+    replicasRuido: repValidas,
+    nReplicasRuido: repValidas,
     semilla: semilla
   };
+}
+
+// Sincroniza los campos de entrada del motor genético en el DOM a partir de la configuración del ViewModel.
+export function sincronizarFormularioMotor(configMotor = {}) {
+  if (typeof document === "undefined" || !configMotor) return;
+  const map = [
+    ["param-poblacion", configMotor.tamPoblacion ?? configMotor.tamanoPoblacion],
+    ["param-generaciones", configMotor.generaciones],
+    ["param-mutacion", configMotor.probMutacion ?? configMotor.tasaMutacion],
+    ["param-elitismo", configMotor.elitismo],
+    ["param-torneo", configMotor.torneoK ?? configMotor.tamanoTorneo],
+    ["param-replicas-ruido", configMotor.replicasRuido ?? configMotor.nReplicasRuido],
+    ["param-semilla", configMotor.semilla],
+    ["param-cruzamiento", configMotor.probCruzamiento],
+    ["param-seleccion-esquema", configMotor.esquemaSeleccion],
+    ["param-crossover-tipo", configMotor.crossover]
+  ];
+  map.forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el && val !== undefined && val !== null) {
+      el.value = val;
+    }
+  });
 }
 
 // Dibuja en el Canvas 2D el gráfico correspondiente: curva monobjetivo o dispersión multiobjetivo (Scatter Plot Pareto).
@@ -872,96 +908,139 @@ export function cerrarModalGuardarPreset(elementosPreset) {
   }
 }
 
+// Clasifica un modelo dentro de las categorías de ingeniería de la Biblioteca Material 3.
+function obtenerCategoriaModelo(mod) {
+  if (!mod) return "otros";
+  if (mod.esDinamico) return "dinamicos";
+  const id = mod.id || "";
+  if (["pata-jansen", "pata-caminante", "brazo-robotico", "armadura-puente", "cohete-landing", "orbita-transferencia"].includes(id)) {
+    return "mecanismos";
+  }
+  if (["campo-potencial", "distribucion-termica", "confinamiento-em"].includes(id)) {
+    return "campos";
+  }
+  if (["acustica-beamforming", "superficie-fonoabsorbente", "linea-transmision-rf"].includes(id)) {
+    return "ondas";
+  }
+  if (["controlador-pid", "filtro-rlc", "corte-chapa-nesting", "balanceo-fases-trifasico"].includes(id)) {
+    return "control";
+  }
+  return "mecanismos";
+}
+
 // Renderiza y abre la biblioteca completa con todas las simulaciones y presets guardados.
 export function abrirModalBiblioteca(elementosBiblioteca, modelos, presets, onAccion) {
   const { modal, contenedor, inputBuscar } = elementosBiblioteca;
   if (!modal || !contenedor) return;
+
+  let categoriaActiva = "todos";
+  const contenedorFiltros = typeof document !== "undefined" ? document.getElementById("filtros-biblioteca-m3") : null;
 
   const renderizarItems = (filtro = "") => {
     contenedor.innerHTML = "";
     const filtroNorm = filtro.toLowerCase().trim();
 
     // 1. Modelos (Nativos y Dinámicos)
-    modelos.forEach(mod => {
-      const textoBuscar = `${mod.nombre} ${mod.descripcion || ""}`.toLowerCase();
-      if (filtroNorm && !textoBuscar.includes(filtroNorm)) return;
+    if (categoriaActiva !== "presets") {
+      modelos.forEach(mod => {
+        const catMod = obtenerCategoriaModelo(mod);
+        if (categoriaActiva !== "todos" && catMod !== categoriaActiva) return;
 
-      const card = document.createElement("div");
-      card.className = "tarjeta-simulacion-biblioteca";
+        const textoBuscar = `${mod.nombre} ${mod.descripcion || ""} ${catMod}`.toLowerCase();
+        if (filtroNorm && !textoBuscar.includes(filtroNorm)) return;
 
-      const badgeClase = mod.esDinamico ? "badge-dinamico" : "badge-nativo";
-      const badgeTexto = mod.esDinamico ? "Dinámico Low-Code" : "Modelo Nativo";
+        const card = document.createElement("div");
+        card.className = "tarjeta-simulacion-biblioteca";
 
-      card.innerHTML = `
-        <div>
-          <h4>
-            <span>${mod.nombre}</span>
-            <span class="badge-tipo-sim ${badgeClase}">${badgeTexto}</span>
-          </h4>
-          <p style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.35rem;">
-            ${mod.descripcion || "Sin descripción"}
-          </p>
-        </div>
-        <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem;">
-          <button type="button" class="btn-m3-filled btn-cargar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">▶ Cargar</button>
-          <button type="button" class="btn-m3-tonal btn-copiar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">📑 Copiar</button>
-          <button type="button" class="btn-m3-tonal btn-editar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">✏️ Editar en Estudio</button>
-          ${mod.esDinamico ? `
-            <button type="button" class="btn-m3-tonal btn-renombrar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">🏷️ Renombrar</button>
-            <button type="button" class="btn-m3-outlined btn-exportar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">📤 Exportar</button>
-            <button type="button" class="btn-peligro btn-eliminar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">🗑️ Borrar</button>
-          ` : `
-            <button type="button" class="btn-m3-outlined btn-exportar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${mod.id}">📤 Exportar</button>
-          `}
-        </div>
-      `;
+        const badgeClase = mod.esDinamico ? "badge-dinamico" : "badge-nativo";
+        const badgeTexto = mod.esDinamico ? "✨ Dinámico Low-Code" : "📦 Modelo Nativo";
 
-      card.querySelector(".btn-cargar-sim")?.addEventListener("click", () => onAccion("cargar", mod.id));
-      card.querySelector(".btn-copiar-sim")?.addEventListener("click", () => onAccion("copiar", mod.id));
-      card.querySelector(".btn-editar-sim")?.addEventListener("click", () => onAccion("editar", mod.id));
-      card.querySelector(".btn-renombrar-sim")?.addEventListener("click", () => onAccion("renombrar", mod.id));
-      card.querySelector(".btn-exportar-sim")?.addEventListener("click", () => onAccion("exportar", mod.id));
-      card.querySelector(".btn-eliminar-sim")?.addEventListener("click", () => onAccion("eliminar", mod.id));
+        card.innerHTML = `
+          <div>
+            <h4>
+              <span>${mod.nombre}</span>
+              <span class="badge-tipo-sim ${badgeClase}">${badgeTexto}</span>
+            </h4>
+            <p style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.35rem;">
+              ${mod.descripcion || "Sin descripción"}
+            </p>
+          </div>
+          <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem;">
+            <button type="button" class="btn-m3-filled btn-cargar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem; min-height: 32px;" data-id="${mod.id}">▶ Cargar</button>
+            <button type="button" class="btn-m3-tonal btn-editar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem; min-height: 32px;" data-id="${mod.id}">🛠️ Estudio CAD</button>
+            <button type="button" class="btn-m3-tonal btn-copiar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem; min-height: 32px;" data-id="${mod.id}">📑 Copiar</button>
+            ${mod.esDinamico ? `
+              <button type="button" class="btn-m3-tonal btn-renombrar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem; min-height: 32px;" data-id="${mod.id}">🏷️ Renombrar</button>
+              <button type="button" class="btn-m3-outlined btn-exportar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem; min-height: 32px;" data-id="${mod.id}">📤 Exportar</button>
+              <button type="button" class="btn-peligro btn-eliminar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem; min-height: 32px;" data-id="${mod.id}">🗑️ Borrar</button>
+            ` : `
+              <button type="button" class="btn-m3-outlined btn-exportar-sim" style="padding: 0.3rem 0.65rem; font-size: 0.78rem; min-height: 32px;" data-id="${mod.id}">📤 Exportar</button>
+            `}
+          </div>
+        `;
 
-      contenedor.appendChild(card);
-    });
+        card.querySelector(".btn-cargar-sim")?.addEventListener("click", () => onAccion("cargar", mod.id));
+        card.querySelector(".btn-copiar-sim")?.addEventListener("click", () => onAccion("copiar", mod.id));
+        card.querySelector(".btn-editar-sim")?.addEventListener("click", () => onAccion("editar", mod.id));
+        card.querySelector(".btn-renombrar-sim")?.addEventListener("click", () => onAccion("renombrar", mod.id));
+        card.querySelector(".btn-exportar-sim")?.addEventListener("click", () => onAccion("exportar", mod.id));
+        card.querySelector(".btn-eliminar-sim")?.addEventListener("click", () => onAccion("eliminar", mod.id));
+
+        contenedor.appendChild(card);
+      });
+    }
 
     // 2. Presets de Escenario Guardados
-    (presets || []).forEach(pre => {
-      const textoBuscar = `${pre.nombre} preset escenario`.toLowerCase();
-      if (filtroNorm && !textoBuscar.includes(filtroNorm)) return;
+    if (categoriaActiva === "todos" || categoriaActiva === "presets") {
+      (presets || []).forEach(pre => {
+        const textoBuscar = `${pre.nombre} preset escenario ${pre.modeloId}`.toLowerCase();
+        if (filtroNorm && !textoBuscar.includes(filtroNorm)) return;
 
-      const card = document.createElement("div");
-      card.className = "tarjeta-simulacion-biblioteca";
+        const card = document.createElement("div");
+        card.className = "tarjeta-simulacion-biblioteca";
 
-      card.innerHTML = `
-        <div>
-          <h4>
-            <span>⭐ ${pre.nombre}</span>
-            <span class="badge-tipo-sim badge-preset">Preset Escenario</span>
-          </h4>
-          <p style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.35rem;">
-            Modelo base: <strong>${pre.modeloId}</strong> | Creado: ${new Date(pre.fechaCreacion || Date.now()).toLocaleDateString()}
-          </p>
-        </div>
-        <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem;">
-          <button type="button" class="btn-m3-filled btn-cargar-preset" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${pre.id}">⭐ Cargar Preset</button>
-          <button type="button" class="btn-m3-outlined btn-exportar-preset" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${pre.id}">📤 Exportar</button>
-          <button type="button" class="btn-peligro btn-eliminar-preset" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" data-id="${pre.id}">🗑️ Borrar</button>
-        </div>
-      `;
+        card.innerHTML = `
+          <div>
+            <h4>
+              <span>⭐ ${pre.nombre}</span>
+              <span class="badge-tipo-sim badge-preset">Preset Escenario</span>
+            </h4>
+            <p style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.35rem;">
+              Modelo base: <strong>${pre.modeloId}</strong> | Creado: ${new Date(pre.fechaCreacion || Date.now()).toLocaleDateString()}
+            </p>
+          </div>
+          <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem;">
+            <button type="button" class="btn-m3-filled btn-cargar-preset" style="padding: 0.3rem 0.65rem; font-size: 0.78rem; min-height: 32px;" data-id="${pre.id}">⭐ Cargar Preset</button>
+            <button type="button" class="btn-m3-outlined btn-exportar-preset" style="padding: 0.3rem 0.65rem; font-size: 0.78rem; min-height: 32px;" data-id="${pre.id}">📤 Exportar</button>
+            <button type="button" class="btn-peligro btn-eliminar-preset" style="padding: 0.3rem 0.65rem; font-size: 0.78rem; min-height: 32px;" data-id="${pre.id}">🗑️ Borrar</button>
+          </div>
+        `;
 
-      card.querySelector(".btn-cargar-preset")?.addEventListener("click", () => onAccion("cargarPreset", pre.id));
-      card.querySelector(".btn-exportar-preset")?.addEventListener("click", () => onAccion("exportarPreset", pre.id));
-      card.querySelector(".btn-eliminar-preset")?.addEventListener("click", () => onAccion("eliminarPreset", pre.id));
+        card.querySelector(".btn-cargar-preset")?.addEventListener("click", () => onAccion("cargarPreset", pre.id));
+        card.querySelector(".btn-exportar-preset")?.addEventListener("click", () => onAccion("exportarPreset", pre.id));
+        card.querySelector(".btn-eliminar-preset")?.addEventListener("click", () => onAccion("eliminarPreset", pre.id));
 
-      contenedor.appendChild(card);
-    });
+        contenedor.appendChild(card);
+      });
+    }
 
     if (contenedor.children.length === 0) {
-      contenedor.innerHTML = `<div style="padding: 2rem; text-align: center; color: var(--md-sys-color-on-surface-variant); grid-column: 1 / -1;">No se encontraron simulaciones que coincidan con la búsqueda.</div>`;
+      contenedor.innerHTML = `<div style="padding: 2rem; text-align: center; color: var(--md-sys-color-on-surface-variant); grid-column: 1 / -1;">No se encontraron simulaciones en esta categoría que coincidan con la búsqueda.</div>`;
     }
   };
+
+  if (contenedorFiltros) {
+    contenedorFiltros.querySelectorAll(".m3-filter-chip").forEach(chip => {
+      chip.classList.toggle("activo", chip.dataset.categoria === "todos");
+      chip.onclick = () => {
+        categoriaActiva = chip.dataset.categoria || "todos";
+        contenedorFiltros.querySelectorAll(".m3-filter-chip").forEach(c => {
+          c.classList.toggle("activo", c === chip);
+        });
+        renderizarItems(inputBuscar ? inputBuscar.value : "");
+      };
+    });
+  }
 
   renderizarItems(inputBuscar ? inputBuscar.value : "");
 

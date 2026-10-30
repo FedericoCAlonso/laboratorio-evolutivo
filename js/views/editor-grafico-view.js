@@ -206,6 +206,11 @@ export class EditorGraficoView {
               ⚙️ DOF: M = 1 (Determinado)
             </div>
 
+            <!-- Badge de Fitness Evaluado en Vivo -->
+            <div id="cad-live-fitness-badge" title="Aptitud (Fitness) evaluada en tiempo real mientras arrastras nodos o modificas cotas">
+              🎯 Fitness: --
+            </div>
+
             <!-- Selector de mecanismos preconfigurados -->
             <select id="cad-select-predefinido" style="padding: 0.28rem 0.45rem; font-size: 0.75rem; border-radius: 6px; background: var(--bg-input, #0f172a); color: var(--texto-principal, #f8fafc); border: 1px solid var(--borde, #334155); cursor: pointer;">
               <option value="">💡 Cargar Mecanismo...</option>
@@ -300,6 +305,7 @@ export class EditorGraficoView {
     this.dom.canvas = this.contenedor.querySelector("#canvas-editor-cad");
     this.dom.ctx = this.dom.canvas ? this.dom.canvas.getContext("2d") : null;
     this.dom.badgeDof = this.contenedor.querySelector("#cad-badge-dof");
+    this.dom.badgeFitnessVivo = this.contenedor.querySelector("#cad-live-fitness-badge");
     this.dom.btnAnimar = this.contenedor.querySelector("#cad-btn-animar");
     this.dom.btnFullscreen = this.contenedor.querySelector("#cad-btn-fullscreen");
     this.dom.selectPredefinido = this.contenedor.querySelector("#cad-select-predefinido");
@@ -907,9 +913,9 @@ export class EditorGraficoView {
     let html = "";
     mapaVars.forEach((info, nom) => {
       html += `
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; background: rgba(15,23,42,0.75); border: 1px solid rgba(59,130,246,0.3); border-radius: 5px; padding: 3px 6px;" title="${info.origen}">
-          <span style="font-family: monospace; font-weight: 700; color: #93c5fd; font-size: 0.74rem;">${nom}:</span>
-          <input type="number" step="0.1" data-cad-var="${nom}" value="${info.valor}" style="width: 64px; background: #090d16; color: #f8fafc; border: 1px solid #334155; border-radius: 4px; padding: 2px 4px; font-family: monospace; font-size: 0.74rem; text-align: right;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; background: var(--md-sys-color-surface-container-high, rgba(15,23,42,0.75)); border: 1px solid var(--md-sys-color-outline-variant, rgba(59,130,246,0.3)); border-radius: 6px; padding: 3px 6px;" title="${info.origen}">
+          <span style="font-family: monospace; font-weight: 700; color: var(--md-sys-color-primary, #93c5fd); font-size: 0.74rem;">${nom}:</span>
+          <input type="number" step="0.1" data-cad-var="${nom}" value="${info.valor}" style="width: 64px; background: var(--md-sys-color-surface-container-highest, #090d16); color: var(--md-sys-color-on-surface, #f8fafc); border: 1px solid var(--md-sys-color-outline, #334155); border-radius: 4px; padding: 2px 4px; font-family: monospace; font-size: 0.74rem; text-align: right;">
         </div>
       `;
     });
@@ -951,6 +957,22 @@ export class EditorGraficoView {
       this.dom.badgeDof.textContent = `🔒 DOF: M = ${analisis.dof} (Rígido/Sobrerrestringido)`;
     }
     this.dom.badgeDof.title = analisis.mensaje;
+  }
+
+  // Actualiza la insignia de Fitness evaluado en tiempo real en la barra superior del Editor CAD.
+  actualizarFitnessEnVivo(resultadoFitness) {
+    if (!this.dom?.badgeFitnessVivo) return;
+    if (Array.isArray(resultadoFitness)) {
+      const f1 = typeof resultadoFitness[0] === "number" ? resultadoFitness[0].toFixed(2) : resultadoFitness[0];
+      const f2 = typeof resultadoFitness[1] === "number" ? resultadoFitness[1].toFixed(2) : resultadoFitness[1];
+      this.dom.badgeFitnessVivo.textContent = `🎯 Pareto: [${f1}, ${f2}]`;
+    } else if (typeof resultadoFitness === "number") {
+      this.dom.badgeFitnessVivo.textContent = isFinite(resultadoFitness)
+        ? `🎯 Fitness: ${resultadoFitness.toFixed(3)}`
+        : "🎯 Fitness: Inválido";
+    } else if (resultadoFitness !== undefined && resultadoFitness !== null) {
+      this.dom.badgeFitnessVivo.textContent = `🎯 Fitness: ${resultadoFitness}`;
+    }
   }
 
   // Actualiza el panel inspector lateral de propiedades

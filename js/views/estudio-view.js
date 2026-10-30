@@ -838,6 +838,9 @@ export class EstudioView {
         this.dom.hudTiempo.textContent = `${tiempoMs} ms`;
       }
 
+      // Actualiza la píldora de Fitness en vivo dentro del Editor CAD 2D
+      this.editorGrafico?.actualizarFitnessEnVivo(resultadoFitness);
+
       if (this.dom.hudFitness) {
         if (Array.isArray(resultadoFitness)) {
           const f1 = typeof resultadoFitness[0] === "number" ? resultadoFitness[0].toFixed(3) : resultadoFitness[0];

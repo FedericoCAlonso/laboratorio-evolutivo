@@ -51,19 +51,23 @@ export class AppViewModel {
     // 4. Parámetros de entrada actuales del modelo.
     this.entradasModelo = {};
 
-    // 5. Configuración del motor genético.
+    // 5. Configuración del motor genético (claves unificadas para Motor, Worker y Vistas).
     this.configMotor = {
       tamPoblacion: 80,
+      tamanoPoblacion: 80,
       generaciones: 100,
       probCruzamiento: 0.85,
       probMutacion: 0.12,
+      tasaMutacion: 0.12,
       elitismo: 2,
       esquemaSeleccion: "torneo",
       torneoK: 3,
+      tamanoTorneo: 3,
       crossover: "sbx",
       sigmaMutacion: 0.1,
       semilla: 123456,
-      replicasRuido: 3
+      replicasRuido: 3,
+      nReplicasRuido: 3
     };
 
     // 6. Preferencias de interfaz Material 3.
@@ -305,11 +309,59 @@ export class AppViewModel {
     this.emit("entradasActualizadas", this.entradasModelo);
   }
 
-  // Actualiza la configuración de parámetros del motor genético.
-  actualizarConfigMotor(nuevaConfig) {
-    this.configMotor = { ...this.configMotor, ...nuevaConfig };
+  // Actualiza la configuración de parámetros del motor genético sincronizando alias de propiedades.
+  actualizarConfigMotor(nuevaConfig = {}) {
+    const fusion = { ...this.configMotor, ...nuevaConfig };
+    const pob = nuevaConfig.tamanoPoblacion ?? nuevaConfig.tamPoblacion ?? fusion.tamPoblacion ?? 80;
+    const mut = nuevaConfig.tasaMutacion ?? nuevaConfig.probMutacion ?? fusion.probMutacion ?? 0.12;
+    const tor = nuevaConfig.tamanoTorneo ?? nuevaConfig.torneoK ?? fusion.torneoK ?? 3;
+    const rep = nuevaConfig.nReplicasRuido ?? nuevaConfig.replicasRuido ?? fusion.replicasRuido ?? 3;
+
+    this.configMotor = {
+      ...fusion,
+      tamPoblacion: pob,
+      tamanoPoblacion: pob,
+      probMutacion: mut,
+      tasaMutacion: mut,
+      torneoK: tor,
+      tamanoTorneo: tor,
+      replicasRuido: rep,
+      nReplicasRuido: rep
+    };
     this._guardarConfiguracionApp();
     this.emit("configMotorActualizada", this.configMotor);
+  }
+
+  // Genera un resumen estructurado de los genes del individuo activo para renderizar chips en la Vista.
+  obtenerResumenGenomaActual(genomaExplicito = null) {
+    const genoma = genomaExplicito || this.mejorSolucion?.genoma || this.obtenerGenomaInicial(this.modeloActual, this.entradasModelo);
+    if (!Array.isArray(genoma) || !this.modeloActual) return [];
+
+    const defs = typeof this.modeloActual.crearGenoma === "function"
+      ? this.modeloActual.crearGenoma(this.entradasModelo)
+      : (this.modeloActual.variables || []);
+
+    return genoma.map((valor, idx) => {
+      const def = defs[idx] || {};
+      const nombre = def.nombre || `g${idx + 1}`;
+      const etiqueta = def.etiqueta || nombre;
+      const tipo = def.tipo || "continuo";
+      const numVal = Number(valor);
+      const valorFormateado = Number.isFinite(numVal)
+        ? (tipo === "entero" || Number.isInteger(numVal) ? String(numVal) : numVal.toFixed(2))
+        : String(valor);
+
+      return {
+        indice: idx,
+        nombre,
+        etiqueta,
+        valor: numVal,
+        valorFormateado,
+        min: def.min,
+        max: def.max,
+        tipo
+      };
+    });
   }
 
   // Genera un número pseudoaleatorio entero nuevo para usar como semilla de simulación.
@@ -696,6 +748,13 @@ export class AppViewModel {
     }
 
     this.emit("temaCambiado", { modo: this.temaModo, acento: this.temaAcento });
+    this.emit("configMotorActualizada", this.configMotor);
+    this.emit("estado:inicializado", {
+      configMotor: this.configMotor,
+      modelo: this.modeloActual,
+      entradasModelo: this.entradasModelo,
+      tema: { modo: this.temaModo, acento: this.temaAcento }
+    });
     this.emit("modeloCambiado", {
       modelo: this.modeloActual,
       genomaInicial: this.obtenerGenomaInicial(this.modeloActual, this.entradasModelo)

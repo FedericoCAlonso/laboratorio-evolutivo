@@ -44,6 +44,8 @@
   --md-sys-color-tertiary-container: #f2daff;
   --md-sys-color-surface: #fdfcff;
   --md-sys-color-surface-dim: #ded8e1;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #f7f2fa;
   --md-sys-color-surface-container: #f3edf7;
   --md-sys-color-surface-container-high: #ece6f0;
   --md-sys-color-surface-container-highest: #e6e0e9;
@@ -149,6 +151,8 @@
   --md-sys-color-tertiary-container: #523f5f;
   --md-sys-color-surface: #101418;
   --md-sys-color-surface-dim: #101418;
+  --md-sys-color-surface-container-lowest: #0b0e12;
+  --md-sys-color-surface-container-low: #181c20;
   --md-sys-color-surface-container: #1d2024;
   --md-sys-color-surface-container-high: #272a2f;
   --md-sys-color-surface-container-highest: #32353a;
@@ -280,10 +284,10 @@ body {
 
 .app-contenedor {
   width: 100%;
-  max-width: 1100px;
+  max-width: 1440px;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.15rem;
 }
 
 /* -------------------------------------------------------------------------
@@ -1360,3 +1364,350 @@ canvas {
   accent-color: var(--md-sys-color-primary);
   cursor: pointer;
 }
+
+/* =========================================================================
+   MEJORA INTEGRAL MATERIAL DESIGN 3: TOP APP BAR, BENTO GRID, TOOLTIPS Y CAD
+   ========================================================================= */
+
+/* 1. Barra Superior Global M3 con Conmutador Segmentado de Espacio de Trabajo */
+.m3-top-app-bar {
+  position: sticky;
+  top: 0.5rem;
+  z-index: 90;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.65rem 1.15rem;
+  background: var(--md-sys-color-surface-container);
+  border-radius: var(--md-shape-corner-xl);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  box-shadow: var(--md-elevation-2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.m3-brand-block {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.m3-brand-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--md-shape-corner-md);
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  box-shadow: var(--md-elevation-1);
+}
+
+.m3-segmented-nav {
+  display: inline-flex;
+  align-items: center;
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-shape-corner-full);
+  padding: 3px;
+  gap: 3px;
+}
+
+.m3-seg-btn {
+  border: none;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.42rem 0.95rem;
+  border-radius: var(--md-shape-corner-full);
+  min-height: 34px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.m3-seg-btn:hover:not(.activo) {
+  color: var(--md-sys-color-on-surface);
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+.m3-seg-btn.activo {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  box-shadow: var(--md-elevation-1);
+}
+
+.m3-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.m3-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: var(--md-shape-corner-full);
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.m3-icon-btn {
+  min-height: 36px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.82rem;
+  border-radius: var(--md-shape-corner-full);
+}
+
+/* 2. Layout Bento Adaptativo del Laboratorio Evolutivo */
+.lab-bento-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.15rem;
+  align-items: start;
+}
+
+@media (min-width: 1120px) {
+  .lab-bento-grid {
+    grid-template-columns: 430px minmax(0, 1fr);
+  }
+}
+
+.lab-control-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+@media (min-width: 1120px) {
+  .lab-control-column {
+    position: sticky;
+    top: 4.8rem;
+    max-height: calc(100vh - 5.5rem);
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+}
+
+.lab-stage-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  min-width: 0;
+}
+
+/* Acordeón M3 para Operadores Evolutivos Avanzados */
+.m3-accordion-details {
+  margin-top: 0.5rem;
+  margin-bottom: 0.75rem;
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-shape-corner-md);
+  overflow: hidden;
+}
+
+.m3-accordion-summary {
+  padding: 0.6rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--md-sys-color-primary);
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+}
+
+.m3-accordion-summary::-webkit-details-marker {
+  display: none;
+}
+
+.m3-accordion-body {
+  padding: 0.75rem 0.85rem;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container);
+}
+
+/* Tira de KPIs del Laboratorio */
+.m3-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.m3-kpi-pill {
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-shape-corner-md);
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.m3-kpi-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.m3-kpi-value {
+  font-size: 0.92rem;
+  font-weight: 800;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--md-sys-color-primary);
+}
+
+/* 3. Tooltip Interactivo para el Gráfico de Convergencia y Pareto */
+.m3-chart-tooltip {
+  position: absolute;
+  pointer-events: none;
+  z-index: 30;
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+  border: 1px solid var(--md-sys-color-primary);
+  border-radius: var(--md-shape-corner-md);
+  padding: 0.45rem 0.7rem;
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  box-shadow: var(--md-elevation-3);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.m3-chart-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 4. Inspector de Genoma Óptimo (M3 Genome Chips) */
+.inspector-header-m3 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.genome-chips-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.75rem;
+}
+
+.m3-genome-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.65rem;
+  border-radius: var(--md-shape-corner-sm);
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  font-size: 0.76rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.m3-genome-chip .chip-key {
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.m3-genome-chip .chip-val {
+  font-weight: 800;
+  color: var(--md-sys-color-primary);
+}
+
+/* 5. Chips de Filtrado por Categoría en la Biblioteca */
+.m3-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.m3-filter-chip {
+  padding: 0.32rem 0.75rem;
+  min-height: 32px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  border-radius: var(--md-shape-corner-full);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface-variant);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.m3-filter-chip:hover {
+  border-color: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-surface);
+}
+
+.m3-filter-chip.activo {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  border-color: var(--md-sys-color-primary);
+  font-weight: 700;
+}
+
+/* 6. Adaptación Temática M3 Completa para el Editor CAD 2D */
+.editor-cad-contenedor {
+  background: var(--md-sys-color-surface-container) !important;
+  border: 1px solid var(--md-sys-color-outline-variant) !important;
+  color: var(--md-sys-color-on-surface) !important;
+}
+
+.toolbar-cad {
+  background: var(--md-sys-color-surface-container-high) !important;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant) !important;
+}
+
+#cad-sidebar-inspector {
+  background: var(--md-sys-color-surface-container) !important;
+  border-left: 1px solid var(--md-sys-color-outline-variant) !important;
+  color: var(--md-sys-color-on-surface) !important;
+}
+
+#cad-sidebar-inspector input,
+#cad-sidebar-inspector select {
+  background: var(--md-sys-color-surface-container-highest) !important;
+  color: var(--md-sys-color-on-surface) !important;
+  border: 1px solid var(--md-sys-color-outline) !important;
+  min-height: 30px;
+}
+
+#cad-live-fitness-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--md-shape-corner-full);
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  border: 1px solid var(--md-sys-color-primary);
+}
+

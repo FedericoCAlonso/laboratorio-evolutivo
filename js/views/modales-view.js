@@ -161,6 +161,43 @@ export class ModalesView {
   aplicarTema(modo, acento) {
     aplicarTemaColor(modo, acento);
   }
+
+  // Despliega un diálogo nativo Material 3 de confirmación retornando una Promesa booleana.
+  confirmar({ titulo = "⚠️ Confirmar Acción", mensaje = "¿Desea continuar?", textoConfirmar = "Confirmar", textoCancelar = "Cancelar", peligro = true } = {}) {
+    if (typeof document === "undefined") return Promise.resolve(true);
+    const modal = document.getElementById("modal-confirmacion-m3");
+    const tituloEl = document.getElementById("modal-titulo-confirmar");
+    const mensajeEl = document.getElementById("modal-mensaje-confirmar");
+    const btnAceptar = document.getElementById("btn-aceptar-confirmar-m3");
+    const btnCancelar = document.getElementById("btn-cancelar-confirmar-m3");
+    const btnCerrar = document.getElementById("btn-cerrar-confirmar-m3");
+
+    if (!modal || !btnAceptar || !btnCancelar) {
+      return Promise.resolve(typeof window !== "undefined" && typeof window.confirm === "function" ? window.confirm(mensaje) : true);
+    }
+
+    if (tituloEl) tituloEl.textContent = titulo;
+    if (mensajeEl) mensajeEl.textContent = mensaje;
+    btnAceptar.textContent = textoConfirmar;
+    btnCancelar.textContent = textoCancelar;
+    btnAceptar.className = peligro ? "btn-peligro" : "btn-m3-filled";
+
+    modal.style.display = "flex";
+
+    return new Promise((resolve) => {
+      const finalizar = (resultado) => {
+        modal.style.display = "none";
+        btnAceptar.onclick = null;
+        btnCancelar.onclick = null;
+        if (btnCerrar) btnCerrar.onclick = null;
+        resolve(resultado);
+      };
+
+      btnAceptar.onclick = () => finalizar(true);
+      btnCancelar.onclick = () => finalizar(false);
+      if (btnCerrar) btnCerrar.onclick = () => finalizar(false);
+    });
+  }
 }
 
 export default ModalesView;

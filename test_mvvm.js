@@ -119,6 +119,14 @@ MODELOS.forEach(m => {
 console.log("    ✓ Factory obtenerVisualizador mapea correctamente todos los modelos | OK");
 
 // 4. Verificación de GraficoView
+const fakeTooltip = {
+  innerHTML: "",
+  style: {},
+  classList: {
+    add: function() { this.visible = true; },
+    remove: function() { this.visible = false; }
+  }
+};
 const fakeCanvas = {
   getContext: () => ({
     resetTransform: () => {},
@@ -129,14 +137,20 @@ const fakeCanvas = {
     moveTo: () => {},
     lineTo: () => {},
     stroke: () => {},
-    fillText: () => {}
+    fillText: () => {},
+    save: () => {},
+    restore: () => {},
+    setLineDash: () => {},
+    arc: () => {},
+    fill: () => {}
   }),
+  getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 220 }),
   clientWidth: 800,
   clientHeight: 220,
   style: {}
 };
 const fakeLeyenda = { innerHTML: "" };
-const graficoView = new GraficoView(fakeCanvas, fakeLeyenda);
+const graficoView = new GraficoView(fakeCanvas, fakeLeyenda, fakeTooltip);
 graficoView.actualizarLeyenda(true);
 if (!fakeLeyenda.innerHTML.includes("Pareto")) {
   throw new Error("GraficoView.actualizarLeyenda multiobjetivo falló.");
@@ -145,7 +159,15 @@ graficoView.actualizarLeyenda(false);
 if (!fakeLeyenda.innerHTML.includes("Mejor Individuo")) {
   throw new Error("GraficoView.actualizarLeyenda monobjetivo falló.");
 }
-graficoView.render({ historiaMejor: [10, 5, 2], historiaPromedio: [15, 8, 4], totalGeneraciones: 50 });
-console.log("    ✓ GraficoView render y actualización de leyendas | OK");
+graficoView.render({ historiaMejor: [10, 5, 2], historiaPromedio: [15, 8, 4], totalGeneraciones: 2 });
+graficoView.actualizarHover(400, 100);
+if (!fakeTooltip.innerHTML.includes("Generación") || !fakeTooltip.classList.visible) {
+  throw new Error("GraficoView.actualizarHover no activó el tooltip M3 en modo convergencia.");
+}
+graficoView.ocultarHover();
+if (fakeTooltip.classList.visible) {
+  throw new Error("GraficoView.ocultarHover no ocultó el tooltip M3.");
+}
+console.log("    ✓ GraficoView render, crosshair interactivo, tooltip M3 y leyendas | OK");
 
 console.log("\n=== TODAS LAS PRUEBAS DE ARQUITECTURA MVVM PASARON EXITOSAMENTE (6/6) ===");

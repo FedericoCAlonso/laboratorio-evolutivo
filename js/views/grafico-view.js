@@ -5,16 +5,44 @@
 
 // Vista encargada de renderizar la evolución matemática en Canvas 2D (convergencia monobjetivo y Pareto multiobjetivo).
 export class GraficoView {
-  // Inicializa la vista con la referencia al elemento canvas del DOM.
-  constructor(canvasElement, contenedorLeyenda = null) {
+  // Inicializa la vista con la referencia al elemento canvas del DOM y el tooltip M3 opcional.
+  constructor(canvasElement, contenedorLeyenda = null, tooltipElement = null) {
     this.canvas = canvasElement;
     this.contenedorLeyenda = contenedorLeyenda;
+    this.tooltip = tooltipElement || (typeof document !== "undefined" ? document.getElementById("tooltip-grafico-m3") : null);
     this.limitesPareto = null;
+    this.limitesConvergencia = null;
+    this.ultimoRenderArgs = null;
+    this.indiceGenHover = null;
+  }
+
+  // Obtiene los colores semánticos del tema Material 3 activo con respaldo para ejecución Headless.
+  _obtenerPaletaTema() {
+    if (typeof window === "undefined" || typeof document === "undefined" || !window.getComputedStyle) {
+      return {
+        texto: "#64748b",
+        textoFuerte: "#334155",
+        grilla: "rgba(100, 116, 139, 0.2)",
+        fondoArea: "rgba(0, 0, 0, 0.03)",
+        primario: "#0061a4"
+      };
+    }
+    const estilos = window.getComputedStyle(document.documentElement);
+    const onSurfaceVariant = estilos.getPropertyValue("--md-sys-color-on-surface-variant").trim() || "#64748b";
+    const onSurface = estilos.getComputedStyle ? onSurfaceVariant : (estilos.getPropertyValue("--md-sys-color-on-surface").trim() || "#334155");
+    const primario = estilos.getPropertyValue("--md-sys-color-primary").trim() || "#0061a4";
+    return {
+      texto: onSurfaceVariant,
+      textoFuerte: onSurface,
+      grilla: "rgba(148, 163, 184, 0.22)",
+      fondoArea: "rgba(148, 163, 184, 0.05)",
+      primario
+    };
   }
 
   // Actualiza la leyenda descriptiva bajo el gráfico según el modo de optimización.
   actualizarLeyenda(esMultiobjetivo) {
-    const contenedor = this.contenedorLeyenda || document.querySelector(".leyenda-grafico");
+    const contenedor = this.contenedorLeyenda || (typeof document !== "undefined" ? document.querySelector(".leyenda-grafico") : null);
     if (!contenedor) return;
 
     if (esMultiobjetivo) {
@@ -47,8 +75,9 @@ export class GraficoView {
   }
 
   // Dibuja en el Canvas 2D la curva monobjetivo o el scatter plot de Pareto según los datos provistos.
-  render({ historiaMejor = [], historiaPromedio = [], totalGeneraciones = 100, datosMulti = null }) {
+  render({ historiaMejor = [], historiaPromedio = [], totalGeneraciones = 100, datosMulti = null } = {}) {
     if (!this.canvas) return;
+    this.ultimoRenderArgs = { historiaMejor, historiaPromedio, totalGeneraciones, datosMulti };
 
     const ctx = this.canvas.getContext("2d");
     const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
@@ -65,6 +94,7 @@ export class GraficoView {
     ctx.clearRect(0, 0, anchoCSS, altoCSS);
 
     if (datosMulti && datosMulti.esMultiobjetivo) {
+      this.limitesConvergencia = null;
       this._dibujarScatterPlotPareto(ctx, anchoCSS, altoCSS, datosMulti);
       return;
     }
@@ -72,24 +102,26 @@ export class GraficoView {
     this._dibujarConvergenciaMonobjetivo(ctx, anchoCSS, altoCSS, historiaMejor, historiaPromedio, totalGeneraciones);
   }
 
-  // Renderiza la curva de convergencia monobjetivo tradicional.
+  // Renderiza la curva de convergencia monobjetivo con soporte para línea guía (crosshair) interactiva.
   _dibujarConvergenciaMonobjetivo(ctx, anchoCSS, altoCSS, historiaMejor, historiaPromedio, totalGeneraciones) {
-    this.canvas.style.cursor = "default";
+    this.canvas.style.cursor = historiaMejor && historiaMejor.length > 0 ? "crosshair" : "default";
     this.limitesPareto = null;
     this.canvas._limitesPareto = null;
 
-    const margenIzq = 50;
+    const paleta = this._obtenerPaletaTema();
+    const margenIzq = 54;
     const margenDer = 20;
     const margenSup = 20;
     const margenInf = 30;
     const anchoGrafico = anchoCSS - margenIzq - margenDer;
     const altoGrafico = altoCSS - margenSup - margenInf;
 
-    ctx.fillStyle = "rgba(0, 0, 0, 0.03)";
+    ctx.fillStyle = paleta.fondoArea;
     ctx.fillRect(margenIzq, margenSup, anchoGrafico, altoGrafico);
 
     if (!historiaMejor || historiaMejor.length === 0) {
-      ctx.fillStyle = "#64748b";
+      this.limitesConvergencia = null;
+      ctx.fillStyle = paleta.texto;
       ctx.font = "13px system-ui";
       ctx.textAlign = "center";
       ctx.fillText("Esperando inicio de la corrida...", anchoCSS / 2, altoCSS / 2);
@@ -97,7 +129,7 @@ export class GraficoView {
     }
 
     let minVal = Math.min(...historiaMejor);
-    let maxVal = Math.max(...historiaPromedio);
+    let maxVal = Math.max(...(historiaPromedio.length > 0 ? historiaPromedio : historiaMejor));
 
     if (minVal === maxVal) {
       maxVal += 1;
@@ -105,9 +137,22 @@ export class GraficoView {
     }
     const rangoY = maxVal - minVal;
 
-    ctx.strokeStyle = "rgba(100, 116, 139, 0.2)";
+    this.limitesConvergencia = {
+      margenIzq,
+      margenSup,
+      anchoGrafico,
+      altoGrafico,
+      minVal,
+      maxVal,
+      rangoY,
+      totalGeneraciones: totalGeneraciones || Math.max(1, historiaMejor.length - 1),
+      historiaMejor,
+      historiaPromedio
+    };
+
+    ctx.strokeStyle = paleta.grilla;
     ctx.lineWidth = 1;
-    ctx.fillStyle = "#64748b";
+    ctx.fillStyle = paleta.texto;
     ctx.font = "11px system-ui";
     ctx.textAlign = "right";
 
@@ -154,7 +199,38 @@ export class GraficoView {
       ctx.stroke();
     }
 
-    ctx.fillStyle = "#64748b";
+    // Si hay una generación bajo el cursor (hover), dibujar línea vertical guía y puntos resaltados
+    if (this.indiceGenHover !== null && this.indiceGenHover >= 0 && this.indiceGenHover < historiaMejor.length) {
+      const idx = this.indiceGenHover;
+      const ptMejor = convertirCoordenadas(idx, historiaMejor[idx]);
+      if (typeof ctx.save === "function") ctx.save();
+      if (typeof ctx.setLineDash === "function") ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = paleta.primario;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(ptMejor.x, margenSup);
+      ctx.lineTo(ptMejor.x, margenSup + altoGrafico);
+      ctx.stroke();
+      if (typeof ctx.setLineDash === "function") ctx.setLineDash([]);
+
+      if (typeof ctx.arc === "function") {
+        ctx.fillStyle = "#10b981";
+        ctx.beginPath();
+        ctx.arc(ptMejor.x, ptMejor.y, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (idx < historiaPromedio.length) {
+          const ptProm = convertirCoordenadas(idx, historiaPromedio[idx]);
+          ctx.fillStyle = "#8b5cf6";
+          ctx.beginPath();
+          ctx.arc(ptProm.x, ptProm.y, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      if (typeof ctx.restore === "function") ctx.restore();
+    }
+
+    ctx.fillStyle = paleta.texto;
     ctx.font = "11px system-ui";
     ctx.textAlign = "center";
     ctx.fillText("Gen 0", margenIzq, altoCSS - 8);
@@ -166,6 +242,7 @@ export class GraficoView {
   _dibujarScatterPlotPareto(ctx, anchoCSS, altoCSS, datosMulti) {
     this.canvas.style.cursor = "pointer";
 
+    const paleta = this._obtenerPaletaTema();
     const frentePareto = datosMulti.frentePareto || [];
     const poblacion = datosMulti.poblacion || [];
     const nombres = datosMulti.nombresObjetivos || ["Objetivo 1", "Objetivo 2"];
@@ -182,11 +259,11 @@ export class GraficoView {
     const validosPoblacion = poblacion.filter((p) => Array.isArray(p.fitness) && p.fitness[0] < 500 && p.fitness[1] < 500);
     const todosValidos = [...validosFrente, ...validosPoblacion];
 
-    ctx.fillStyle = "rgba(0, 0, 0, 0.03)";
+    ctx.fillStyle = paleta.fondoArea;
     ctx.fillRect(margenIzq, margenSup, anchoGrafico, altoGrafico);
 
     if (todosValidos.length === 0) {
-      ctx.fillStyle = "#64748b";
+      ctx.fillStyle = paleta.texto;
       ctx.font = "13px system-ui";
       ctx.textAlign = "center";
       ctx.fillText("Buscando soluciones cinemáticamente viables...", anchoCSS / 2, altoCSS / 2);
@@ -219,7 +296,8 @@ export class GraficoView {
     this.limitesPareto = {
       x0, x1, y0, y1,
       margenIzq, margenSup, anchoGrafico, altoGrafico,
-      frenteValido: validosFrente
+      frenteValido: validosFrente,
+      nombresObjetivos: nombres
     };
     this.canvas._limitesPareto = this.limitesPareto;
 
@@ -227,9 +305,9 @@ export class GraficoView {
     const aPixelY = (val) => margenSup + altoGrafico - ((val - y0) / (y1 - y0)) * altoGrafico;
 
     // Trazado de grilla y escalas cartesianas.
-    ctx.strokeStyle = "rgba(100, 116, 139, 0.2)";
+    ctx.strokeStyle = paleta.grilla;
     ctx.lineWidth = 1;
-    ctx.fillStyle = "#64748b";
+    ctx.fillStyle = paleta.texto;
     ctx.font = "11px system-ui";
 
     // Eje vertical Y (Objetivo 2).
@@ -264,7 +342,7 @@ export class GraficoView {
 
     // Título e indicador de ejes.
     ctx.font = "bold 11px system-ui";
-    ctx.fillStyle = "#334155";
+    ctx.fillStyle = paleta.textoFuerte;
     ctx.textAlign = "center";
     ctx.fillText(`Eje X: ${nombres[0]} (Menor = Mejor)`, margenIzq + anchoGrafico / 2, altoCSS - 6);
 
@@ -340,14 +418,14 @@ export class GraficoView {
       ctx.stroke();
 
       ctx.font = "bold 11px system-ui";
-      ctx.fillStyle = "#b45309";
+      ctx.fillStyle = "#f59e0b";
       ctx.textAlign = "center";
       ctx.fillText("★ Seleccionado", sx, sy - 15);
     }
 
     // Indicador resumen en esquina superior derecha.
     ctx.font = "bold 11px system-ui";
-    ctx.fillStyle = "#059669";
+    ctx.fillStyle = "#10b981";
     ctx.textAlign = "right";
     ctx.fillText(`Frente Pareto: ${validosFrente.length} soluciones (Clic para inspeccionar)`, margenIzq + anchoGrafico, margenSup - 8);
   }
@@ -383,6 +461,77 @@ export class GraficoView {
       return mejorInd;
     }
     return null;
+  }
+
+  // Gestiona el movimiento del cursor sobre el gráfico para mostrar el tooltip interactivo M3 y la guía vertical.
+  actualizarHover(clientX, clientY) {
+    if (!this.canvas || typeof this.canvas.getBoundingClientRect !== "function") return;
+    const rect = this.canvas.getBoundingClientRect();
+    const mouseX = clientX - rect.left;
+    const mouseY = clientY - rect.top;
+
+    // 1. Modo Multiobjetivo Pareto
+    if (this.limitesPareto) {
+      const punto = this.obtenerPuntoParetoCercano(clientX, clientY);
+      this.canvas.style.cursor = punto ? "pointer" : "default";
+      if (punto && this.tooltip) {
+        const nombres = this.limitesPareto.nombresObjetivos || ["f₁", "f₂"];
+        this.tooltip.innerHTML = `<strong>★ Individuo Pareto</strong><br>${nombres[0]}: <b>${punto.fitness[0].toFixed(3)}</b> | ${nombres[1]}: <b>${punto.fitness[1].toFixed(3)}</b>`;
+        this._posicionarTooltip(mouseX, mouseY, rect.width);
+      } else {
+        this.ocultarHover();
+      }
+      return;
+    }
+
+    // 2. Modo Convergencia Monobjetivo
+    if (this.limitesConvergencia) {
+      const { margenIzq, anchoGrafico, totalGeneraciones, historiaMejor, historiaPromedio } = this.limitesConvergencia;
+      if (mouseX < margenIzq || mouseX > margenIzq + anchoGrafico || historiaMejor.length === 0) {
+        this.ocultarHover();
+        return;
+      }
+
+      const ratio = (mouseX - margenIzq) / Math.max(1, anchoGrafico);
+      const genEstimada = Math.round(ratio * (totalGeneraciones || 1));
+      const idx = Math.max(0, Math.min(historiaMejor.length - 1, genEstimada));
+
+      if (this.indiceGenHover !== idx) {
+        this.indiceGenHover = idx;
+        if (this.ultimoRenderArgs) {
+          this.render(this.ultimoRenderArgs);
+        }
+      }
+
+      if (this.tooltip) {
+        const mejorVal = Number(historiaMejor[idx]).toFixed(4);
+        const promVal = idx < historiaPromedio.length ? Number(historiaPromedio[idx]).toFixed(4) : "--";
+        this.tooltip.innerHTML = `<strong>Generación ${idx}</strong><br><span style="color:#10b981;">● Mejor: ${mejorVal}</span> | <span style="color:#8b5cf6;">● Prom: ${promVal}</span>`;
+        this._posicionarTooltip(mouseX, mouseY, rect.width);
+      }
+    }
+  }
+
+  // Posiciona y hace visible el tooltip flotante dentro de los límites del contenedor del gráfico.
+  _posicionarTooltip(mouseX, mouseY, anchoCanvas) {
+    if (!this.tooltip) return;
+    const desplazarIzq = mouseX > anchoCanvas * 0.65;
+    this.tooltip.style.left = desplazarIzq ? `${Math.max(8, mouseX - 210)}px` : `${mouseX + 14}px`;
+    this.tooltip.style.top = `${Math.max(8, mouseY - 38)}px`;
+    this.tooltip.classList.add("visible");
+  }
+
+  // Oculta el tooltip flotante y limpia el estado de resaltado temporal bajo el cursor.
+  ocultarHover() {
+    if (this.tooltip) {
+      this.tooltip.classList.remove("visible");
+    }
+    if (this.indiceGenHover !== null) {
+      this.indiceGenHover = null;
+      if (this.ultimoRenderArgs) {
+        this.render(this.ultimoRenderArgs);
+      }
+    }
   }
 }
 

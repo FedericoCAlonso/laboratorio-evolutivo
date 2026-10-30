@@ -12,6 +12,7 @@ import {
   construirFormularioModelo,
   obtenerDatosEntradaModelo,
   obtenerParametrosMotor,
+  sincronizarFormularioMotor,
   actualizarBotonesControl,
   actualizarToolbarAcciones
 } from "../ui.js";
@@ -76,13 +77,22 @@ export class AppView {
       tituloGrafico: document.getElementById("titulo-grafico"),
       etiquetaMejorFitness: document.getElementById("etiqueta-mejor-fitness"),
       canvasFitness: document.getElementById("canvas-fitness"),
+      tooltipGrafico: document.getElementById("tooltip-grafico-m3"),
       leyendaGrafico: document.querySelector(".leyenda-grafico"),
       contenedorDibujoModelo: document.getElementById("contenedor-dibujo-modelo"),
-      textoDescribirModelo: document.getElementById("texto-describir-modelo")
+      chipsGenomaOptimo: document.getElementById("chips-genoma-optimo"),
+      btnCopiarReporte: document.getElementById("btn-copiar-reporte"),
+      textoDescribirModelo: document.getElementById("texto-describir-modelo"),
+      kpiMejorFitness: document.getElementById("kpi-mejor-fitness"),
+      kpiModoOptimizacion: document.getElementById("kpi-modo-optimizacion"),
+      badgeMotorActivo: document.getElementById("badge-motor-activo"),
+      btnNavLaboratorio: document.getElementById("btn-nav-laboratorio"),
+      btnNavEstudio: document.getElementById("btn-nav-estudio"),
+      btnQuickTheme: document.getElementById("btn-quick-theme")
     };
 
-    // Subvista de gráficos (Canvas 2D para convergencia y Pareto).
-    this.graficoView = new GraficoView(this.dom.canvasFitness, this.dom.leyendaGrafico);
+    // Subvista de gráficos (Canvas 2D para convergencia y Pareto con Crosshair Tooltip).
+    this.graficoView = new GraficoView(this.dom.canvasFitness, this.dom.leyendaGrafico, this.dom.tooltipGrafico);
 
     // Subvista de modales (Biblioteca, Configuración, Renombrar, etc.).
     this.modalesView = new ModalesView({
@@ -128,6 +138,7 @@ export class AppView {
         try {
           const compilado = this.vm.guardarModeloDinamico(def, esEdicion, idExistente);
           this.estudioView.cerrar();
+          this._sincronizarNavSegmentada("laboratorio");
           this.modalesView.notificar(`💾 Simulación '${compilado.nombre}' guardada y activada con éxito`);
         } catch (err) {
           if (this.estudioView.dom.alerta) {
@@ -135,7 +146,9 @@ export class AppView {
           }
         }
       },
-      onCerrar: () => {}
+      onCerrar: () => {
+        this._sincronizarNavSegmentada("laboratorio");
+      }
     });
 
     // Enlaza la vista de Estudio al controlador modal para retrocompatibilidad
@@ -155,8 +168,43 @@ export class AppView {
     this.vm.restaurarEstadoInicial();
   }
 
+  // Sincroniza el estado activo del conmutador de navegación segmentado Material 3.
+  _sincronizarNavSegmentada(vistaActiva = "laboratorio") {
+    this.dom.btnNavLaboratorio?.classList.toggle("activo", vistaActiva === "laboratorio");
+    this.dom.btnNavEstudio?.classList.toggle("activo", vistaActiva === "estudio");
+  }
+
+  // Renderiza la tira de chips M3 con los valores actuales de las variables del genoma activo.
+  _renderizarChipsGenoma(genoma = null) {
+    if (!this.dom.chipsGenomaOptimo) return;
+    const resumen = this.vm.obtenerResumenGenomaActual(genoma);
+    if (!resumen || resumen.length === 0) {
+      this.dom.chipsGenomaOptimo.innerHTML = "";
+      return;
+    }
+
+    this.dom.chipsGenomaOptimo.innerHTML = resumen.map((item) => `
+      <div class="m3-genome-chip" title="${item.etiqueta} [Rango: ${item.min ?? "--"} a ${item.max ?? "--"}]">
+        <span class="chip-key">${item.nombre}:</span>
+        <span class="chip-val">${item.valorFormateado}</span>
+      </div>
+    `).join("");
+  }
+
   // Suscribe la vista a las notificaciones y cambios de estado emitidos por el ViewModel.
   _suscribirEventosViewModel() {
+    // 0. Sincronización inicial completa de configMotor y vista
+    this.vm.on("estado:inicializado", ({ configMotor }) => {
+      sincronizarFormularioMotor(configMotor);
+      if (this.dom.textoGeneracion && configMotor?.generaciones) {
+        this.dom.textoGeneracion.textContent = `Gen 0 / ${configMotor.generaciones}`;
+      }
+    });
+
+    this.vm.on("configMotorActualizada", (configMotor) => {
+      sincronizarFormularioMotor(configMotor);
+    });
+
     // 1. Cambio de modelo activo
     this.vm.on("modeloCambiado", ({ modelo, genomaInicial }) => {
       detenerTodosLosVisualizadores();
@@ -181,10 +229,16 @@ export class AppView {
         this.dom.contenedorAlerta
       );
 
-      // Reinicia el gráfico y la leyenda.
+      // Reinicia el gráfico, KPIs y leyenda.
       this.ultimoDatosMulti = null;
       if (this.dom.tituloGrafico) {
         this.dom.tituloGrafico.textContent = "📈 Curva de Convergencia del Fitness (Menor = Mejor)";
+      }
+      if (this.dom.kpiMejorFitness) {
+        this.dom.kpiMejorFitness.textContent = "--";
+      }
+      if (this.dom.kpiModoOptimizacion) {
+        this.dom.kpiModoOptimizacion.textContent = "Listo";
       }
       this.graficoView.actualizarLeyenda(false);
       this.graficoView.render({
@@ -193,7 +247,7 @@ export class AppView {
         totalGeneraciones: this.vm.configMotor.generaciones
       });
 
-      // Renderiza la previsualización del modelo con su solución inicial.
+      // Renderiza la previsualización del modelo con su solución inicial y chips de genoma.
       if (genomaInicial && this.dom.contenedorDibujoModelo) {
         const visualizador = obtenerVisualizador(modelo.id);
         visualizador.render(this.dom.contenedorDibujoModelo, genomaInicial, this.vm.entradasModelo, {
@@ -201,6 +255,7 @@ export class AppView {
           fitness: null
         });
         this.dom.textoDescribirModelo.textContent = modelo.describir(genomaInicial, this.vm.entradasModelo);
+        this._renderizarChipsGenoma(genomaInicial);
       }
     });
 
@@ -210,12 +265,25 @@ export class AppView {
       this.dom.barraProgreso.style.width = `${porcentaje}%`;
       this.dom.textoGeneracion.textContent = `Gen ${datos.generacion} / ${datos.totalGeneraciones}`;
 
+      if (this.dom.badgeMotorActivo && datos.motorTipo) {
+        this.dom.badgeMotorActivo.textContent = `⚡ ${datos.motorTipo}`;
+      }
+
       if (datos.esMultiobjetivo) {
         if (this.dom.tituloGrafico) {
           this.dom.tituloGrafico.textContent = "📈 Frente de Pareto Multiobjetivo (Haz clic en un punto para ver su mecanismo)";
         }
         const numSol = datos.frentePareto ? datos.frentePareto.length : 0;
         this.dom.etiquetaMejorFitness.textContent = `Frente Pareto: ${numSol} sol. (${datos.motorTipo})`;
+        if (this.dom.kpiMejorFitness) {
+          const fitSel = datos.solucionParetoSeleccionada?.fitness;
+          this.dom.kpiMejorFitness.textContent = Array.isArray(fitSel)
+            ? `[${fitSel[0].toFixed(2)}, ${fitSel[1].toFixed(2)}]`
+            : `${numSol} sol. F₀`;
+        }
+        if (this.dom.kpiModoOptimizacion) {
+          this.dom.kpiModoOptimizacion.textContent = "NSGA-II Pareto";
+        }
 
         this.ultimoDatosMulti = {
           esMultiobjetivo: true,
@@ -238,6 +306,12 @@ export class AppView {
           ? datos.mejorSolucion.fitness.toFixed(4)
           : datos.mejorSolucion?.fitness;
         this.dom.etiquetaMejorFitness.textContent = `Fitness: ${fitTexto} (${datos.motorTipo})`;
+        if (this.dom.kpiMejorFitness) {
+          this.dom.kpiMejorFitness.textContent = fitTexto ?? "--";
+        }
+        if (this.dom.kpiModoOptimizacion) {
+          this.dom.kpiModoOptimizacion.textContent = "Monoobjetivo";
+        }
 
         this.ultimoDatosMulti = null;
         this.graficoView.actualizarLeyenda(false);
@@ -257,6 +331,7 @@ export class AppView {
           fitness: datos.mejorSolucion?.fitness
         });
         this.dom.textoDescribirModelo.textContent = this.vm.modeloActual.describir(genomaADibujar, this.vm.entradasModelo);
+        this._renderizarChipsGenoma(genomaADibujar);
       }
     });
 
@@ -269,12 +344,16 @@ export class AppView {
           datosMulti: this.ultimoDatosMulti
         });
       }
+      if (this.dom.kpiMejorFitness && Array.isArray(individuo.fitness)) {
+        this.dom.kpiMejorFitness.textContent = `[${individuo.fitness[0].toFixed(2)}, ${individuo.fitness[1].toFixed(2)}]`;
+      }
       const visualizador = obtenerVisualizador(modelo.id);
       visualizador.render(this.dom.contenedorDibujoModelo, individuo.genoma, entrada, {
         modelo,
         fitness: individuo.fitness
       });
       this.dom.textoDescribirModelo.textContent = modelo.describir(individuo.genoma, entrada);
+      this._renderizarChipsGenoma(individuo.genoma);
     });
 
     // 4. Cambios de estado operativo de la simulación
@@ -311,13 +390,7 @@ export class AppView {
     // 8. Aplicación de preset
     this.vm.on("presetAplicado", (preset) => {
       if (preset.configMotor) {
-        if (preset.configMotor.tamPoblacion) this.dom.inputPoblacion.value = preset.configMotor.tamPoblacion;
-        if (preset.configMotor.generaciones) this.dom.inputGeneraciones.value = preset.configMotor.generaciones;
-        if (preset.configMotor.probMutacion) this.dom.inputMutacion.value = preset.configMotor.probMutacion;
-        if (preset.configMotor.elitismo) this.dom.inputElitismo.value = preset.configMotor.elitismo;
-        if (preset.configMotor.torneoK) this.dom.inputTorneo.value = preset.configMotor.torneoK;
-        if (preset.configMotor.replicasRuido) this.dom.inputReplicasRuido.value = preset.configMotor.replicasRuido;
-        if (preset.configMotor.semilla) this.dom.inputSemilla.value = preset.configMotor.semilla;
+        sincronizarFormularioMotor(preset.configMotor);
       }
       this.modalesView.notificar(`⭐ Preset '${preset.nombre}' aplicado con éxito`);
     });
@@ -325,6 +398,13 @@ export class AppView {
     // 9. Cambio de tema y color
     this.vm.on("temaCambiado", ({ modo, acento }) => {
       this.modalesView.aplicarTema(modo, acento);
+      if (this.dom.btnQuickTheme) {
+        const icono = modo === "light" ? "☀️ Claro" : (modo === "dark" ? "🌙 Oscuro" : "🌓 Auto");
+        this.dom.btnQuickTheme.textContent = icono;
+      }
+      if (this.graficoView?.ultimoRenderArgs) {
+        this.graficoView.render(this.graficoView.ultimoRenderArgs);
+      }
     });
 
     // 10. Errores
@@ -336,6 +416,42 @@ export class AppView {
 
   // Registra los eventos del DOM (botones, inputs, clics del Canvas y modales) conectándolos con comandos del ViewModel.
   _registrarEventosDOM() {
+    // Conmutador de Espacio de Trabajo en la Barra Superior M3
+    this.dom.btnNavLaboratorio?.addEventListener("click", () => {
+      if (this.estudioView) this.estudioView.cerrar();
+      this._sincronizarNavSegmentada("laboratorio");
+    });
+
+    this.dom.btnNavEstudio?.addEventListener("click", () => {
+      const { def, esEdicion } = this._obtenerDefinicionEditable(this.vm.modeloActual);
+      this._sincronizarNavSegmentada("estudio");
+      this.estudioView.abrir(def, esEdicion);
+    });
+
+    // Conmutador rápido de Tema (Claro -> Oscuro -> Auto)
+    this.dom.btnQuickTheme?.addEventListener("click", () => {
+      const orden = ["light", "dark", "auto"];
+      const actual = this.vm.temaModo || "auto";
+      const sig = orden[(orden.indexOf(actual) + 1) % orden.length];
+      this.vm.cambiarModoTema(sig);
+    });
+
+    // Botón para copiar la solución óptima y el informe al portapapeles
+    this.dom.btnCopiarReporte?.addEventListener("click", async () => {
+      const texto = this.dom.textoDescribirModelo?.textContent || "";
+      const resumen = this.vm.obtenerResumenGenomaActual();
+      const varsStr = resumen.map(r => `${r.nombre}=${r.valorFormateado}`).join(", ");
+      const payload = `=== ${this.vm.modeloActual?.nombre || "Simulación"} ===\nVariables: ${varsStr}\n\n${texto}`;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(payload);
+        }
+        this.modalesView.notificar("📋 Solución e informe técnico copiados al portapapeles");
+      } catch (_) {
+        this.modalesView.notificar("📋 Solución lista en el inspector");
+      }
+    });
+
     // Selector desplegable de modelos
     this.dom.selectorModelo.addEventListener("change", (e) => {
       this.vm.seleccionarModelo(e.target.value);
@@ -344,11 +460,15 @@ export class AppView {
     // Botones de ejecución
     this.dom.btnCorrer.addEventListener("click", () => {
       this.modalesView.alerta(null, this.dom.contenedorAlerta);
-      const config = obtenerParametrosMotor();
-      const entradas = obtenerDatosEntradaModelo(this.vm.modeloActual);
-      this.vm.actualizarConfigMotor(config);
-      this.vm.actualizarEntradasModelo(entradas);
-      this.vm.iniciar();
+      try {
+        const config = obtenerParametrosMotor();
+        const entradas = obtenerDatosEntradaModelo(this.vm.modeloActual);
+        this.vm.actualizarConfigMotor(config);
+        this.vm.actualizarEntradasModelo(entradas);
+        this.vm.iniciar();
+      } catch (err) {
+        this.modalesView.alerta(err.message, this.dom.contenedorAlerta);
+      }
     });
 
     this.dom.btnPausar.addEventListener("click", () => {
@@ -372,25 +492,30 @@ export class AppView {
       }
     });
 
-    // Tooltip interactivo con cursor pointer
+    // Tooltip interactivo M3 y guía crosshair en el gráfico (Monobjetivo y Pareto)
     this.dom.canvasFitness.addEventListener("mousemove", (e) => {
-      if (!this.vm.esMultiobjetivo) return;
-      const punto = this.graficoView.obtenerPuntoParetoCercano(e.clientX, e.clientY);
-      this.dom.canvasFitness.style.cursor = punto ? "pointer" : "default";
+      this.graficoView.actualizarHover(e.clientX, e.clientY);
+    });
+
+    this.dom.canvasFitness.addEventListener("mouseleave", () => {
+      this.graficoView.ocultarHover();
     });
 
     // Acciones de Toolbar
     this.dom.btnAbrirConstructor.addEventListener("click", () => {
+      this._sincronizarNavSegmentada("estudio");
       this.estudioView.abrir(null, false);
     });
 
     this.dom.btnEditarModelo.addEventListener("click", () => {
       const { def, esEdicion } = this._obtenerDefinicionEditable(this.vm.modeloActual);
+      this._sincronizarNavSegmentada("estudio");
       this.estudioView.abrir(def, esEdicion);
     });
 
     document.getElementById("btn-header-estudio")?.addEventListener("click", () => {
       const { def, esEdicion } = this._obtenerDefinicionEditable(this.vm.modeloActual);
+      this._sincronizarNavSegmentada("estudio");
       this.estudioView.abrir(def, esEdicion);
     });
 
@@ -407,8 +532,14 @@ export class AppView {
       this.modalesView.abrirRenombrar(this.vm.modeloActual);
     });
 
-    this.dom.btnEliminarModelo.addEventListener("click", () => {
-      if (!confirm(`¿Deseas eliminar definitivamente la simulación '${this.vm.modeloActual.nombre}'?`)) return;
+    this.dom.btnEliminarModelo.addEventListener("click", async () => {
+      const confirmado = await this.modalesView.confirmar({
+        titulo: "🗑️ Eliminar Simulación",
+        mensaje: `¿Deseas eliminar definitivamente la simulación '${this.vm.modeloActual.nombre}'? Esta acción no se puede deshacer.`,
+        textoConfirmar: "Eliminar",
+        peligro: true
+      });
+      if (!confirmado) return;
       try {
         this.vm.eliminarModelo();
         this.modalesView.notificar("🗑️ Simulación eliminada con éxito");
@@ -476,6 +607,7 @@ export class AppView {
 
         const compilado = this.vm.guardarModeloDinamico(def, esEdicion, idExistente);
         this.modalesView.cerrarConstructor();
+        this._sincronizarNavSegmentada("laboratorio");
         this.modalesView.notificar(`💾 Simulación '${compilado.nombre}' guardada con éxito`);
       } catch (err) {
         this.modalesView.alerta(err.message, document.getElementById("alerta-constructor"));
@@ -496,7 +628,7 @@ export class AppView {
         this.modalesView.cerrarRenombrar();
         this.modalesView.notificar(`🏷️ Renombrado a '${mod.nombre}'`);
       } catch (err) {
-        alert(err.message);
+        this.modalesView.notificar(`⚠️ ${err.message}`);
       }
     });
 
@@ -510,7 +642,7 @@ export class AppView {
         this.modalesView.cerrarGuardarPreset();
         this.modalesView.notificar(`⭐ Preset '${p.nombre}' guardado`);
       } catch (err) {
-        alert(err.message);
+        this.modalesView.notificar(`⚠️ ${err.message}`);
       }
     });
 
@@ -547,6 +679,7 @@ export class AppView {
     document.getElementById("btn-cerrar-biblioteca-pie")?.addEventListener("click", () => this.modalesView.cerrarBiblioteca());
     document.getElementById("btn-nuevo-desde-biblioteca")?.addEventListener("click", () => {
       this.modalesView.cerrarBiblioteca();
+      this._sincronizarNavSegmentada("estudio");
       this.estudioView.abrir(null, false);
     });
     document.getElementById("btn-importar-desde-biblioteca")?.addEventListener("click", () => {
@@ -560,11 +693,12 @@ export class AppView {
     this.modalesView.abrirBiblioteca(
       this.vm.obtenerModelos(),
       this.vm.obtenerPresets(),
-      (accion, id) => {
+      async (accion, id) => {
         try {
           if (accion === "cargar") {
             this.vm.seleccionarModelo(id);
             this.modalesView.cerrarBiblioteca();
+            this._sincronizarNavSegmentada("laboratorio");
             this.modalesView.notificar(`▶ Simulación cargada`);
           } else if (accion === "copiar") {
             const clon = this.vm.clonarModelo(id);
@@ -575,6 +709,7 @@ export class AppView {
             this.modalesView.cerrarBiblioteca();
             if (mod) {
               const { def, esEdicion } = this._obtenerDefinicionEditable(mod);
+              this._sincronizarNavSegmentada("estudio");
               this.estudioView.abrir(def, esEdicion);
             }
           } else if (accion === "renombrar") {
@@ -586,7 +721,13 @@ export class AppView {
             descargarArchivoJSON(`${id}_simulacion.json`, datos);
             this.modalesView.notificar(`📤 Archivo descargado`);
           } else if (accion === "eliminar") {
-            if (confirm("¿Estás seguro de que deseas eliminar esta simulación?")) {
+            const ok = await this.modalesView.confirmar({
+              titulo: "🗑️ Eliminar Simulación",
+              mensaje: "¿Estás seguro de que deseas eliminar esta simulación de la biblioteca?",
+              textoConfirmar: "Eliminar",
+              peligro: true
+            });
+            if (ok) {
               this.vm.eliminarModelo(id);
               this._abrirBiblioteca();
               this.modalesView.notificar("🗑️ Simulación eliminada");
@@ -599,7 +740,13 @@ export class AppView {
             descargarArchivoJSON(`${id}.json`, datos);
             this.modalesView.notificar(`📤 Preset exportado`);
           } else if (accion === "eliminarPreset") {
-            if (confirm("¿Deseas eliminar este preset?")) {
+            const ok = await this.modalesView.confirmar({
+              titulo: "🗑️ Eliminar Preset",
+              mensaje: "¿Deseas eliminar este preset de escenario?",
+              textoConfirmar: "Eliminar",
+              peligro: true
+            });
+            if (ok) {
               this.vm.eliminarPreset(id);
               this._abrirBiblioteca();
               this.modalesView.notificar("🗑️ Preset eliminado");

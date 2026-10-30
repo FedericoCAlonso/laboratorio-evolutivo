@@ -12,165 +12,260 @@
 <body>
   <div class="app-contenedor" id="contenedor-principal">
     <!-- =====================================================================
+         ENCABEZADO GLOBAL MATERIAL DESIGN 3 (TOP APP BAR & WORKSPACE SWITCHER)
+         ===================================================================== -->
+    <header class="m3-top-app-bar" id="header-global-m3">
+      <div class="m3-brand-block">
+        <div class="m3-brand-icon" aria-hidden="true">🧬</div>
+        <div style="display: flex; flex-direction: column; gap: 0.1rem;">
+          <div class="titulo-app" style="font-size: 1.25rem;">
+            <span>Laboratorio Evolutivo</span>
+            <span id="badge-motor-activo" class="insignia-pwa" title="Motor de cálculo en segundo plano">⚡ Web Worker · NSGA-II</span>
+          </div>
+          <div style="font-size: 0.78rem; color: var(--md-sys-color-on-surface-variant);">
+            Optimización evolutiva multifísica, cinemática 2D y diseño asistido Low-Code
+          </div>
+        </div>
+      </div>
+
+      <!-- Conmutador de Espacio de Trabajo (M3 Segmented Navigation) -->
+      <nav class="m3-segmented-nav" aria-label="Espacio de trabajo principal">
+        <button type="button" id="btn-nav-laboratorio" class="m3-seg-btn activo" title="Vista de Simulación Evolutiva y Frente de Pareto">
+          <span>🔬</span>
+          <span>Laboratorio</span>
+        </button>
+        <button type="button" id="btn-nav-estudio" class="m3-seg-btn" title="Abrir el Estudio de Modelado CAD 2D y Low-Code">
+          <span>🛠️</span>
+          <span>Estudio CAD &amp; Código</span>
+        </button>
+      </nav>
+
+      <!-- Acciones Globales Rápidas -->
+      <div class="m3-top-actions">
+        <button type="button" id="btn-abrir-biblioteca" class="btn-m3-tonal m3-icon-btn" title="Explorar las 16 simulaciones nativas, modelos personalizados y presets">
+          📚 Biblioteca
+        </button>
+        <button type="button" id="btn-quick-theme" class="btn-m3-outlined m3-icon-btn" title="Alternar rápidamente entre modo Claro y Oscuro">
+          🌓 Tema
+        </button>
+        <button type="button" id="btn-abrir-configuracion" class="btn-m3-tonal m3-icon-btn" title="Abrir configuración de apariencia y paletas Material 3">
+          ⚙️ Apariencia
+        </button>
+      </div>
+    </header>
+
+    <!-- =====================================================================
          VISTA 1: LABORATORIO EVOLUTIVO (PANEL PRINCIPAL DE SIMULACIÓN Y PARETO)
          ===================================================================== -->
     <main id="vista-laboratorio" class="vista-laboratorio">
-      <!-- Encabezado de la PWA (Top App Bar Material 3) -->
-      <header>
-        <div style="display: flex; flex-direction: column; gap: 0.2rem;">
-          <div class="titulo-app">
-            <span>🧬</span>
-            <span>Laboratorio Evolutivo</span>
-          </div>
-          <div style="font-size: 0.82rem; color: var(--md-sys-color-on-surface-variant);">
-            Optimizador genético multimodelo (NSGA-II Pareto + Web Workers + WASM)
-          </div>
-        </div>
-
-        <!-- Acciones de cabecera: Botón de Configuración -->
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-          <button type="button" id="btn-abrir-configuracion" class="btn-m3-tonal" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;" title="Abrir configuración y opciones de apariencia">
-            ⚙️ Configuración
-          </button>
-        </div>
-      </header>
-
       <!-- Mensaje de alerta para validaciones de entrada -->
       <div id="contenedor-alerta" class="alerta"></div>
 
-      <!-- Sección de Selección de Modelo y Parámetros del Motor -->
-      <div class="grid-2">
-        <!-- Tarjeta: Selección y Gestión de Modelos / Simulaciones -->
-        <section class="tarjeta">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; gap: 0.5rem; flex-wrap: wrap;">
-            <h2 class="tarjeta-titulo" style="margin-bottom: 0;">
-              <span>📦 Simulación Activa</span>
+      <!-- Layout Bento Adaptativo de 2 Columnas en Escritorio -->
+      <div class="lab-bento-grid">
+        <!-- Columna Izquierda: Control del Modelo y Motor Evolutivo -->
+        <div class="lab-control-column">
+          <!-- Tarjeta 1: Selección y Gestión de Modelos / Simulaciones -->
+          <section class="tarjeta">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; gap: 0.5rem; flex-wrap: wrap;">
+              <h2 class="tarjeta-titulo" style="margin-bottom: 0;">
+                <span>📦 Simulación Activa</span>
+              </h2>
+              <div style="display: flex; gap: 0.4rem; align-items: center;">
+                <button type="button" id="btn-header-estudio" class="btn-m3-filled" style="padding: 0.35rem 0.8rem; font-size: 0.78rem; min-height: 34px;" title="Abrir la simulación en el Estudio de Modelado a pantalla completa">🛠️ Abrir en Estudio</button>
+              </div>
+            </div>
+
+            <div class="grupo-campo">
+              <label for="selector-modelo">Seleccionar Modelo o Simulación</label>
+              <select id="selector-modelo" aria-label="Seleccionar Modelo"></select>
+              <span id="descripcion-modelo" class="descripcion-campo"></span>
+            </div>
+
+            <!-- Barra de herramientas para gestión CRUD de simulaciones -->
+            <div class="barra-acciones-simulacion">
+              <button type="button" id="btn-abrir-constructor" class="btn-m3-filled" style="padding: 0.32rem 0.7rem; font-size: 0.76rem; min-height: 32px;" title="Diseñar o crear una nueva simulación en el Estudio de Modelado">➕ Nuevo</button>
+              <button type="button" id="btn-editar-modelo" class="btn-m3-tonal" style="padding: 0.32rem 0.7rem; font-size: 0.76rem; min-height: 32px;" title="Abrir y editar esta simulación en el Estudio de Modelado a pantalla completa">✏️ Editar CAD/Código</button>
+              <button type="button" id="btn-copiar-modelo" class="btn-m3-tonal" style="padding: 0.32rem 0.7rem; font-size: 0.76rem; min-height: 32px;" title="Duplicar esta simulación para crear una variante">📑 Copiar</button>
+              <button type="button" id="btn-renombrar-modelo" class="btn-m3-tonal" style="padding: 0.32rem 0.7rem; font-size: 0.76rem; min-height: 32px; display: none;" title="Renombrar título y descripción">🏷️ Renombrar</button>
+              <button type="button" id="btn-guardar-preset" class="btn-m3-tonal" style="padding: 0.32rem 0.7rem; font-size: 0.76rem; min-height: 32px;" title="Guardar la configuración completa actual como Preset">⭐ Preset</button>
+              <button type="button" id="btn-exportar-modelo" class="btn-m3-outlined" style="padding: 0.32rem 0.6rem; font-size: 0.76rem; min-height: 32px;" title="Descargar definición en archivo JSON">📤 Exportar</button>
+              <button type="button" id="btn-importar-modelo" class="btn-m3-outlined" style="padding: 0.32rem 0.6rem; font-size: 0.76rem; min-height: 32px;" title="Importar simulación desde un archivo o código JSON">📥 Importar</button>
+              <button type="button" id="btn-eliminar-modelo" class="btn-peligro" style="padding: 0.32rem 0.6rem; font-size: 0.76rem; min-height: 32px; display: none;" title="Eliminar simulación">🗑️ Borrar</button>
+            </div>
+
+            <div id="contenedor-formulario-modelo" style="margin-top: 0.9rem;">
+              <!-- Campos generados dinámicamente desde parametrosEntrada del modelo -->
+            </div>
+          </section>
+
+          <!-- Tarjeta 2: Parámetros del Motor Genético y Ejecución -->
+          <section class="tarjeta">
+            <h2 class="tarjeta-titulo">
+              <span>⚙️ Motor Genético y Ejecución</span>
             </h2>
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-              <button type="button" id="btn-header-estudio" class="btn-m3-filled" style="padding: 0.4rem 0.85rem; font-size: 0.82rem;" title="Abrir la simulación en el Estudio de Modelado a pantalla completa">🛠️ Estudio de Modelado</button>
-              <button type="button" id="btn-abrir-biblioteca" class="btn-secundario" style="padding: 0.4rem 0.8rem; font-size: 0.82rem;" title="Ver todas las simulaciones y presets guardados">📚 Biblioteca</button>
+            <div class="grid-params">
+              <div class="grupo-campo">
+                <label for="param-poblacion">Población</label>
+                <input type="number" id="param-poblacion" min="4" max="2000" value="80">
+              </div>
+              <div class="grupo-campo">
+                <label for="param-generaciones">Generaciones</label>
+                <input type="number" id="param-generaciones" min="1" max="5000" value="100">
+              </div>
+              <div class="grupo-campo">
+                <label for="param-mutacion">Tasa Mutación</label>
+                <input type="number" id="param-mutacion" min="0" max="1" step="0.01" value="0.12">
+              </div>
+              <div class="grupo-campo">
+                <label for="param-elitismo">Elitismo</label>
+                <input type="number" id="param-elitismo" min="0" max="50" value="2">
+              </div>
+              <div class="grupo-campo">
+                <label for="param-torneo">Torneo (k)</label>
+                <input type="number" id="param-torneo" min="1" max="50" value="3">
+              </div>
+              <div class="grupo-campo">
+                <label for="param-replicas-ruido">Réplicas Ruido</label>
+                <input type="number" id="param-replicas-ruido" min="1" max="50" value="3">
+              </div>
             </div>
-          </div>
 
-          <div class="grupo-campo">
-            <label for="selector-modelo">Seleccionar Modelo o Simulación</label>
-            <select id="selector-modelo" aria-label="Seleccionar Modelo"></select>
-            <span id="descripcion-modelo" class="descripcion-campo"></span>
-          </div>
+            <!-- Acordeón M3: Operadores Genéticos Avanzados y Semilla -->
+            <details class="m3-accordion-details">
+              <summary class="m3-accordion-summary">
+                <span>🧬 Operadores Avanzados y Reproducibilidad</span>
+                <span>▾</span>
+              </summary>
+              <div class="m3-accordion-body">
+                <div class="grid-params">
+                  <div class="grupo-campo">
+                    <label for="param-cruzamiento">Prob. Cruce</label>
+                    <input type="number" id="param-cruzamiento" min="0" max="1" step="0.05" value="0.85">
+                  </div>
+                  <div class="grupo-campo">
+                    <label for="param-seleccion-esquema">Selección</label>
+                    <select id="param-seleccion-esquema">
+                      <option value="torneo" selected>Torneo Determinista</option>
+                      <option value="ruleta">Ruleta Proporcional</option>
+                      <option value="rango">Rango Lineal</option>
+                    </select>
+                  </div>
+                  <div class="grupo-campo">
+                    <label for="param-crossover-tipo">Cruce (Crossover)</label>
+                    <select id="param-crossover-tipo">
+                      <option value="sbx" selected>SBX / Uniforme</option>
+                      <option value="aritmetico">Aritmético</option>
+                      <option value="un_punto">Un Punto</option>
+                    </select>
+                  </div>
+                </div>
 
-          <!-- Barra de herramientas para gestión CRUD de simulaciones (Editar, Copiar, Renombrar, Borrar, Exportar) -->
-          <div class="barra-acciones-simulacion">
-            <button type="button" id="btn-abrir-constructor" class="btn-m3-filled" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" title="Diseñar o crear una nueva simulación en el Estudio de Modelado">➕ Nuevo</button>
-            <button type="button" id="btn-editar-modelo" class="btn-m3-tonal" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" title="Abrir y editar esta simulación en el Estudio de Modelado a pantalla completa">✏️ Editar en Estudio</button>
-            <button type="button" id="btn-copiar-modelo" class="btn-m3-tonal" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" title="Duplicar esta simulación para crear una variante">📑 Copiar</button>
-            <button type="button" id="btn-renombrar-modelo" class="btn-m3-tonal" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; display: none;" title="Renombrar título y descripción">🏷️ Renombrar</button>
-            <button type="button" id="btn-guardar-preset" class="btn-m3-tonal" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" title="Guardar la configuración completa actual como Preset">⭐ Guardar Preset</button>
-            <button type="button" id="btn-exportar-modelo" class="btn-m3-outlined" style="padding: 0.35rem 0.65rem; font-size: 0.8rem;" title="Descargar definición en archivo JSON">📤 Exportar</button>
-            <button type="button" id="btn-importar-modelo" class="btn-m3-outlined" style="padding: 0.35rem 0.65rem; font-size: 0.8rem;" title="Importar simulación desde un archivo o código JSON">📥 Importar</button>
-            <button type="button" id="btn-eliminar-modelo" class="btn-peligro" style="padding: 0.35rem 0.65rem; font-size: 0.8rem; display: none;" title="Eliminar simulación">🗑️ Borrar</button>
-          </div>
+                <div class="grupo-campo" style="margin-bottom: 0;">
+                  <label for="param-semilla">Semilla Determinista (Mulberry32)</label>
+                  <div class="texto-semilla-grupo">
+                    <input type="number" id="param-semilla" value="123456">
+                    <button type="button" id="btn-nueva-semilla" class="btn-secundario" title="Generar nueva semilla aleatoria">🎲 Nueva</button>
+                  </div>
+                </div>
+              </div>
+            </details>
 
-          <div id="contenedor-formulario-modelo" style="margin-top: 1rem;">
-            <!-- Campos generados dinámicamente desde parametrosEntrada del modelo -->
-          </div>
-        </section>
+            <!-- Botones de control del algoritmo -->
+            <div class="botonera" style="margin-top: 0.85rem;">
+              <button type="button" id="btn-correr" class="btn-exito" style="flex: 1.2;">▶ Evolucionar</button>
+              <button type="button" id="btn-pausar" class="btn-aviso" style="flex: 1;" disabled>⏸ Pausar</button>
+              <button type="button" id="btn-detener" class="btn-peligro" style="flex: 1;" disabled>⏹ Detener</button>
+            </div>
 
-        <!-- Tarjeta: Parámetros del Motor Genético -->
-        <section class="tarjeta">
-          <h2 class="tarjeta-titulo">
-            <span>⚙️ Parámetros del Motor</span>
-          </h2>
-          <div class="grid-params">
-            <div class="grupo-campo">
-              <label for="param-poblacion">Población</label>
-              <input type="number" id="param-poblacion" min="4" max="2000" value="60">
+            <!-- Barra de progreso Material 3 -->
+            <div class="barra-progreso-contenedor">
+              <div id="barra-progreso" class="barra-progreso-relleno"></div>
             </div>
-            <div class="grupo-campo">
-              <label for="param-generaciones">Generaciones</label>
-              <input type="number" id="param-generaciones" min="1" max="5000" value="200">
+            <div class="indicadores-progreso">
+              <span id="texto-estado">Listo para comenzar</span>
+              <span id="texto-generacion">Gen 0 / 100</span>
             </div>
-            <div class="grupo-campo">
-              <label for="param-mutacion">Mutación</label>
-              <input type="number" id="param-mutacion" min="0" max="1" step="0.01" value="0.05">
-            </div>
-            <div class="grupo-campo">
-              <label for="param-elitismo">Elitismo</label>
-              <input type="number" id="param-elitismo" min="0" max="50" value="2">
-            </div>
-            <div class="grupo-campo">
-              <label for="param-torneo">Torneo</label>
-              <input type="number" id="param-torneo" min="1" max="50" value="3">
-            </div>
-            <div class="grupo-campo">
-              <label for="param-replicas-ruido">Réplicas Ruido</label>
-              <input type="number" id="param-replicas-ruido" min="1" max="50" value="5">
-            </div>
-          </div>
 
-          <div class="grupo-campo">
-            <label for="param-semilla">Semilla Aleatoria (Reproducibilidad)</label>
-            <div class="texto-semilla-grupo">
-              <input type="number" id="param-semilla" value="123456">
-              <button type="button" id="btn-nueva-semilla" class="btn-secundario" title="Generar nueva semilla">🎲 Nueva</button>
+            <!-- Tira de KPIs Rápidos en Vivo -->
+            <div class="m3-kpi-strip">
+              <div class="m3-kpi-pill">
+                <span class="m3-kpi-label">Mejor Aptitud</span>
+                <span id="kpi-mejor-fitness" class="m3-kpi-value">--</span>
+              </div>
+              <div class="m3-kpi-pill">
+                <span class="m3-kpi-label">Modo Evolutivo</span>
+                <span id="kpi-modo-optimizacion" class="m3-kpi-value">Mono / NSGA-II</span>
+              </div>
             </div>
-            <span class="descripcion-campo">Con la misma semilla y parámetros, el resultado es 100% idéntico.</span>
-          </div>
+          </section>
+        </div>
 
-          <!-- Botones de control del algoritmo -->
-          <div class="botonera">
-            <button type="button" id="btn-correr" class="btn-exito">▶ Correr</button>
-            <button type="button" id="btn-pausar" class="btn-aviso" disabled>⏸ Pausar</button>
-            <button type="button" id="btn-detener" class="btn-peligro" disabled>⏹ Detener</button>
-          </div>
+        <!-- Columna Derecha: Escenario Visual Interactivo, Curva de Convergencia/Pareto e Inspector -->
+        <div class="lab-stage-column">
+          <!-- Tarjeta 3: Visualización de la Solución y Genoma Óptimo -->
+          <section class="tarjeta">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+              <h2 class="tarjeta-titulo" style="margin-bottom: 0;">
+                <span>🏆 Simulación Física de la Solución Óptima</span>
+              </h2>
+              <button type="button" id="btn-copiar-reporte" class="btn-m3-tonal" style="padding: 0.3rem 0.75rem; font-size: 0.76rem; min-height: 32px;" title="Copiar los valores del genoma óptimo y el informe técnico al portapapeles">
+                📋 Copiar Solución
+              </button>
+            </div>
 
-          <!-- Barra de progreso Material 3 -->
-          <div class="barra-progreso-contenedor">
-            <div id="barra-progreso" class="barra-progreso-relleno"></div>
-          </div>
-          <div class="indicadores-progreso">
-            <span id="texto-estado">Listo para comenzar</span>
-            <span id="texto-generacion">Gen 0 / 200</span>
-          </div>
-        </section>
+            <!-- Contenedor donde el modelo actual dibuja su resultado visual interactivo -->
+            <div id="contenedor-dibujo-modelo"></div>
+
+            <!-- Chips de Variables / Genes del Mejor Individuo -->
+            <div class="inspector-header-m3">
+              <h3 style="font-size: 0.88rem; font-weight: 700; color: var(--md-sys-color-on-surface-variant); margin: 0;">
+                🧬 Variables Optimizadas (Genoma Activo)
+              </h3>
+            </div>
+            <div id="chips-genoma-optimo" class="genome-chips-grid">
+              <!-- Chips renderizados dinámicamente por AppView -->
+            </div>
+
+            <!-- Contenedor para el informe técnico describir() -->
+            <details class="m3-accordion-details" open>
+              <summary class="m3-accordion-summary">
+                <span>📋 Informe Técnico Detallado</span>
+                <span>▾</span>
+              </summary>
+              <div class="m3-accordion-body" style="padding: 0;">
+                <pre id="texto-describir-modelo" class="texto-descriptivo" style="border: none; border-radius: 0; margin: 0;">Presione "Evolucionar" para iniciar la optimización y ver los resultados.</pre>
+              </div>
+            </details>
+          </section>
+
+          <!-- Tarjeta 4: Gráfico de Convergencia / Frente de Pareto (Canvas 2D con Crosshair Tooltip) -->
+          <section class="tarjeta">
+            <h2 class="tarjeta-titulo">
+              <span id="titulo-grafico">📈 Curva de Convergencia del Fitness (Menor = Mejor)</span>
+              <span id="etiqueta-mejor-fitness" style="font-size: 0.88rem; color: var(--md-sys-color-primary);">Fitness: --</span>
+            </h2>
+            <div class="grafico-contenedor" id="contenedor-grafico-principal">
+              <canvas id="canvas-fitness" width="800" height="230"></canvas>
+              <div id="tooltip-grafico-m3" class="m3-chart-tooltip" role="status" aria-live="polite"></div>
+              <div class="leyenda-grafico">
+                <div class="item-leyenda">
+                  <div class="color-leyenda" style="background-color: #10b981;"></div>
+                  <span>Mejor Individuo</span>
+                </div>
+                <div class="item-leyenda">
+                  <div class="color-leyenda" style="background-color: #8b5cf6;"></div>
+                  <span>Promedio Población</span>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
 
-      <!-- Sección de Gráfico de Convergencia / Frente de Pareto (Canvas 2D) -->
-      <section class="tarjeta">
-        <h2 class="tarjeta-titulo">
-          <span id="titulo-grafico">📈 Curva de Convergencia del Fitness (Menor = Mejor)</span>
-          <span id="etiqueta-mejor-fitness" style="font-size: 0.9rem; color: var(--md-sys-color-primary);">Fitness: --</span>
-        </h2>
-        <div class="grafico-contenedor">
-          <canvas id="canvas-fitness" width="800" height="230"></canvas>
-          <div class="leyenda-grafico">
-            <div class="item-leyenda">
-              <div class="color-leyenda" style="background-color: #10b981;"></div>
-              <span>Mejor Individuo</span>
-            </div>
-            <div class="item-leyenda">
-              <div class="color-leyenda" style="background-color: #8b5cf6;"></div>
-              <span>Promedio Población</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Sección de Visualización de la Solución (Provista por el Modelo) -->
-      <section class="tarjeta">
-        <h2 class="tarjeta-titulo">
-          <span>🏆 Solución del Modelo Activo</span>
-        </h2>
-        <!-- Contenedor donde el modelo actual dibuja su resultado visual interactivo -->
-        <div id="contenedor-dibujo-modelo"></div>
-
-        <!-- Contenedor para el informe técnico describir() -->
-        <h3 style="font-size: 0.95rem; margin-top: 1rem; color: var(--md-sys-color-on-surface-variant);">Detalle Descriptivo</h3>
-        <pre id="texto-describir-modelo" class="texto-descriptivo">Presione "Correr" para iniciar la optimización y ver los resultados.</pre>
-      </section>
-
       <!-- Pie de página -->
-      <footer style="text-align: center; margin-top: 1rem; padding: 1rem 0; font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); border-top: 1px solid var(--md-sys-color-outline-variant);">
-        <span>&copy; 2026 Federico C. Alonso. Laboratorio Evolutivo PWA con Google Material 3.</span>
+      <footer style="text-align: center; margin-top: 0.5rem; padding: 1rem 0; font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); border-top: 1px solid var(--md-sys-color-outline-variant);">
+        <span>&copy; 2026 Federico C. Alonso. Laboratorio Evolutivo PWA con Google Material Design 3 y Arquitectura MVVM.</span>
       </footer>
     </main>
 
@@ -453,21 +548,32 @@
 
   <!-- Modal 2: Biblioteca de Simulaciones y Presets -->
   <div id="modal-biblioteca-simulaciones" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modal-titulo-biblioteca">
-    <div class="modal-dialog" style="max-width: 820px;">
+    <div class="modal-dialog" style="max-width: 920px;">
       <div class="modal-header">
         <h3 id="modal-titulo-biblioteca">📚 Biblioteca de Simulaciones y Presets</h3>
         <button type="button" id="btn-cerrar-biblioteca" class="btn-cerrar-modal" aria-label="Cerrar">&times;</button>
       </div>
       <div class="modal-body">
         <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-          <input type="text" id="input-buscar-biblioteca" placeholder="🔍 Filtrar simulaciones..." style="max-width: 320px;">
+          <input type="text" id="input-buscar-biblioteca" placeholder="🔍 Filtrar simulaciones por nombre o descripción..." style="max-width: 360px;">
           <div style="display: flex; gap: 0.5rem;">
             <button type="button" id="btn-nuevo-desde-biblioteca" class="btn-m3-filled" style="font-size: 0.8rem;">➕ Crear Nueva</button>
             <button type="button" id="btn-importar-desde-biblioteca" class="btn-m3-outlined" style="font-size: 0.8rem;">📥 Importar JSON</button>
           </div>
         </div>
 
-        <div id="contenedor-items-biblioteca" class="grid-biblioteca" style="margin-top: 0.75rem;">
+        <!-- Barra de Filtros por Dominio de Ingeniería (M3 Filter Chips) -->
+        <div id="filtros-biblioteca-m3" class="m3-filter-chips" role="group" aria-label="Categorías de simulación">
+          <button type="button" class="m3-filter-chip activo" data-categoria="todos">🌐 Todos</button>
+          <button type="button" class="m3-filter-chip" data-categoria="mecanismos">⚙️ Mecanismos y Estructuras</button>
+          <button type="button" class="m3-filter-chip" data-categoria="campos">⚡ Campos y Termodinámica</button>
+          <button type="button" class="m3-filter-chip" data-categoria="ondas">🔊 Acústica y RF</button>
+          <button type="button" class="m3-filter-chip" data-categoria="control">🎛️ Control, Fases y Topología</button>
+          <button type="button" class="m3-filter-chip" data-categoria="dinamicos">✨ Mis Modelos</button>
+          <button type="button" class="m3-filter-chip" data-categoria="presets">⭐ Presets</button>
+        </div>
+
+        <div id="contenedor-items-biblioteca" class="grid-biblioteca" style="margin-top: 0.5rem;">
           <!-- Tarjetas renderizadas dinámicamente -->
         </div>
       </div>
@@ -592,6 +698,23 @@
       </div>
       <div class="modal-footer">
         <button type="button" id="btn-cerrar-config-pie" class="btn-secundario">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 7: Diálogo de Confirmación Nativo Material 3 -->
+  <div id="modal-confirmacion-m3" class="modal-overlay" style="display: none;" role="alertdialog" aria-modal="true" aria-labelledby="modal-titulo-confirmar">
+    <div class="modal-dialog" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 id="modal-titulo-confirmar">⚠️ Confirmar Acción</h3>
+        <button type="button" id="btn-cerrar-confirmar-m3" class="btn-cerrar-modal" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="modal-mensaje-confirmar" style="font-size: 0.92rem; color: var(--md-sys-color-on-surface-variant); line-height: 1.5;"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-cancelar-confirmar-m3" class="btn-secundario">Cancelar</button>
+        <button type="button" id="btn-aceptar-confirmar-m3" class="btn-peligro">Confirmar</button>
       </div>
     </div>
   </div>
