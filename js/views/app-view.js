@@ -3,11 +3,11 @@
 // ARQUITECTURA MVVM - ENLACE BIDIRECCIONAL ENTRE EL VIEWMODEL Y EL DOM
 // =========================================================================
 
-import { GraficoView } from "./grafico-view.js";
-import { ModalesView } from "./modales-view.js";
-import { EstudioView } from "./estudio-view.js";
-import { obtenerVisualizador, detenerTodosLosVisualizadores } from "./visualizers.js";
-import { obtenerPlantillaSimulacion } from "../builder.js";
+import { GraficoView } from "./grafico-view.js?v=2.4";
+import { ModalesView } from "./modales-view.js?v=2.4";
+import { EstudioView } from "./estudio-view.js?v=2.4";
+import { obtenerVisualizador, detenerTodosLosVisualizadores } from "./visualizers.js?v=2.4";
+import { obtenerPlantillaSimulacion } from "../builder.js?v=2.4";
 import {
   construirFormularioModelo,
   obtenerDatosEntradaModelo,
@@ -140,6 +140,9 @@ export class AppView {
 
     // Enlaza la vista de Estudio al controlador modal para retrocompatibilidad
     this.modalesView.asignarEstudioView(this.estudioView);
+    if (typeof window !== "undefined") {
+      window.estudioView = this.estudioView;
+    }
 
     // Estado local para recordar datos de dibujo de Pareto.
     this.ultimoDatosMulti = null;
@@ -617,8 +620,10 @@ export class AppView {
     }
 
     const plantilla = obtenerPlantillaSimulacion(modelo.id) || {};
-    const varsLista = (modelo.variables || (modelo.crearGenoma ? modelo.crearGenoma() : [])).map(v => ({
-      nombre: v.nombre,
+    const nombresJansen = ["a", "l", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"];
+    const genomaCrudo = modelo.variables || (modelo.crearGenoma ? modelo.crearGenoma() : []);
+    const varsLista = genomaCrudo.map((v, i) => ({
+      nombre: v.nombre || (modelo.id === "pata-jansen" ? nombresJansen[i] : `var${i + 1}`),
       tipo: v.tipo || "continuo",
       min: v.min !== undefined ? v.min : 0,
       max: v.max !== undefined ? v.max : 100
@@ -632,7 +637,7 @@ export class AppView {
       variables: varsLista.length > 0 ? varsLista : (plantilla.variables || [
         { nombre: "var1", tipo: "continuo", min: 0, max: 100 }
       ]),
-      codigoEvaluacion: plantilla.codigoEvaluacion || `// Función de aptitud para ${modelo.nombre}\n// Variables: ${varsLista.map(v => 'vars.' + v.nombre).join(', ')}\nreturn Math.abs(vars.${varsLista[0]?.nombre || 'var1'} - 50);`
+      codigoEvaluacion: plantilla.codigoEvaluacion || `// Función de aptitud para ${modelo.nombre}\n// Variables disponibles: ${varsLista.map(v => 'vars.' + v.nombre).join(', ')}\nreturn Math.abs(vars.${varsLista[0]?.nombre || 'var1'} - 50);`
     };
 
     return { def, esEdicion: false };

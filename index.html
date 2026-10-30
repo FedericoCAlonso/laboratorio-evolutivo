@@ -7,7 +7,7 @@
   <meta name="description" content="Laboratorio Evolutivo: Optimizador genético con modelos intercambiables, evolución multiobjetivo Pareto, diseño Google Material 3 y modos de color">
   <title>Laboratorio Evolutivo</title>
   <!-- Estilos visuales desacoplados Google Material 3 con soporte para modos de color y temas -->
-  <link rel="stylesheet" href="./styles.css?v=2.3">
+  <link rel="stylesheet" href="./styles.css?v=2.4">
 </head>
 <body>
   <div class="app-contenedor" id="contenedor-principal">
@@ -229,15 +229,15 @@
         <section class="panel-editor-estudio">
           <!-- Selector de Pestañas Material 3 (Variables, Código, Metadatos) -->
           <div class="tabs-estudio" role="tablist" id="tabs-estudio-contenedor">
-            <button type="button" id="tab-btn-vars" class="tab-estudio-btn activo" role="tab" aria-selected="true" data-tab="vars" tabindex="0">
+            <button type="button" id="tab-btn-vars" class="tab-estudio-btn activo" role="tab" aria-selected="true" data-tab="vars" tabindex="0" onclick="window.estudioView && window.estudioView.cambiarTab('vars')">
               <span class="paso-num">1</span>
               <span>🧬 Variables (Genes)</span>
             </button>
-            <button type="button" id="tab-btn-codigo" class="tab-estudio-btn" role="tab" aria-selected="false" data-tab="codigo" tabindex="-1">
+            <button type="button" id="tab-btn-codigo" class="tab-estudio-btn" role="tab" aria-selected="false" data-tab="codigo" tabindex="-1" onclick="window.estudioView && window.estudioView.cambiarTab('codigo')">
               <span class="paso-num">2</span>
               <span>💻 Código de Evaluación</span>
             </button>
-            <button type="button" id="tab-btn-meta" class="tab-estudio-btn" role="tab" aria-selected="false" data-tab="meta" tabindex="-1">
+            <button type="button" id="tab-btn-meta" class="tab-estudio-btn" role="tab" aria-selected="false" data-tab="meta" tabindex="-1" onclick="window.estudioView && window.estudioView.cambiarTab('meta')">
               <span class="paso-num">3</span>
               <span>⚙️ Metadatos & Visualizador</span>
             </button>
@@ -271,7 +271,7 @@
               <button type="button" id="btn-agregar-variable" class="btn-m3-tonal">
                 ➕ Agregar Variable
               </button>
-              <button type="button" id="btn-etapa-siguiente-vars" class="btn-m3-filled" title="Avanzar a la función de evaluación en JavaScript">
+              <button type="button" id="btn-etapa-siguiente-vars" class="btn-m3-filled" title="Avanzar a la función de evaluación en JavaScript" onclick="window.estudioView && window.estudioView.cambiarTab('codigo')">
                 Siguiente: 💻 Código de Evaluación ➔
               </button>
             </div>
@@ -307,10 +307,10 @@
 
             <!-- Barra de navegación de la Etapa 2 -->
             <div class="nav-etapas-estudio">
-              <button type="button" id="btn-etapa-anterior-codigo" class="btn-m3-tonal" title="Regresar a la configuración de variables">
+              <button type="button" id="btn-etapa-anterior-codigo" class="btn-m3-tonal" title="Regresar a la configuración de variables" onclick="window.estudioView && window.estudioView.cambiarTab('vars')">
                 ⬅ Anterior: 🧬 Variables
               </button>
-              <button type="button" id="btn-etapa-siguiente-codigo" class="btn-m3-filled" title="Avanzar a la configuración de metadatos y visualizador">
+              <button type="button" id="btn-etapa-siguiente-codigo" class="btn-m3-filled" title="Avanzar a la configuración de metadatos y visualizador" onclick="window.estudioView && window.estudioView.cambiarTab('meta')">
                 Siguiente: ⚙️ Metadatos & Visualizador ➔
               </button>
             </div>
@@ -355,10 +355,10 @@
 
             <!-- Barra de navegación y guardado de la Etapa 3 -->
             <div class="nav-etapas-estudio">
-              <button type="button" id="btn-etapa-anterior-meta" class="btn-m3-tonal" title="Regresar al editor de código">
+              <button type="button" id="btn-etapa-anterior-meta" class="btn-m3-tonal" title="Regresar al editor de código" onclick="window.estudioView && window.estudioView.cambiarTab('codigo')">
                 ⬅ Anterior: 💻 Código de Evaluación
               </button>
-              <button type="button" id="btn-etapa-guardar-meta" class="btn-m3-filled" title="Compilar y guardar la simulación en el Laboratorio">
+              <button type="button" id="btn-etapa-guardar-meta" class="btn-m3-filled" title="Compilar y guardar la simulación en el Laboratorio" onclick="window.estudioView && window.estudioView.ejecutarGuardado()">
                 💾 Guardar y Aplicar Simulación
               </button>
             </div>
@@ -557,6 +557,6 @@
   <div id="modal-constructor-modelo" style="display: none;" aria-hidden="true"></div>
 
   <!-- Carga del punto de entrada modular con ES Modules nativos -->
-  <script type="module" src="./js/main.js?v=2.3"></script>
+  <script type="module" src="./js/main.js?v=2.4"></script>
 </body>
 </html>

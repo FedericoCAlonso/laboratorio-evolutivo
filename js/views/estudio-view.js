@@ -3,14 +3,33 @@
 // ARQUITECTURA MVVM - VISTA DEDICADA DE EDICIÓN LOW-CODE CON PREVIEW EN VIVO
 // =========================================================================
 
-import { VisualizadorDinamico } from "./visualizers.js";
-import { obtenerPlantillaSimulacion } from "../builder.js";
-import { HINTS_VISUALIZACION, mostrarAlerta } from "../ui.js";
+import { VisualizadorDinamico } from "./visualizers.js?v=2.4";
+import { obtenerPlantillaSimulacion } from "../builder.js?v=2.4";
+import { HINTS_VISUALIZACION, mostrarAlerta } from "../ui.js?v=2.4";
 
 // Vista de pantalla completa para el diseño, edición y prueba interactiva de simulaciones evolutivas.
 export class EstudioView {
   // Inicializa la vista del Estudio de Modelado asociando referencias DOM y callbacks de ciclo de vida.
   constructor(opciones = {}) {
+    this.onGuardar = opciones.onGuardar || null;
+    this.onCerrar = opciones.onCerrar || null;
+
+    // Instancia del visualizador dinámico para la previsualización en vivo
+    this.visualizador = new VisualizadorDinamico();
+
+    // Estado interno del estudio
+    this.modo = "creacion"; // 'creacion' | 'edicion'
+    this.modeloIdActual = null;
+    this.tabActiva = "vars"; // 'vars' | 'codigo' | 'meta'
+    this.valoresGenesPrueba = {};
+    this._eventosRegistrados = false;
+
+    this._mapearDom();
+    this._registrarEventos();
+  }
+
+  // Mapea y actualiza las referencias a los elementos del DOM del Estudio de Modelado.
+  _mapearDom() {
     this.dom = {
       vistaLaboratorio: document.getElementById("vista-laboratorio"),
       vistaEstudio: document.getElementById("vista-estudio"),
@@ -66,24 +85,13 @@ export class EstudioView {
       hudTiempo: document.getElementById("estudio-hud-tiempo"),
       hudDescribir: document.getElementById("estudio-preview-describir")
     };
-
-    this.onGuardar = opciones.onGuardar || null;
-    this.onCerrar = opciones.onCerrar || null;
-
-    // Instancia del visualizador dinámico para la previsualización en vivo
-    this.visualizador = new VisualizadorDinamico();
-
-    // Estado interno del estudio
-    this.modo = "creacion"; // 'creacion' | 'edicion'
-    this.modeloIdActual = null;
-    this.tabActiva = "vars"; // 'vars' | 'codigo' | 'meta'
-    this.valoresGenesPrueba = {};
-
-    this._registrarEventos();
   }
 
   // Registra todos los escuchadores de eventos para interactividad, tabs, snippets y sliders.
   _registrarEventos() {
+    if (this._eventosRegistrados) return;
+    this._eventosRegistrados = true;
+
     // 1. Acciones de navegación
     this.dom.btnVolver?.addEventListener("click", () => this.cerrar());
     this.dom.btnGuardar?.addEventListener("click", () => this._ejecutarGuardado());
@@ -197,11 +205,18 @@ export class EstudioView {
   cambiarTab(tab) {
     this.tabActiva = tab;
 
+    const btnVars = this.dom?.tabBtnVars || document.getElementById("tab-btn-vars");
+    const btnCodigo = this.dom?.tabBtnCodigo || document.getElementById("tab-btn-codigo");
+    const btnMeta = this.dom?.tabBtnMeta || document.getElementById("tab-btn-meta");
+    const panelVars = this.dom?.tabPanelVars || document.getElementById("tab-panel-vars");
+    const panelCodigo = this.dom?.tabPanelCodigo || document.getElementById("tab-panel-codigo");
+    const panelMeta = this.dom?.tabPanelMeta || document.getElementById("tab-panel-meta");
+
     // Actualiza botones de pestañas y accesibilidad WAI-ARIA
     const botones = [
-      { id: "vars", el: this.dom.tabBtnVars, panel: this.dom.tabPanelVars },
-      { id: "codigo", el: this.dom.tabBtnCodigo, panel: this.dom.tabPanelCodigo },
-      { id: "meta", el: this.dom.tabBtnMeta, panel: this.dom.tabPanelMeta }
+      { id: "vars", el: btnVars, panel: panelVars },
+      { id: "codigo", el: btnCodigo, panel: panelCodigo },
+      { id: "meta", el: btnMeta, panel: panelMeta }
     ];
 
     botones.forEach(({ id, el, panel }) => {
@@ -219,21 +234,30 @@ export class EstudioView {
     });
 
     // Enfocar automáticamente el textarea si se pasa a la etapa de código
-    if (tab === "codigo" && this.dom.textareaCodigo) {
-      setTimeout(() => this.dom.textareaCodigo?.focus(), 60);
+    const textarea = this.dom?.textareaCodigo || document.getElementById("textarea-codigo-evaluacion");
+    if (tab === "codigo" && textarea) {
+      setTimeout(() => textarea?.focus(), 60);
     }
 
     // Desplazar el panel hacia arriba para orientar visualmente al usuario al inicio de la etapa
-    if (this.dom.panelEditor) {
+    const panelEditor = this.dom?.panelEditor || document.querySelector(".panel-editor-estudio");
+    if (panelEditor) {
       try {
-        this.dom.panelEditor.scrollIntoView({ behavior: "smooth", block: "start" });
+        panelEditor.scrollIntoView({ behavior: "smooth", block: "start" });
       } catch (_) {}
     }
+  }
+
+  // Ejecuta la validación y guardado de la simulación activa.
+  ejecutarGuardado() {
+    this._ejecutarGuardado();
   }
 
   // Abre el Estudio de Modelado a pantalla completa inicializando o precargando los datos del modelo.
   abrir(datosIniciales = null, esEdicion = false) {
     try {
+      this._mapearDom();
+      this._registrarEventos();
       this.modo = esEdicion ? "edicion" : "creacion";
       this.modeloIdActual = datosIniciales?.id || null;
 
