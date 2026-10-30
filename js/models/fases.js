@@ -2,6 +2,18 @@
 // MÓDULO: MODELO 1 - BALANCEO DE FASES TRIFÁSICO (R, S, T)
 // =========================================================================
 
+// Lista canónica de 8 circuitos residenciales por defecto cuando no se especifica entrada personalizada.
+const CIRCUITOS_DEFECTO = [
+  { nombre: "Iluminación PB", corriente: 6.0, faseFija: "" },
+  { nombre: "Iluminación PA", corriente: 5.5, faseFija: "" },
+  { nombre: "Tomas Uso General PB", corriente: 12.0, faseFija: "" },
+  { nombre: "Tomas Uso Especial Cocina", corriente: 16.0, faseFija: "" },
+  { nombre: "Horno Eléctrico", corriente: 22.0, faseFija: "" },
+  { nombre: "Aire Acondicionado Living", corriente: 18.0, faseFija: "" },
+  { nombre: "Aire Dormitorio Principal", corriente: 9.5, faseFija: "" },
+  { nombre: "Aire Dormitorio Secundario", corriente: 9.5, faseFija: "" }
+];
+
 // Objeto que implementa el contrato del Modelo 1: Balanceo de cargas en sistemas eléctricos trifásicos.
 export const ModeloBalanceoFases = {
   // Identificador único del modelo en el registro.
@@ -10,6 +22,8 @@ export const ModeloBalanceoFases = {
   nombre: "Balanceo de Fases Trifásico (R, S, T)",
   // Descripción técnica del problema de optimización combinatoria.
   descripcion: "Distribuye cargas monofásicas entre las fases R, S y T para minimizar el desbalance de corriente y respetar fases obligatorias.",
+  // Visualizador por defecto en el Estudio y Laboratorio.
+  tipoVisualizacion: "distribucion_recursos",
   // No utiliza aceleración WebAssembly compilada por ser un problema combinatorio puramente discreto.
   usaWasm: false,
   // Indica que la función de aptitud es determinista sin ruido estocástico.
@@ -54,7 +68,7 @@ export const ModeloBalanceoFases = {
 
   // Crea el genoma definiendo un gen categórico (0=R, 1=S, 2=T) por cada circuito recibido.
   crearGenoma(entrada = {}) {
-    const listaCircuitos = entrada?.circuitos || [500, 450, 400, 350, 300, 250, 200, 150];
+    const listaCircuitos = entrada?.circuitos || CIRCUITOS_DEFECTO;
     // Mapea cada circuito a un gen con valores discretos entre 0 y 2.
     return listaCircuitos.map(() => ({
       tipo: "categorico",
@@ -64,15 +78,15 @@ export const ModeloBalanceoFases = {
   },
 
   // Evalúa el genoma calculando el desbalance (máx - mín) de corriente más penalizaciones.
-  evaluar(genoma, entrada) {
-    const circuitos = entrada.circuitos || [];
-    const penalizacionBase = Number(entrada.penalizacionViolacion) || 500;
+  evaluar(genoma, entrada = {}) {
+    const circuitos = entrada?.circuitos || CIRCUITOS_DEFECTO;
+    const penalizacionBase = Number(entrada?.penalizacionViolacion) || 500;
     let sumasFases = [0, 0, 0]; // 0: R, 1: S, 2: T
     let penalizacionTotal = 0;
     const nombreFases = ["R", "S", "T"];
 
     for (let i = 0; i < circuitos.length; i++) {
-      const faseAsignada = genoma[i]; // 0, 1 o 2
+      const faseAsignada = Math.round(genoma[i]); // 0, 1 o 2
       const corriente = Number(circuitos[i].corriente) || 0;
       sumasFases[faseAsignada] += corriente;
 
@@ -92,8 +106,8 @@ export const ModeloBalanceoFases = {
   },
 
   // Devuelve una descripción en texto plano y legible del resultado del balanceo.
-  describir(genoma, entrada) {
-    const circuitos = entrada.circuitos || [];
+  describir(genoma, entrada = {}) {
+    const circuitos = entrada?.circuitos || CIRCUITOS_DEFECTO;
     const fases = ["R", "S", "T"];
     const sumas = [0, 0, 0];
     const asignaciones = { R: [], S: [], T: [] };

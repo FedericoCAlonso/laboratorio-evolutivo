@@ -12,6 +12,7 @@ import {
   crearGrafoPataJansen,
   crearGrafoBrazoRobotico
 } from "./engines/mecanismos.js";
+import { PLANTILLAS_FIELES } from "./plantillas/index.js";
 
 // Plantillas preconfiguradas para inspirar y servir de base a nuevas simulaciones de diversas naturalezas.
 export const PLANTILLAS_SIMULACION = {
@@ -241,6 +242,14 @@ PLANTILLAS_SIMULACION["superficie-fonoabsorbente"] = PLANTILLAS_SIMULACION["fono
 PLANTILLAS_SIMULACION["linea-transmision-rf"] = PLANTILLAS_SIMULACION["linea_rf"];
 PLANTILLAS_SIMULACION["corte-chapa-nesting"] = PLANTILLAS_SIMULACION["corte_chapa"];
 
+// Sustituye las plantillas por las versiones fieles a cada modelo nativo (mismas variables y misma evaluación).
+for (const [id, plantilla] of Object.entries(PLANTILLAS_FIELES)) {
+  if (!plantilla) continue;
+  PLANTILLAS_SIMULACION[id] = plantilla;
+  const alias = id.replace(/-/g, "_");
+  if (PLANTILLAS_SIMULACION[alias]) PLANTILLAS_SIMULACION[alias] = plantilla;
+}
+
 // Obtiene una copia profunda de una plantilla predefinida a partir de su clave o identificador de modelo.
 export function obtenerPlantillaSimulacion(clave) {
   if (!clave) return null;
@@ -325,8 +334,8 @@ export function validarDefinicionModelo(definicion) {
     if (min >= max) {
       throw new Error(`Variable '${nombre}': El valor mínimo (${min}) debe ser estrictamente menor que el máximo (${max}).`);
     }
-    if (v.tipo !== "continuo" && v.tipo !== "entero") {
-      throw new Error(`Variable '${nombre}': El tipo debe ser 'continuo' o 'entero'.`);
+    if (v.tipo !== "continuo" && v.tipo !== "entero" && v.tipo !== "categorico") {
+      throw new Error(`Variable '${nombre}': El tipo debe ser 'continuo', 'entero' o 'categorico'.`);
     }
   }
 
@@ -343,7 +352,8 @@ export function validarDefinicionModelo(definicion) {
   // Prueba de ejecución con valores de prueba (punto medio de cada variable).
   const varsPrueba = {};
   definicion.variables.forEach(v => {
-    varsPrueba[v.nombre.trim()] = (Number(v.min) + Number(v.max)) / 2;
+    const mid = (Number(v.min) + Number(v.max)) / 2;
+    varsPrueba[v.nombre.trim()] = (v.tipo === "entero" || v.tipo === "categorico") ? Math.round(mid) : mid;
   });
 
   // Telemetría de sensores de prueba si el modelo incluye mecanismo CAD o sensores
@@ -392,7 +402,7 @@ export function compilarModeloDinamico(definicionCruda) {
   const varsDef = definicionCruda.variables.map(v => ({
     nombre: v.nombre.trim(),
     etiqueta: v.etiqueta || v.nombre.trim(),
-    tipo: v.tipo === "entero" ? "entero" : "continuo",
+    tipo: (v.tipo === "entero" || v.tipo === "categorico") ? v.tipo : "continuo",
     min: Number(v.min),
     max: Number(v.max),
     valorNominal: v.valorNominal !== undefined ? Number(v.valorNominal) : undefined

@@ -2,6 +2,8 @@
 // MÓDULO: MODELO 3 - PATA JANSEN (13 BARRAS DE THEO JANSEN CON FILTROS DUROS)
 // =========================================================================
 
+import { MotorEstructurasCinematica } from "../engines/estructuras.js";
+
 // Función geométrica base que calcula la intersección entre dos circunferencias según el signo s (+1 o -1).
 export function interseccion(p1, r1, p2, r2, s) {
   const dx = p2.x - p1.x, dy = p2.y - p1.y, dd = Math.hypot(dx, dy);
@@ -298,166 +300,8 @@ export const ModeloPataJansen = {
 
   // Evalúa la marcha aplicando las barreras físicas duras de entorno y luego la función multiobjetivo.
   evaluar(genoma, entrada) {
-    const modo = (entrada?.modoOptimizacion || "multiobjetivo").toString().toLowerCase().trim();
-    const esMultiobjetivo = modo === "multiobjetivo";
-
-    const maxAncho = Number(entrada?.maxAncho !== undefined ? entrada.maxAncho : 80);
-    const maxAlto = Number(entrada?.maxAlto !== undefined ? entrada.maxAlto : 40);
-    const obstaculoAlto = Number(entrada?.obstaculoAlto !== undefined ? entrada.obstaculoAlto : 15);
-
-    const w1 = Number(entrada?.w1 !== undefined ? entrada.w1 : 3.0);
-    const w2 = Number(entrada?.w2 !== undefined ? entrada.w2 : 1.0);
-    const w3 = Number(entrada?.w3 !== undefined ? entrada.w3 : 1.0);
-    const w4 = Number(entrada?.w4 !== undefined ? entrada.w4 : 1.0);
-    const w5 = Number(entrada?.w5 !== undefined ? entrada.w5 : 0.5);
-    const w7 = Number(entrada?.w7 !== undefined ? entrada.w7 : 1.0);
-    const w9 = Number(entrada?.w9 !== undefined ? entrada.w9 : 1.0);
-    const zancadaObj = Number(entrada?.zancadaObjetivo !== undefined ? entrada.zancadaObjetivo : 4.0);
-    const criterio = (entrada?.criterioSuavidad || "pico").toString().toLowerCase().trim() === "variacion" ? "variacion" : "pico";
-    const limitePico = Number(entrada?.limitePico !== undefined ? entrada.limitePico : 30);
-    const m = LONGITUD_MANIVELA_JANSEN;
-
-    const N = 180;
-    const pasos = [];
-    let pasosInvalidos = 0;
-
-    for (let s = 0; s < N; s++) {
-      const theta = (2 * Math.PI * s) / N;
-      const res = this.resolverCinematica(theta, genoma);
-      if (!res) pasosInvalidos++;
-      else pasos.push({ idx: s, ...res });
-    }
-
-    if (pasosInvalidos > 0) {
-      return esMultiobjetivo
-        ? [1000 + 10 * pasosInvalidos, 1000 + 10 * pasosInvalidos]
-        : 1000 + 10 * pasosInvalidos;
-    }
-
-    let minX = Infinity, maxX = -Infinity;
-    let minY = Infinity, maxY = -Infinity;
-    for (let s = 0; s < N; s++) {
-      const H = pasos[s].H;
-      if (H.x < minX) minX = H.x;
-      if (H.x > maxX) maxX = H.x;
-      if (H.y < minY) minY = H.y;
-      if (H.y > maxY) maxY = H.y;
-    }
-
-    const anchoTotal = maxX - minX;
-    const alturaTotal = maxY - minY;
-    const diagCaja = Math.hypot(anchoTotal, alturaTotal);
-
-    for (let s = 0; s < N; s++) {
-      const hAct = pasos[s].H;
-      const hSig = pasos[(s + 1) % N].H;
-      if (Math.hypot(hSig.x - hAct.x, hSig.y - hAct.y) > 0.25 * diagCaja) {
-        return esMultiobjetivo ? [500, 500] : 500;
-      }
-    }
-
-    if (alturaTotal <= 1e-6 || anchoTotal <= 1e-6) {
-      return esMultiobjetivo ? [800, 800] : 800;
-    }
-
-    const numApoyo = Math.round(N * 0.35);
-    const ordenadosPorY = [...pasos].sort((p1, p2) => p1.H.y - p2.H.y);
-    const apoyo = ordenadosPorY.slice(0, numApoyo);
-    const apoyoSet = new Set(apoyo.map(p => p.idx));
-
-    let minYApoyo = Infinity, maxYApoyo = -Infinity;
-    let minXApoyo = Infinity, maxXApoyo = -Infinity;
-    let sumaYApoyo = 0;
-
-    for (let s = 0; s < apoyo.length; s++) {
-      const H = apoyo[s].H;
-      if (H.y < minYApoyo) minYApoyo = H.y;
-      if (H.y > maxYApoyo) maxYApoyo = H.y;
-      if (H.x < minXApoyo) minXApoyo = H.x;
-      if (H.x > maxXApoyo) maxXApoyo = H.x;
-      sumaYApoyo += H.y;
-    }
-
-    const anchoApoyo = maxXApoyo - minXApoyo;
-    if (anchoApoyo <= 1e-6) {
-      return esMultiobjetivo ? [800, 800] : 800;
-    }
-
-    const mediaYApoyo = sumaYApoyo / numApoyo;
-
-    // Despeje vertical real medido desde la cota más alta alcanzada respecto a la altura media de apoyo.
-    const despeje_real = maxY - mediaYApoyo;
-
-    // Filtros eliminatorios duros de entorno: descarta de inmediato con penalización 800 si viola las restricciones físicas.
-    if (anchoTotal > maxAncho || alturaTotal > maxAlto || despeje_real < obstaculoAlto) {
-      return esMultiobjetivo ? [800, 800] : 800;
-    }
-
-    const f1 = (maxYApoyo - minYApoyo) / alturaTotal;
-    const f2 = 1 - Math.min(1, anchoApoyo / (zancadaObj * m));
-    const f3 = Math.max(0, 0.3 - (maxY - mediaYApoyo) / anchoApoyo) / 0.3;
-
-    const dxPasos = [];
-    for (let s = 0; s < N; s++) {
-      const sig = (s + 1) % N;
-      if (apoyoSet.has(s) && apoyoSet.has(sig)) {
-        dxPasos.push(pasos[sig].H.x - pasos[s].H.x);
-      }
-    }
-
-    let f4 = 1.0;
-    if (dxPasos.length >= 3) {
-      const promDx = dxPasos.reduce((acc, v) => acc + v, 0) / dxPasos.length;
-      const promAbsDx = dxPasos.reduce((acc, v) => acc + Math.abs(v), 0) / dxPasos.length;
-      const varianza = dxPasos.reduce((acc, v) => acc + (v - promDx) ** 2, 0) / dxPasos.length;
-      const desvio = Math.sqrt(varianza);
-      if (promAbsDx > 1e-6) {
-        f4 = Math.min(1, desvio / promAbsDx);
-      }
-    }
-
-    const aNorm = calcularAceleracionPieJansen(pasos, m);
-    const metSuavidad = calcularMetricasSuavidadJansen(aNorm, criterio, limitePico);
-    const f5 = metSuavidad.f5;
-
-    const suelo_y = maxYApoyo;
-    let i_in = -1;
-    for (let t = 0; t < N; t++) {
-      const prev = (t - 1 + N) % N;
-      if (pasos[t].H.y <= suelo_y && pasos[prev].H.y > suelo_y) {
-        i_in = t;
-        break;
-      }
-    }
-
-    let dx_ataque = anchoTotal;
-    let f7 = 1.0;
-    if (i_in !== -1) {
-      const yMidTarget = minY + (alturaTotal * 0.5);
-      let i_mid = -1;
-      let curr = i_in;
-      for (let step = 0; step < N; step++) {
-        curr = (curr - 1 + N) % N;
-        if (pasos[curr].H.y >= yMidTarget) {
-          i_mid = curr;
-          break;
-        }
-      }
-      if (i_mid !== -1) {
-        dx_ataque = Math.abs(pasos[i_in].H.x - pasos[i_mid].H.x);
-        f7 = dx_ataque / (anchoTotal || 1);
-      }
-    }
-
-    const f9 = (anchoTotal - anchoApoyo) / (anchoTotal || 1);
-
-    // En optimización multiobjetivo Pareto retornamos el par [f5, f2] sin sumar con pesos w.
-    if (esMultiobjetivo) {
-      const penPlanitud = f1 > 0.25 ? (f1 - 0.25) * 2.0 : 0;
-      return [f5, f2 + penPlanitud];
-    }
-
-    return w1 * f1 + w2 * f2 + w3 * f3 + w4 * f4 + w5 * f5 + w7 * f7 + w9 * f9;
+    // Delegado al motor de estructuras: única fuente de verdad del fitness de Jansen.
+    return MotorEstructurasCinematica.evaluarJansenFitness(genoma, entrada || {});
   },
 
   // Extrae la totalidad de puntos y métricas cinemáticas incluyendo dimensiones y despeje de obstáculo.

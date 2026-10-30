@@ -213,6 +213,15 @@ const grafoBrazoPlantilla = new GrafoMecanismoMultifisica(PLANTILLAS_SIMULACION.
 const dofPlantillaBrazo = analizarGradosLibertad(grafoBrazoPlantilla);
 assert.strictEqual(dofPlantillaBrazo.M, 3, "La plantilla de Brazo Robótico debe preservar M=3 GDL");
 
+// 5.2 Verificar coherencia geométrica exacta en theta=0 de crearGrafoPataJansen (ninguna barra cambia al arrastrar 0 px)
+const gJansenExacto = crearGrafoPataJansen();
+gJansenExacto.barras.forEach(b => {
+  const nA = gJansenExacto.nodos.find(n => n.id === b.nodoA);
+  const nB = gJansenExacto.nodos.find(n => n.id === b.nodoB);
+  const distReal = Math.hypot(nA.x - nB.x, nA.y - nB.y);
+  assert.ok(Math.abs(distReal - b.longitud) < 0.25, `Barra ${b.id} (${b.variableAsociada}) debe coincidir con distancia euclidiana de sus nodos (${distReal.toFixed(2)} vs ${b.longitud})`);
+});
+console.log("    ✓ Coherencia geométrica exacta en θ=0 de los 8 nodos y 10 barras de Theo Jansen verificada | OK");
 console.log("    ✓ Paridad completa de plantillas preconfiguradas con el Editor CAD | OK");
 
 console.log("\n=== ¡TODAS LAS PRUEBAS DEL MOTOR CAD Y MECANISMOS PASARON CON ÉXITO (5/5)! ===");

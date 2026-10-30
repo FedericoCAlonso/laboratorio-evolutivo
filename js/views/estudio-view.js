@@ -14,7 +14,8 @@ import { EditorGraficoView } from "./editor-grafico-view.js?v=2.5";
 import {
   GrafoMecanismoMultifisica,
   crearGrafoPataJansen,
-  crearGrafoBrazoRobotico
+  crearGrafoBrazoRobotico,
+  crearGrafoPataCaminante
 } from "../engines/mecanismos.js?v=2.5";
 
 // Vista de pantalla completa para el diseño, edición y prueba interactiva de simulaciones evolutivas.
@@ -415,11 +416,19 @@ export class EstudioView {
       this.dom.textareaCodigo.value = def.codigoEvaluacion || "";
     }
 
-    // Limpia y reconstruye la tabla de variables
+    // Limpia y reconstruye la tabla de variables e inicializa sus valores nominales de prueba
+    this.valoresGenesPrueba = {};
     if (this.dom.tbodyVariables) {
       this.dom.tbodyVariables.innerHTML = "";
       const vars = def.variables || [];
-      vars.forEach((v) => this.agregarVariable(v));
+      vars.forEach((v) => {
+        this.agregarVariable(v);
+        if (v.nombre) {
+          let valInit = v.valorNominal !== undefined ? Number(v.valorNominal) : (Number(v.min || 0) + Number(v.max || 100)) / 2;
+          if (v.tipo === "entero" || v.tipo === "categorico") valInit = Math.round(valInit);
+          this.valoresGenesPrueba[v.nombre] = valInit;
+        }
+      });
     }
 
     // Carga o genera el grafo de mecanismo multicuerpo en el editor CAD
@@ -428,6 +437,8 @@ export class EstudioView {
         this.editorGrafico.cargarGrafo(def.grafo);
       } else if (def.id === "pata-jansen" || def.id === "jansen" || def.nombre?.toLowerCase().includes("jansen")) {
         this.editorGrafico.cargarGrafo(crearGrafoPataJansen(this.valoresGenesPrueba));
+      } else if (def.id === "pata-caminante" || def.nombre?.toLowerCase().includes("caminante")) {
+        this.editorGrafico.cargarGrafo(crearGrafoPataCaminante(this.valoresGenesPrueba));
       } else if (def.id === "brazo-robotico" || def.id === "brazo" || def.nombre?.toLowerCase().includes("brazo")) {
         this.editorGrafico.cargarGrafo(crearGrafoBrazoRobotico(this.valoresGenesPrueba));
       } else {
@@ -468,30 +479,85 @@ export class EstudioView {
     if (!this.dom.tbodyVariables) return;
 
     const tr = document.createElement("tr");
+    if (v.etiqueta) tr.dataset.etiqueta = v.etiqueta;
+    if (v.opciones) tr.dataset.opciones = JSON.stringify(v.opciones);
 
-    // Columna 1: Nombre de la variable
+    // Columna 1: Nombre de la variable y su valor nominal / actual en vivo
     const tdNom = document.createElement("td");
+    const filaSupNom = document.createElement("div");
+    filaSupNom.style.display = "flex";
+    filaSupNom.style.alignItems = "center";
+    filaSupNom.style.gap = "6px";
+
     const inpNom = document.createElement("input");
     inpNom.type = "text";
     inpNom.className = "var-nombre input-m3-campo";
     inpNom.placeholder = "ej: radio";
     inpNom.value = v.nombre || "";
+    inpNom.style.flex = "1";
     inpNom.addEventListener("input", () => this.sincronizarSlidersGenes());
-    tdNom.appendChild(inpNom);
+    filaSupNom.appendChild(inpNom);
 
-    if (v.etiqueta || v.valorNominal !== undefined) {
-      const hint = document.createElement("div");
-      hint.className = "var-etiqueta-hint";
-      hint.style.fontSize = "0.72rem";
-      hint.style.color = "var(--md-sys-color-on-surface-variant)";
-      hint.style.marginTop = "3px";
-      hint.style.opacity = "0.85";
-      const textoNominal = v.valorNominal !== undefined ? ` [Nominal: ${v.valorNominal}]` : "";
-      hint.textContent = (v.etiqueta || v.nombre) + textoNominal;
-      tdNom.appendChild(hint);
-    }
+    const valNominalInicial = v.valorNominal !== undefined
+      ? v.valorNominal
+      : ((v.min !== undefined && v.max !== undefined) ? parseFloat(((Number(v.min) + Number(v.max)) / 2).toFixed(2)) : 50);
 
-    // Columna 2: Tipo de variable (continuo / entero)
+    const badgeNominalWrap = document.createElement("div");
+    badgeNominalWrap.style.display = "inline-flex";
+    badgeNominalWrap.style.alignItems = "center";
+    badgeNominalWrap.style.gap = "3px";
+    badgeNominalWrap.style.background = "rgba(59, 130, 246, 0.12)";
+    badgeNominalWrap.style.border = "1px solid rgba(59, 130, 246, 0.35)";
+    badgeNominalWrap.style.borderRadius = "6px";
+    badgeNominalWrap.style.padding = "2px 6px";
+    badgeNominalWrap.title = "Valor actual / nominal (se actualiza en vivo al arrastrar nodos en el CAD)";
+
+    const lblNom = document.createElement("span");
+    lblNom.style.fontSize = "0.68rem";
+    lblNom.style.fontWeight = "600";
+    lblNom.style.color = "var(--md-sys-color-primary, #60a5fa)";
+    lblNom.textContent = "Actual:";
+
+    const inpNominal = document.createElement("input");
+    inpNominal.type = "number";
+    inpNominal.step = "any";
+    inpNominal.className = "var-nominal input-m3-campo";
+    inpNominal.style.width = "68px";
+    inpNominal.style.padding = "2px 4px";
+    inpNominal.style.fontSize = "0.75rem";
+    inpNominal.style.fontFamily = "monospace";
+    inpNominal.value = valNominalInicial;
+    inpNominal.addEventListener("input", (e) => {
+      const nv = parseFloat(e.target.value);
+      const nomAct = inpNom.value.trim();
+      if (!isNaN(nv) && nomAct) {
+        this.valoresGenesPrueba[nomAct] = nv;
+        const hintEl = tr.querySelector(".var-etiqueta-hint");
+        if (hintEl) {
+          const baseEt = tr.dataset.etiqueta || nomAct;
+          hintEl.textContent = `${baseEt} [Actual: ${nv}]`;
+        }
+        this.sincronizarSlidersGenes();
+        this.ejecutarPruebaEnVivo();
+      }
+    });
+
+    badgeNominalWrap.appendChild(lblNom);
+    badgeNominalWrap.appendChild(inpNominal);
+    filaSupNom.appendChild(badgeNominalWrap);
+    tdNom.appendChild(filaSupNom);
+
+    const hint = document.createElement("div");
+    hint.className = "var-etiqueta-hint";
+    hint.style.fontSize = "0.72rem";
+    hint.style.color = "var(--md-sys-color-on-surface-variant)";
+    hint.style.marginTop = "3px";
+    hint.style.opacity = "0.85";
+    const textoNominal = valNominalInicial !== undefined ? ` [Actual: ${valNominalInicial}]` : "";
+    hint.textContent = (v.etiqueta || v.nombre || "Variable") + textoNominal;
+    tdNom.appendChild(hint);
+
+    // Columna 2: Tipo de variable (continuo / entero / categorico)
     const tdTipo = document.createElement("td");
     const selTipo = document.createElement("select");
     selTipo.className = "var-tipo select-m3-campo";
@@ -501,10 +567,15 @@ export class EstudioView {
     const optEnt = document.createElement("option");
     optEnt.value = "entero";
     optEnt.textContent = "Entero";
+    const optCat = document.createElement("option");
+    optCat.value = "categorico";
+    optCat.textContent = "Categórico";
     if (v.tipo === "entero") optEnt.selected = true;
+    else if (v.tipo === "categorico") optCat.selected = true;
     else optCont.selected = true;
     selTipo.appendChild(optCont);
     selTipo.appendChild(optEnt);
+    selTipo.appendChild(optCat);
     selTipo.addEventListener("change", () => this.sincronizarSlidersGenes());
     tdTipo.appendChild(selTipo);
 
@@ -565,15 +636,28 @@ export class EstudioView {
       const selTipo = tr.querySelector(".var-tipo");
       const inpMin = tr.querySelector(".var-min");
       const inpMax = tr.querySelector(".var-max");
+      const inpNominal = tr.querySelector(".var-nominal");
 
       const nom = inpNom ? inpNom.value.trim() : "";
       if (nom) {
-        variables.push({
+        const minVal = inpMin ? parseFloat(inpMin.value) : 0;
+        const maxVal = inpMax ? parseFloat(inpMax.value) : 100;
+        const nomVal = inpNominal && inpNominal.value !== ""
+          ? parseFloat(inpNominal.value)
+          : (this.valoresGenesPrueba[nom] !== undefined ? this.valoresGenesPrueba[nom] : (minVal + maxVal) / 2);
+
+        const objVar = {
           nombre: nom,
+          etiqueta: tr.dataset.etiqueta || nom,
           tipo: selTipo ? selTipo.value : "continuo",
-          min: inpMin ? parseFloat(inpMin.value) : 0,
-          max: inpMax ? parseFloat(inpMax.value) : 100
-        });
+          min: minVal,
+          max: maxVal,
+          valorNominal: nomVal
+        };
+        if (tr.dataset.opciones) {
+          try { objVar.opciones = JSON.parse(tr.dataset.opciones); } catch (_) {}
+        }
+        variables.push(objVar);
       }
     });
 
@@ -775,6 +859,7 @@ export class EstudioView {
           nombre: def.nombre,
           descripcion: def.descripcion,
           tipoVisualizacion: def.tipoVisualizacion,
+          grafo: def.grafo,
           variables: def.variables,
           crearGenoma() { return def.variables; },
           describir(g) {
@@ -846,7 +931,7 @@ return [suavidad, errZancada];`;
         snippet = `\n// Motor de Estructuras: cinemática y esfuerzo mecánico\nconst radioTotal = vars.longitud1 + vars.longitud2;\nconst errorAlcance = Math.abs(radioTotal - 60);\nreturn [errorAlcance, vars.longitud1 * 0.1];`;
         break;
       case "jansen":
-        snippet = `\n// Simulación cinemática cerrada de Theo Jansen (180 pasos)\nconst sim = estructuras.evaluarJansen(vars, { longitudManivela: 15, zancadaObjetivo: 60, obstaculoAlto: 15 });\nif (!sim.esValido) return [1000 + 10 * sim.pasosInvalidos, 1000 + 10 * sim.pasosInvalidos];\nreturn [sim.f5_suavidad, sim.errorZancada];`;
+        snippet = `\n// Simulación cinemática cerrada de Theo Jansen (180 pasos con criterios completos)\nreturn estructuras.evaluarJansenFitness(vars, { modoOptimizacion: "multiobjetivo", maxAncho: 80, maxAlto: 40, obstaculoAlto: 15, zancadaObjetivo: 4.0 });`;
         break;
       case "ondas":
         snippet = `\n// Motor de Ondas: absorción acústica y directividad\nconst absorcion = Math.sin((vars.frecuencia || 1000) * 0.001);\nreturn 1.0 - Math.min(1.0, Math.max(0.0, absorcion));`;
@@ -980,11 +1065,20 @@ return [suavidad, errZancada];`;
       if (fila) {
         const inpMin = fila.querySelector(".var-min");
         const inpMax = fila.querySelector(".var-max");
+        const inpNominal = fila.querySelector(".var-nominal");
+        const hintEl = fila.querySelector(".var-etiqueta-hint");
         if (inpMin && numVal < parseFloat(inpMin.value)) {
           inpMin.value = Math.max(0.1, Number((numVal * 0.7).toFixed(1)));
         }
         if (inpMax && numVal > parseFloat(inpMax.value)) {
           inpMax.value = Number((numVal * 1.3).toFixed(1));
+        }
+        if (inpNominal) {
+          inpNominal.value = numVal;
+        }
+        if (hintEl) {
+          const baseEt = fila.dataset.etiqueta || nombre;
+          hintEl.textContent = `${baseEt} [Actual: ${numVal}]`;
         }
       } else {
         this._asegurarVariableEnTabla({

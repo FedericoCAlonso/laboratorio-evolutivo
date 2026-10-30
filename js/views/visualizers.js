@@ -3716,6 +3716,104 @@ export class VisualizadorDinamico {
       return;
     }
 
+    // 0b. Delegación directa a los visualizadores nativos especializados de los 16 modelos
+    if (tipo === "brazo_robotico" || modelo?.id === "brazo-robotico") {
+      this.subVisualizadorActivo = new VisualizadorBrazo();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+    if (tipo === "cohete_landing" || modelo?.id === "cohete-landing") {
+      this.subVisualizadorActivo = new VisualizadorCohete();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+    if (tipo === "controlador_pid" || modelo?.id === "controlador-pid") {
+      this.subVisualizadorActivo = new VisualizadorPID();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+    if (tipo === "orbita_transferencia" || modelo?.id === "orbita-transferencia") {
+      this.subVisualizadorActivo = new VisualizadorOrbita();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+    if (tipo === "filtro_rlc" || modelo?.id === "filtro-rlc") {
+      this.subVisualizadorActivo = new VisualizadorFiltro();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+    if (tipo === "armadura_puente" || modelo?.id === "armadura-puente") {
+      this.subVisualizadorActivo = new VisualizadorArmadura();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+    if (tipo === "distribucion_termica" || modelo?.id === "distribucion-termica") {
+      this.subVisualizadorActivo = new VisualizadorTermico();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+    if (tipo === "balanceo_fases_trifasico" || modelo?.id === "balanceo-fases-trifasico") {
+      this.subVisualizadorActivo = new VisualizadorFases();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+    if (tipo === "pata_caminante" || modelo?.id === "pata-caminante") {
+      this.subVisualizadorActivo = new VisualizadorCaminante();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+    if (tipo === "campo_potencial_2d" && (modelo?.id === "campo-potencial" || varsDef.length >= 6)) {
+      this.subVisualizadorActivo = new VisualizadorPotencial();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+    if (tipo === "trayectoria_particulas_2d" && varsDef.length >= 3) {
+      if (varsDef.some(v => v.nombre === "r2")) {
+        this.subVisualizadorActivo = new VisualizadorOrbita();
+        this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+        return;
+      }
+      if (varsDef.some(v => v.nombre === "angulo")) {
+        this.subVisualizadorActivo = new VisualizadorCohete();
+        this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+        return;
+      }
+    }
+    if (tipo === "serie_temporal" && varsDef.length >= 3) {
+      if (varsDef.some(v => v.nombre === "kp")) {
+        this.subVisualizadorActivo = new VisualizadorPID();
+        this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+        return;
+      }
+      if (varsDef.some(v => v.nombre === "r")) {
+        this.subVisualizadorActivo = new VisualizadorFiltro();
+        this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+        return;
+      }
+    }
+    if (tipo === "mecanismo_barras_2d") {
+      if (varsDef.some(v => v.nombre === "theta1")) {
+        this.subVisualizadorActivo = new VisualizadorBrazo();
+        this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+        return;
+      }
+      if (varsDef.some(v => v.nombre === "h1" && varsDef.some(vx => vx.nombre === "h2"))) {
+        this.subVisualizadorActivo = new VisualizadorArmadura();
+        this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+        return;
+      }
+      if (varsDef.some(v => v.nombre === "l1_manivela")) {
+        this.subVisualizadorActivo = new VisualizadorCaminante();
+        this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+        return;
+      }
+    }
+    if (tipo === "distribucion_recursos" && varsDef.some(v => v.nombre === "f1")) {
+      this.subVisualizadorActivo = new VisualizadorFases();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+
     // 1. Representación de Campo de Potencial 2D
     if (tipo === "campo_potencial_2d") {
       this._renderizarCampoPotencialDinamico(contenedor, genoma, varsDef, contexto);

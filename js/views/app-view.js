@@ -635,7 +635,7 @@ export class AppView {
 
     const def = {
       id: modelo.id,
-      nombre: plantilla.nombre || `${modelo.nombre} (Copia Editable)`,
+      nombre: plantilla.nombre || modelo.nombre || `${modelo.id} (Editable)`,
       descripcion: plantilla.descripcion || modelo.descripcion,
       tipoVisualizacion: plantilla.tipoVisualizacion || modelo.tipoVisualizacion || "calibracion",
       grafo: plantilla.grafo || modelo.grafo || (modelo.definicionCruda?.grafo) || null,
@@ -645,7 +645,7 @@ export class AppView {
       codigoEvaluacion: plantilla.codigoEvaluacion || `// Función de aptitud para ${modelo.nombre}\n// Variables disponibles: ${varsLista.map(v => 'vars.' + v.nombre).join(', ')}\nreturn Math.abs(vars.${varsLista[0]?.nombre || 'var1'} - 50);`
     };
 
-    return { def, esEdicion: false };
+    return { def, esEdicion: true };
   }
 }
 

@@ -194,20 +194,24 @@
         <div class="estudio-acciones-top">
           <!-- Selector rápido de plantillas base -->
           <div style="display: flex; align-items: center; gap: 0.4rem;">
-            <select id="select-plantilla-constructor" class="select-plantilla-top" title="Cargar plantilla prediseñada para adaptar">
-              <option value="">💡 Cargar Plantilla...</option>
-              <option value="pata_jansen">🦵 Pata Theo Jansen (13 Barras)</option>
-              <option value="campo_potencial">🌐 Campo Potencial 2D</option>
-              <option value="campo_vectorial">🧭 Vórtices y Flujo</option>
-              <option value="trayectoria">🚀 Navegación Espacial</option>
-              <option value="serie_temporal">📊 Oscilador Dinámico</option>
-              <option value="mecanismo">⚙️ Mecanismo 3 Barras</option>
-              <option value="distribucion">📦 Distribución Cargas</option>
-              <option value="acustica_beamforming">🔊 Arreglo Acústico</option>
-              <option value="confinamiento_em">⚡ Trampa Lorentz EM</option>
-              <option value="fonoabsorbente">🔇 Fonoabsorbente dBA</option>
-              <option value="linea_rf">📶 Adaptación RF Smith</option>
-              <option value="corte_chapa">✂️ Corte Chapa Nesting</option>
+            <select id="select-plantilla-constructor" class="select-plantilla-top" title="Cargar cualquiera de los 16 modelos completos o plantillas prediseñadas">
+              <option value="">💡 Cargar Plantilla (16 Modelos)...</option>
+              <option value="pata-jansen">🦵 1. Pata Theo Jansen (13 Barras)</option>
+              <option value="pata-caminante">🦿 2. Pata Caminante (4 Barras)</option>
+              <option value="brazo-robotico">🦾 3. Brazo Robótico (3 Eslabones)</option>
+              <option value="armadura-puente">🌉 4. Armadura de Puente Reticulado</option>
+              <option value="cohete-landing">🚀 5. Aterrizaje Suave de Cohete</option>
+              <option value="orbita-transferencia">🛰️ 6. Transferencia Orbital Hohmann</option>
+              <option value="controlador-pid">🎛️ 7. Controlador PID (Ziegler-Nichols)</option>
+              <option value="filtro-rlc">🔌 8. Filtro Pasa-Banda RLC</option>
+              <option value="campo-potencial">🌐 9. Campo Potencial Electrostático</option>
+              <option value="distribucion-termica">🔥 10. Distribución Térmica (Conducción)</option>
+              <option value="acustica-beamforming">🔊 11. Arreglo Acústico (Beamforming)</option>
+              <option value="confinamiento-em">⚡ 12. Trampa Electromagnética (Lorentz)</option>
+              <option value="superficie-fonoabsorbente">🔇 13. Superficie Fonoabsorbente dBA</option>
+              <option value="linea-transmision-rf">📶 14. Línea RF y Carta de Smith</option>
+              <option value="corte-chapa-nesting">✂️ 15. Corte de Chapa 2D (Nesting)</option>
+              <option value="balanceo-fases-trifasico">⚡ 16. Balanceo Trifásico de Cargas</option>
             </select>
           </div>
 
@@ -366,6 +370,15 @@
               <select id="select-tipo-visualizacion">
                 <option value="calibracion">🎛️ Medidores de Calibración de Variables (Gauges)</option>
                 <option value="mecanismo_jansen">🦵 Cinemática Theo Jansen (13 Barras y Curva del Pie)</option>
+                <option value="pata_caminante">🦿 Mecanismo Caminante 4 Barras (Manivela-Balancín)</option>
+                <option value="brazo_robotico">🦾 Brazo Robótico Articulado 3 GDL + Obstáculo</option>
+                <option value="armadura_puente">🌉 Armadura Reticulada de Puente (Esfuerzos)</option>
+                <option value="cohete_landing">🚀 Descenso y Aterrizaje de Cohete Lunar</option>
+                <option value="orbita_transferencia">🛰️ Transferencia Orbital de Hohmann</option>
+                <option value="controlador_pid">📈 Respuesta Temporal Controlador PID</option>
+                <option value="filtro_rlc">🔌 Diagrama de Bode / Filtro RLC</option>
+                <option value="distribucion_termica">🔥 Mapa Térmico de Disipadores 2D</option>
+                <option value="balanceo_fases_trifasico">⚡ Fasores y Balanceo Trifásico R-S-T</option>
                 <option value="campo_potencial_2d">🌐 Campo Escalar / Mapa de Potencial 2D (Heatmap e Isolíneas)</option>
                 <option value="campo_vectorial_2d">🧭 Campo Vectorial / Líneas de Flujo y Vórtices</option>
                 <option value="trayectoria_particulas_2d">🚀 Trayectoria y Navegación Espacial 2D</option>

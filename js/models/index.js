@@ -20,6 +20,7 @@ import { ModeloSuperficieFonoabsorbente } from "./fonoabsorbente.js";
 import { ModeloLineaTransmisionRF } from "./linea-rf.js";
 import { ModeloCorteChapaNesting } from "./nesting.js";
 import { compilarModeloDinamico } from "../builder.js";
+import { PLANTILLAS_FIELES } from "../plantillas/index.js";
 
 // Reexporta los modelos individuales para facilitar su importación directa.
 export {
@@ -60,6 +61,22 @@ export const MODELOS = [
   ModeloBalanceoFases,
   ModeloPataCaminante
 ];
+
+// Dota de nombre y etiqueta reales a los genes anónimos de cada modelo nativo, tomándolos de su plantilla fiel.
+MODELOS.forEach(modelo => {
+  const plantilla = PLANTILLAS_FIELES[modelo.id];
+  if (!plantilla || typeof modelo.crearGenoma !== "function") return;
+  const crearOriginal = modelo.crearGenoma.bind(modelo);
+  modelo.crearGenoma = () => crearOriginal().map((gen, i) => {
+    const v = plantilla.variables[i] || {};
+    return {
+      ...gen,
+      nombre: gen.nombre || v.nombre || `var${i + 1}`,
+      etiqueta: gen.etiqueta || v.etiqueta || v.nombre,
+      valorNominal: gen.valorNominal !== undefined ? gen.valorNominal : v.valorNominal
+    };
+  });
+});
 
 // Registra un nuevo modelo dinámico compilado en la lista global evitando duplicados por identificador.
 export function registrarModeloDinamico(modelo) {
