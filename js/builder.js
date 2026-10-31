@@ -371,6 +371,11 @@ export function compilarModeloDinamico(definicionCruda) {
   const modeloId = definicionCruda.id || generarIdModelo(definicionCruda.nombre);
   const tipoVisualizacion = definicionCruda.tipoVisualizacion || "calibracion";
   const grafoInstancia = definicionCruda.grafo ? new GrafoMecanismoMultifisica(definicionCruda.grafo) : null;
+  const usaSensores = Boolean(grafoInstancia && /\b(sensores|mecanismo)\b/.test(definicionCruda.codigoEvaluacion));
+  const telemetriaPorDefecto = {
+    pie: { x: 0, y: -40, velocidad: 0, aceleracionPico: 12.5, zancada: 60, despejeSuelo: 15, emB: 0, emE: 0 },
+    efector: { x: 55, y: 40, velocidad: 0, aceleracionPico: 5.0, emB: 0, emE: 0 }
+  };
 
   return {
     id: modeloId,
@@ -409,15 +414,12 @@ export function compilarModeloDinamico(definicionCruda) {
         vars[varsDef[i].nombre] = genoma[i];
       }
 
-      // Telemetría de sensores si el modelo incluye mecanismo CAD
-      let telemetriaSensores = {
-        pie: { x: 0, y: -40, velocidad: 0, aceleracionPico: 12.5, zancada: 60, despejeSuelo: 15, emB: 0, emE: 0 },
-        efector: { x: 55, y: 40, velocidad: 0, aceleracionPico: 5.0, emB: 0, emE: 0 }
-      };
-      if (grafoInstancia) {
+      // Telemetría de sensores si el código de evaluación realmente los consume
+      let telemetriaSensores = telemetriaPorDefecto;
+      if (usaSensores) {
         try {
           const res = simularCicloMecanismo(grafoInstancia, vars, { pasos: 60 });
-          if (res && res.sensores) telemetriaSensores = { ...telemetriaSensores, ...res.sensores };
+          if (res && res.sensores) telemetriaSensores = { ...telemetriaPorDefecto, ...res.sensores };
         } catch (_) {}
       }
 
