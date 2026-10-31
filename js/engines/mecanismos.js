@@ -1392,80 +1392,124 @@ export function crearGrafoBalanceoFases(vars = {}) {
   return grafo;
 }
 
-// Genera el grafo interactivo para la Antena Evolutiva NASA ST5 (4 brazos C4 con hilos segmentados)
-export function crearGrafoAntenaNASA(vars = {}) {
-  const grafo = new GrafoMecanismoMultifisica();
-  const L1 = vars.L1 !== undefined ? Number(vars.L1) : 14.2;
-  const dTheta1 = vars.dTheta1 !== undefined ? Number(vars.dTheta1) : 38.0;
-  const L2 = vars.L2 !== undefined ? Number(vars.L2) : 17.5;
-  const dTheta2 = vars.dTheta2 !== undefined ? Number(vars.dTheta2) : -48.0;
-  const L3 = vars.L3 !== undefined ? Number(vars.L3) : 15.0;
-  const dTheta3 = vars.dTheta3 !== undefined ? Number(vars.dTheta3) : 42.0;
+// =========================================================================
+// UTILIDADES DE PARAMETRIZACIÓN POLAR (ABSOLUTA Y RELATIVA)
+// =========================================================================
 
-  const toRad = Math.PI / 180;
-  const theta1 = (45.0 + dTheta1 * 0.4) * toRad;
-  const theta2 = theta1 + dTheta1 * toRad;
-  const theta3 = theta2 + dTheta2 * toRad;
+// Convierte coordenadas cartesianas (x, y) a coordenadas polares (r, theta)
+export function cartesianoAPolar(x, y, centro = { x: 0, y: 0 }) {
+  const dx = x - (centro.x || 0);
+  const dy = y - (centro.y || 0);
+  const r = Math.hypot(dx, dy);
+  const thetaRad = Math.atan2(dy, dx);
+  let thetaDeg = (thetaRad * 180) / Math.PI;
+  return {
+    r: parseFloat(r.toFixed(3)),
+    thetaRad,
+    thetaDeg: parseFloat(thetaDeg.toFixed(2)),
+    thetaNormDeg: parseFloat(((thetaDeg % 360 + 360) % 360).toFixed(2))
+  };
+}
 
-  grafo.agregarNodo({ id: "feed", nombre: "Puerto Alimentación Central (0,0)", x: 0.0, y: 0.0, tipo: "fijo", carga: 1.0 });
+// Convierte coordenadas polares (r, theta) a coordenadas cartesianas (x, y)
+export function polarACartesiano(r, theta, centro = { x: 0, y: 0 }, enGrados = true) {
+  const rad = enGrados ? (theta * Math.PI) / 180 : theta;
+  return {
+    x: parseFloat(((centro.x || 0) + r * Math.cos(rad)).toFixed(3)),
+    y: parseFloat(((centro.y || 0) + r * Math.sin(rad)).toFixed(3))
+  };
+}
 
-  // Puntos base para el brazo 1
-  const p1_x = L1 * Math.cos(theta1);
-  const p1_y = L1 * Math.sin(theta1);
-  const p2_x = p1_x + L2 * Math.cos(theta2);
-  const p2_y = p1_y + L2 * Math.sin(theta2);
-  const p3_x = p2_x + L3 * Math.cos(theta3);
-  const p3_y = p2_y + L3 * Math.sin(theta3);
+// Analiza una barra y devuelve su longitud (r), ángulo polar absoluto (θ) y ángulo polar relativo (Δθ)
+// respecto al segmento anterior conectado en el nodo de origen (nodoA)
+export function calcularPolarBarra(barra, grafo) {
+  if (!barra || !grafo) return null;
+  const nA = grafo.nodos.find(n => n.id === barra.nodoA);
+  const nB = grafo.nodos.find(n => n.id === barra.nodoB);
+  if (!nA || !nB) return null;
 
-  const coloresBrazos = ["#f59e0b", "#38bdf8", "#10b981", "#a855f7"];
+  const dx = nB.x - nA.x;
+  const dy = nB.y - nA.y;
+  const r = Math.hypot(dx, dy);
+  const thetaRad = Math.atan2(dy, dx);
+  let thetaDeg = (thetaRad * 180) / Math.PI;
 
-  for (let b = 0; b < 4; b++) {
-    const rot = b * (Math.PI / 2);
-    const cosR = Math.cos(rot);
-    const sinR = Math.sin(rot);
+  // Busca segmento anterior incidente en nodoA (cadena cinemática previa)
+  let deltaThetaDeg = thetaDeg;
+  let tienePrevio = false;
+  let barraPrevia = null;
 
-    const rotar = (x, y) => ({
-      x: parseFloat((x * cosR - y * sinR).toFixed(2)),
-      y: parseFloat((x * sinR + y * cosR).toFixed(2))
-    });
-
-    const c1 = rotar(p1_x, p1_y);
-    const c2 = rotar(p2_x, p2_y);
-    const c3 = rotar(p3_x, p3_y);
-
-    const id1 = `nodo_b${b}_c1`;
-    const id2 = `nodo_b${b}_c2`;
-    const id3 = `nodo_b${b}_c3`;
-
-    if (b === 0) {
-      // Brazo maestro con variables directamente arrastrables en CAD
-      grafo.agregarNodo({ id: id1, nombre: "Codo 1 (L1, Δθ1)", x: c1.x, y: c1.y, tipo: "libre", variableX: "L1", variableY: "dTheta1", offsetY: c1.y - dTheta1, escalaY: 1.0 });
-      grafo.agregarNodo({ id: id2, nombre: "Codo 2 (L2, Δθ2)", x: c2.x, y: c2.y, tipo: "libre", variableX: "L2", variableY: "dTheta2", offsetY: c2.y - dTheta2, escalaY: 1.0 });
-      grafo.agregarNodo({ id: id3, nombre: "Extremo 3 (L3, Δθ3)", x: c3.x, y: c3.y, tipo: "libre", variableX: "L3", variableY: "dTheta3", offsetY: c3.y - dTheta3, escalaY: 1.0 });
-    } else {
-      grafo.agregarNodo({ id: id1, nombre: `Brazo ${b + 1} Codo 1`, x: c1.x, y: c1.y, tipo: "libre" });
-      grafo.agregarNodo({ id: id2, nombre: `Brazo ${b + 1} Codo 2`, x: c2.x, y: c2.y, tipo: "libre" });
-      grafo.agregarNodo({ id: id3, nombre: `Brazo ${b + 1} Extremo`, x: c3.x, y: c3.y, tipo: "libre" });
+  for (const b of grafo.barras) {
+    if (b.id === barra.id) continue;
+    if (b.nodoB === barra.nodoA) {
+      barraPrevia = b;
+      const npA = grafo.nodos.find(n => n.id === b.nodoA);
+      if (npA) {
+        const prevDx = nA.x - npA.x;
+        const prevDy = nA.y - npA.y;
+        const prevThetaDeg = (Math.atan2(prevDy, prevDx) * 180) / Math.PI;
+        deltaThetaDeg = thetaDeg - prevThetaDeg;
+        tienePrevio = true;
+      }
+      break;
+    } else if (b.nodoA === barra.nodoA) {
+      barraPrevia = b;
+      const npB = grafo.nodos.find(n => n.id === b.nodoB);
+      if (npB) {
+        const prevDx = nA.x - npB.x;
+        const prevDy = nA.y - npB.y;
+        const prevThetaDeg = (Math.atan2(prevDy, prevDx) * 180) / Math.PI;
+        deltaThetaDeg = thetaDeg - prevThetaDeg;
+        tienePrevio = true;
+      }
+      break;
     }
-
-    const col = coloresBrazos[b];
-    grafo.agregarBarra({ id: `barra_b${b}_1`, nombre: `Segmento 1 (Brazo ${b + 1})`, nodoA: "feed", nodoB: id1, longitud: L1, variableAsociada: b === 0 ? "L1" : null, color: col, grosor: 2.8 });
-    grafo.agregarBarra({ id: `barra_b${b}_2`, nombre: `Segmento 2 (Brazo ${b + 1})`, nodoA: id1, nodoB: id2, longitud: L2, variableAsociada: b === 0 ? "L2" : null, color: col, grosor: 2.8 });
-    grafo.agregarBarra({ id: `barra_b${b}_3`, nombre: `Segmento 3 (Brazo ${b + 1})`, nodoA: id2, nodoB: id3, longitud: L3, variableAsociada: b === 0 ? "L3" : null, color: col, grosor: 2.8 });
   }
 
-  grafo.agregarSensor({ id: "sensor_vswr", nombre: "vswr", nodoId: "feed", magnitudes: ["posicion", "campo_electrico"], color: "#f59e0b" });
-  grafo.agregarSensor({ id: "sensor_directividad", nombre: "radiacion_lobe", nodoId: "nodo_b0_c3", magnitudes: ["posicion", "trayectoria"], color: "#38bdf8" });
+  // Normaliza Δθ a [-180, 180]
+  while (deltaThetaDeg > 180) deltaThetaDeg -= 360;
+  while (deltaThetaDeg < -180) deltaThetaDeg += 360;
 
-  return grafo;
+  return {
+    r: parseFloat(r.toFixed(2)),
+    thetaDeg: parseFloat(thetaDeg.toFixed(1)),
+    deltaThetaDeg: parseFloat(deltaThetaDeg.toFixed(1)),
+    tienePrevio,
+    barraPreviaId: barraPrevia ? barraPrevia.id : null
+  };
+}
+
+// Rota o ajusta una barra en coordenadas polares (absolutas o relativas), reposicionando el nodo libre
+export function ajustarBarraPolar(barra, grafo, { nuevoAngulo, esRelativo = false, nuevaLongitud = null }) {
+  if (!barra || !grafo) return false;
+  const nA = grafo.nodos.find(n => n.id === barra.nodoA);
+  const nB = grafo.nodos.find(n => n.id === barra.nodoB);
+  if (!nA || !nB || nB.tipo === "fijo") return false;
+
+  const infoPolar = calcularPolarBarra(barra, grafo);
+  if (!infoPolar) return false;
+
+  let anguloAbs = nuevoAngulo;
+  if (esRelativo && infoPolar.tienePrevio) {
+    const anguloBase = infoPolar.thetaDeg - infoPolar.deltaThetaDeg;
+    anguloAbs = anguloBase + nuevoAngulo;
+  }
+
+  const r = (nuevaLongitud !== null && nuevaLongitud !== undefined && nuevaLongitud > 0)
+    ? nuevaLongitud
+    : (barra.longitud || infoPolar.r || 10);
+
+  const pos = polarACartesiano(r, anguloAbs, nA, true);
+  nB.x = pos.x;
+  nB.y = pos.y;
+  barra.longitud = parseFloat(r.toFixed(2));
+  return true;
 }
 
 // Factoría unificada que construye el grafo CAD 2D correspondiente a cualquier identificador de modelo
 export function crearGrafoPorModelo(id, vars = {}) {
   const clave = String(id || "").replace(/_/g, "-");
   switch (clave) {
-    case "antena-nasa":
-      return crearGrafoAntenaNASA(vars);
     case "brazo-robotico":
       return crearGrafoBrazoRobotico(vars);
     case "pata-jansen":

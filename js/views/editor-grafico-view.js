@@ -12,8 +12,11 @@ import {
   crearGrafoBrazoRobotico,
   crearGrafoPataCaminante,
   crearGrafoTrenEngranajes,
-  crearGrafoPorModelo
-} from "../engines/mecanismos.js?v=3.1";
+  crearGrafoPorModelo,
+  calcularPolarBarra,
+  ajustarBarraPolar,
+  cartesianoAPolar
+} from "../engines/mecanismos.js?v=3.2";
 
 // Vista de diseño y construcción gráfica de mecanismos articulados y acoplamientos multifísica
 export class EditorGraficoView {
@@ -307,7 +310,6 @@ export class EditorGraficoView {
               <option value="acustica-beamforming">🔊 Arreglo Acústico y Beamforming</option>
               <option value="superficie-fonoabsorbente">🔇 Superficie Fonoabsorbente (Cuñas)</option>
               <option value="linea-transmision-rf">📶 Línea de Transmisión RF (Smith)</option>
-              <option value="antena-nasa">📡 Antena Evolutiva NASA ST5 (Banda X)</option>
               <option value="corte-chapa-nesting">✂️ Corte de Chapa y Anidado 2D</option>
               <option value="controlador-pid">📈 Sintonizador PID (Lazo Control)</option>
               <option value="filtro-rlc">🔌 Síntesis de Filtro Analógico RLC</option>
@@ -1277,6 +1279,7 @@ export class EditorGraficoView {
         return;
       }
       this._inspectorIdActual = id;
+      const polarNodo = cartesianoAPolar(nodo.x, nodo.y);
 
       this.dom.inspectorContenido.innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 0.5rem;">
@@ -1293,6 +1296,10 @@ export class EditorGraficoView {
               <label style="font-size: 0.7rem; color: #94a3b8;">Y (mm) ${nodo.variableY ? `[${nodo.variableY}]` : ""}</label>
               <input type="number" id="insp-nodo-y" step="any" value="${nodo.y}" style="width: 100%; padding: 0.25rem 0.35rem; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #fff;">
             </div>
+          </div>
+          <div style="padding: 0.3rem 0.45rem; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 6px; font-size: 0.75rem; color: #38bdf8; display: flex; justify-content: space-between;">
+            <span>📐 Polar Absoluto (r, θ):</span>
+            <span style="font-family: monospace; font-weight: 600;">r=${polarNodo.r.toFixed(1)} mm, θ=${polarNodo.thetaDeg.toFixed(1)}°</span>
           </div>
           <div style="display: flex; gap: 0.4rem;">
             <div style="flex: 1;">
@@ -1483,6 +1490,7 @@ export class EditorGraficoView {
       }
       this._inspectorIdActual = id;
       const maxSlider = Math.max(150, Math.ceil((barra.longitud || 40) * 1.8));
+      const infoPolar = calcularPolarBarra(barra, this.grafo);
 
       this.dom.inspectorContenido.innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 0.6rem;">
@@ -1498,6 +1506,24 @@ export class EditorGraficoView {
               <button type="button" id="insp-barra-mas" class="btn-m3-tonal" style="min-width: 38px; min-height: 38px; padding: 0; font-size: 1.05rem; font-weight: 700;">+1</button>
             </div>
             <input type="range" id="insp-barra-slider" min="2" max="${maxSlider}" step="0.5" value="${barra.longitud}" style="width: 100%; height: 28px; margin-top: 0.35rem; accent-color: var(--md-sys-color-primary, #7bd0ff); cursor: pointer;">
+          </div>
+
+          <!-- Parametrización Polar del Eslabón (Absoluta / Relativa) -->
+          <div style="background: rgba(16, 185, 129, 0.08); padding: 0.55rem; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.25);">
+            <div style="font-weight: 700; color: #34d399; font-size: 0.82rem; margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
+              <span>📐 Parametrización Polar</span>
+              <span style="font-size: 0.72rem; color: #94a3b8;">${infoPolar?.tienePrevio ? "Encadenado" : "Base"}</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem;">
+              <div>
+                <label style="color: #cbd5e1; font-size: 0.72rem;">θ Absoluto (°)</label>
+                <input type="number" id="insp-barra-polar-abs" step="1" value="${infoPolar?.thetaDeg ?? 0}" style="width: 100%; min-height: 32px; padding: 0.25rem 0.35rem; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #fff; font-family: monospace; font-size: 0.85rem;">
+              </div>
+              <div>
+                <label style="color: #cbd5e1; font-size: 0.72rem;">Δθ Relativo (°)</label>
+                <input type="number" id="insp-barra-polar-rel" step="1" value="${infoPolar?.deltaThetaDeg ?? 0}" ${infoPolar?.tienePrevio ? "" : "disabled"} style="width: 100%; min-height: 32px; padding: 0.25rem 0.35rem; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: ${infoPolar?.tienePrevio ? '#fff' : '#64748b'}; font-family: monospace; font-size: 0.85rem;">
+              </div>
+            </div>
           </div>
           
           <!-- Vinculación con variable de optimización -->
@@ -1576,6 +1602,20 @@ export class EditorGraficoView {
       });
       this.dom.inspectorContenido.querySelector("#insp-barra-mas")?.addEventListener("click", () => {
         aplicarLongitudBarra((Number(barra.longitud) || 10) + 1);
+      });
+      this.dom.inspectorContenido.querySelector("#insp-barra-polar-abs")?.addEventListener("input", (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val)) {
+          ajustarBarraPolar(barra, this.grafo, { nuevoAngulo: val, esRelativo: false });
+          this._notificarCambioGrafo();
+        }
+      });
+      this.dom.inspectorContenido.querySelector("#insp-barra-polar-rel")?.addEventListener("input", (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val)) {
+          ajustarBarraPolar(barra, this.grafo, { nuevoAngulo: val, esRelativo: true });
+          this._notificarCambioGrafo();
+        }
       });
       this.dom.inspectorContenido.querySelector("#insp-barra-var")?.addEventListener("input", (e) => {
         barra.variableAsociada = e.target.value.trim() || null;

@@ -17,8 +17,7 @@ export const HINTS_VISUALIZACION = {
   "electromagnetismo_lorentz": "Muestra el flujo magnético Bz, bobinas de electroimanes y la trayectoria del haz de iones bajo la fuerza de Lorentz.",
   "fonoabsorbente_acustico": "Ilustra el corte transversal de cuñas o capas estratificadas con atenuación espectral dBA y rebotes acústicos.",
   "linea_transmision_smith": "Traza el coeficiente de reflexión Gamma sobre la Carta de Smith polar y calcula la Relación de Onda Estacionaria (ROE).",
-  "corte_chapa_nesting": "Visualiza el plano de corte 2D con aprovechamiento de chapa matriz y minimización de retazos residuales.",
-  "antena_3d_polar": "Renderiza la antena de hilo 3D con simetría rotacional C4 sobre la cubierta del nanosatélite, lóbulo de radiación polar y ROE (VSWR)."
+  "corte_chapa_nesting": "Visualiza el plano de corte 2D con aprovechamiento de chapa matriz y minimización de retazos residuales."
 };
 
 // Muestra u oculta la barra superior de alerta con mensajes de error o validación.

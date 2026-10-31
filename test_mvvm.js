@@ -20,7 +20,6 @@ import {
   VisualizadorFonoabsorbente,
   VisualizadorLineaRF,
   VisualizadorNesting,
-  VisualizadorAntena,
   VisualizadorDinamico,
   obtenerVisualizador
 } from "./js/views/visualizers.js";
@@ -100,7 +99,6 @@ const visualizadores = [
   new VisualizadorFonoabsorbente(),
   new VisualizadorLineaRF(),
   new VisualizadorNesting(),
-  new VisualizadorAntena(),
   new VisualizadorDinamico()
 ];
 

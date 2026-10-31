@@ -19,7 +19,6 @@ import { ModeloConfinamientoEM } from "./electromagnetismo.js";
 import { ModeloSuperficieFonoabsorbente } from "./fonoabsorbente.js";
 import { ModeloLineaTransmisionRF } from "./linea-rf.js";
 import { ModeloCorteChapaNesting } from "./nesting.js";
-import { ModeloAntenaNasa } from "./antena.js";
 import { compilarModeloDinamico } from "../builder.js";
 import { PLANTILLAS_FIELES } from "../plantillas/index.js";
 
@@ -40,8 +39,7 @@ export {
   ModeloConfinamientoEM,
   ModeloSuperficieFonoabsorbente,
   ModeloLineaTransmisionRF,
-  ModeloCorteChapaNesting,
-  ModeloAntenaNasa
+  ModeloCorteChapaNesting
 };
 
 // Lista global de todos los modelos de optimización disponibles en la aplicación (estáticos y dinámicos).
@@ -61,8 +59,7 @@ export const MODELOS = [
   ModeloCorteChapaNesting,
   ModeloBalanceoFases,
   ModeloPataCaminante,
-  ModeloPataJansen,
-  ModeloAntenaNasa
+  ModeloPataJansen
 ];
 
 // Dota de nombre, etiqueta, grafo y código editable a cada modelo nativo, tomándolos de su plantilla fiel.
