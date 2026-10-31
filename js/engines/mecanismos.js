@@ -786,6 +786,97 @@ export function simularCicloMecanismo(grafo, vars = {}, opciones = {}) {
   };
 }
 
+// Genera el grafo canónico de la Pata Cinemática de Theo Jansen (13 barras y lazo cerrado)
+export function crearGrafoPataJansen(vars = {}) {
+  const grafo = new GrafoMecanismoMultifisica();
+
+  const a = vars.a !== undefined ? Number(vars.a) : 38.0;
+  const l = vars.l !== undefined ? Number(vars.l) : 7.8;
+  const b = vars.b !== undefined ? Number(vars.b) : 41.5;
+  const c = vars.c !== undefined ? Number(vars.c) : 39.3;
+  const d = vars.d !== undefined ? Number(vars.d) : 40.1;
+  const e = vars.e !== undefined ? Number(vars.e) : 55.8;
+  const f = vars.f !== undefined ? Number(vars.f) : 39.4;
+  const g = vars.g !== undefined ? Number(vars.g) : 36.7;
+  const h = vars.h !== undefined ? Number(vars.h) : 65.7;
+  const i = vars.i !== undefined ? Number(vars.i) : 49.0;
+  const j = vars.j !== undefined ? Number(vars.j) : 50.0;
+  const k = vars.k !== undefined ? Number(vars.k) : 61.9;
+  const m = vars.m !== undefined ? Number(vars.m) : 15.0;
+
+  // Resuelve coordenadas analíticas exactas en theta = 0
+  const Y = { x: 0, y: 0 };
+  const X = { x: -a, y: -l };
+  const K = { x: m, y: 0 };
+
+  const intersectar = (p1, r1, p2, r2, s) => {
+    const dx = p2.x - p1.x, dy = p2.y - p1.y, dd = Math.hypot(dx, dy);
+    if (dd === 0 || dd > r1 + r2 || dd < Math.abs(r1 - r2)) return null;
+    const aa = (r1 * r1 - r2 * r2 + dd * dd) / (2 * dd);
+    const hh = Math.sqrt(Math.max(0, r1 * r1 - aa * aa));
+    const mx = p1.x + (aa * dx) / dd, my = p1.y + (aa * dy) / dd;
+    return { x: mx + (s * hh * dy) / dd, y: my - (s * hh * dx) / dd };
+  };
+
+  const D = intersectar(X, b, K, j, -1) || { x: -20.51, y: 29.8 };
+  const E = intersectar(X, d, D, e, -1) || { x: -67.85, y: 0.25 };
+  const F = intersectar(X, c, K, k, 1) || { x: -37.98, y: -47.1 };
+  const G = intersectar(E, f, F, g, 1) || { x: -69.51, y: -28.59 };
+  const H = intersectar(G, h, F, i, 1) || { x: -67.19, y: -86.68 };
+
+  // Nodos fijos a tierra (Bancada)
+  grafo.agregarNodo({ id: "Y_fijo", nombre: "Y: Centro Manivela (0,0)", x: parseFloat(Y.x.toFixed(2)), y: parseFloat(Y.y.toFixed(2)), tipo: "fijo" });
+  grafo.agregarNodo({ id: "X_fijo", nombre: "X: Pivote Fijo Frame (-a, -l)", x: parseFloat(X.x.toFixed(2)), y: parseFloat(X.y.toFixed(2)), tipo: "fijo", variableX: "a", variableY: "l", signoX: -1, signoY: -1 });
+
+  // Nodos móviles
+  grafo.agregarNodo({ id: "K_manivela", nombre: "K: Pin de Manivela Motriz", x: parseFloat(K.x.toFixed(2)), y: parseFloat(K.y.toFixed(2)), tipo: "libre" });
+  grafo.agregarNodo({ id: "D_nodo", nombre: "D: Nodo Triángulo Superior", x: parseFloat(D.x.toFixed(2)), y: parseFloat(D.y.toFixed(2)), tipo: "libre", signoTrilateracion: -1 });
+  grafo.agregarNodo({ id: "E_nodo", nombre: "E: Nodo Balancín Posterior", x: parseFloat(E.x.toFixed(2)), y: parseFloat(E.y.toFixed(2)), tipo: "libre", signoTrilateracion: -1 });
+  grafo.agregarNodo({ id: "F_nodo", nombre: "F: Nodo Biela Inferior", x: parseFloat(F.x.toFixed(2)), y: parseFloat(F.y.toFixed(2)), tipo: "libre", signoTrilateracion: 1 });
+  grafo.agregarNodo({ id: "G_nodo", nombre: "G: Nodo Muslo Articulado", x: parseFloat(G.x.toFixed(2)), y: parseFloat(G.y.toFixed(2)), tipo: "libre", signoTrilateracion: 1 });
+  grafo.agregarNodo({ id: "H_pie", nombre: "H: Pie de Contacto con el Suelo", x: parseFloat(H.x.toFixed(2)), y: parseFloat(H.y.toFixed(2)), tipo: "libre", signoTrilateracion: 1 });
+
+  // Motor rotativo en la manivela central
+  grafo.agregarMotor({
+    id: "motor_manivela_jansen",
+    nombre: "Motor Rotativo Manivela (m=15 mm)",
+    tipo: "rotativo",
+    nodoPivote: "Y_fijo",
+    nodoExtremo: "K_manivela",
+    longitudManivela: m,
+    variableAsociada: "m",
+    velocidadAngular: 1.0
+  });
+
+  // 10 Barras móviles + 2 cotas de bancada (a, l) + manivela (m) = 13 miembros
+  grafo.agregarBarra({ id: "barra_j", nombre: "Barra j: Manivela K a Balancín D", nodoA: "K_manivela", nodoB: "D_nodo", longitud: j, variableAsociada: "j", signoTrilateracion: -1, color: "#3b82f6" });
+  grafo.agregarBarra({ id: "barra_k", nombre: "Barra k: Manivela K a Guía F", nodoA: "K_manivela", nodoB: "F_nodo", longitud: k, variableAsociada: "k", signoTrilateracion: 1, color: "#3b82f6" });
+  grafo.agregarBarra({ id: "barra_b", nombre: "Barra b: Pivote X a Nodo D", nodoA: "X_fijo", nodoB: "D_nodo", longitud: b, variableAsociada: "b", signoTrilateracion: -1, color: "#0284c7" });
+  grafo.agregarBarra({ id: "barra_c", nombre: "Barra c: Pivote X a Nodo F", nodoA: "X_fijo", nodoB: "F_nodo", longitud: c, variableAsociada: "c", signoTrilateracion: 1, color: "#0284c7" });
+  grafo.agregarBarra({ id: "barra_d", nombre: "Barra d: Pivote X a Nodo E", nodoA: "X_fijo", nodoB: "E_nodo", longitud: d, variableAsociada: "d", signoTrilateracion: -1, color: "#0284c7" });
+  grafo.agregarBarra({ id: "barra_e", nombre: "Barra e: Eslabón D a Nodo E", nodoA: "D_nodo", nodoB: "E_nodo", longitud: e, variableAsociada: "e", signoTrilateracion: -1, color: "#065f46" });
+  grafo.agregarBarra({ id: "barra_f", nombre: "Barra f: Muslo E a Nodo G", nodoA: "E_nodo", nodoB: "G_nodo", longitud: f, variableAsociada: "f", signoTrilateracion: 1, color: "#059669" });
+  grafo.agregarBarra({ id: "barra_g", nombre: "Barra g: Muslo F a Nodo G", nodoA: "F_nodo", nodoB: "G_nodo", longitud: g, variableAsociada: "g", signoTrilateracion: 1, color: "#059669" });
+  grafo.agregarBarra({ id: "barra_h", nombre: "Barra h: Pierna G a Pie H", nodoA: "G_nodo", nodoB: "H_pie", longitud: h, variableAsociada: "h", signoTrilateracion: 1, color: "#d97706" });
+  grafo.agregarBarra({ id: "barra_i", nombre: "Barra i: Tirante F a Pie H", nodoA: "F_nodo", nodoB: "H_pie", longitud: i, variableAsociada: "i", signoTrilateracion: 1, color: "#d97706" });
+
+  // Cuerpos rígidos triangulares
+  grafo.agregarCuerpoRigido({ id: "triangulo_D_E_X", nombre: "Triángulo Superior D-E-X", nodos: ["D_nodo", "E_nodo", "X_fijo"], color: "rgba(59, 130, 246, 0.12)" });
+  grafo.agregarCuerpoRigido({ id: "triangulo_E_F_G", nombre: "Triángulo Medio E-F-G", nodos: ["E_nodo", "F_nodo", "G_nodo"], color: "rgba(16, 185, 129, 0.12)" });
+  grafo.agregarCuerpoRigido({ id: "triangulo_F_G_H", nombre: "Triángulo Inferior F-G-H", nodos: ["F_nodo", "G_nodo", "H_pie"], color: "rgba(245, 158, 11, 0.14)" });
+
+  // Sensor principal en el pie de marcha
+  grafo.agregarSensor({
+    id: "sensor_pie_jansen",
+    nombre: "pie",
+    nodoId: "H_pie",
+    magnitudes: ["trayectoria", "posicion", "velocidad", "aceleracion", "zancada", "despeje"],
+    color: "#f59e0b"
+  });
+
+  return grafo;
+}
+
 // Genera el grafo canónico del Mecanismo Caminante de 4 Barras (Manivela-Balancín)
 export function crearGrafoPataCaminante(vars = {}) {
   const grafo = new GrafoMecanismoMultifisica();
@@ -1299,6 +1390,8 @@ export function crearGrafoPorModelo(id, vars = {}) {
   switch (clave) {
     case "brazo-robotico":
       return crearGrafoBrazoRobotico(vars);
+    case "pata-jansen":
+      return crearGrafoPataJansen(vars);
     case "pata-caminante":
       return crearGrafoPataCaminante(vars);
     case "armadura-puente":

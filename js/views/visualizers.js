@@ -42,6 +42,609 @@ import { simularAbsorbenteAcustico } from "../models/fonoabsorbente.js";
 import { simularLineaTransmisionRF } from "../models/linea-rf.js";
 import { simularCorteChapaNesting } from "../models/nesting.js";
 import { LienzoFuncionalRenderer, LienzoTopologicoRenderer } from "./renderers/index.js";
+import {
+  ModeloPataJansen,
+  JANSEN_VALORES_REFERENCIA,
+  TRAYECTORIA_JANSEN_ORIGINAL,
+  obtenerColorAceleracionJansen
+} from "../models/jansen.js";
+
+let jansenPausado = false;
+let mostrarCotasJansen = false;
+let mostrarReferenciaJansen = false;
+
+// -------------------------------------------------------------------------
+// 1. VISUALIZADOR DE PATA THEO JANSEN (13 BARRAS)
+// -------------------------------------------------------------------------
+export class VisualizadorJansen {
+  constructor() {
+    this.animId = null;
+  }
+
+  detener() {
+    if (this.animId !== null) {
+      cancelAnimationFrame(this.animId);
+      this.animId = null;
+    }
+  }
+
+  render(contenedor, genoma, entrada, contexto = {}) {
+    if (!contenedor) return;
+    this.detener();
+
+    const a = typeof genoma?.a === "number" ? genoma.a : (Array.isArray(genoma) ? genoma[0] : 38.0);
+    const l = typeof genoma?.l === "number" ? genoma.l : (Array.isArray(genoma) ? genoma[1] : 7.8);
+    const b = typeof genoma?.b === "number" ? genoma.b : (Array.isArray(genoma) ? genoma[2] : 41.5);
+    const c = typeof genoma?.c === "number" ? genoma.c : (Array.isArray(genoma) ? genoma[3] : 39.3);
+    const d = typeof genoma?.d === "number" ? genoma.d : (Array.isArray(genoma) ? genoma[4] : 40.1);
+    const e = typeof genoma?.e === "number" ? genoma.e : (Array.isArray(genoma) ? genoma[5] : 55.8);
+    const f = typeof genoma?.f === "number" ? genoma.f : (Array.isArray(genoma) ? genoma[6] : 39.4);
+    const g = typeof genoma?.g === "number" ? genoma.g : (Array.isArray(genoma) ? genoma[7] : 36.7);
+    const h = typeof genoma?.h === "number" ? genoma.h : (Array.isArray(genoma) ? genoma[8] : 65.7);
+    const i = typeof genoma?.i === "number" ? genoma.i : (Array.isArray(genoma) ? genoma[9] : 49.0);
+    const j = typeof genoma?.j === "number" ? genoma.j : (Array.isArray(genoma) ? genoma[10] : 50.0);
+    const k = typeof genoma?.k === "number" ? genoma.k : (Array.isArray(genoma) ? genoma[11] : 61.9);
+    const arregloGenoma = [a, l, b, c, d, e, f, g, h, i, j, k];
+
+    const mMet = ModeloPataJansen.obtenerMetricasDetalladas(arregloGenoma, entrada);
+    const mRef = ModeloPataJansen.obtenerMetricasDetalladas(JANSEN_VALORES_REFERENCIA, entrada);
+    const esValido = mMet.valido && mMet.pasos && mMet.pasos.length > 0;
+
+    let bannerAlerta = "";
+    if (!esValido) {
+      bannerAlerta = `
+        <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid var(--peligro, #ef4444); border-radius: var(--radio-sm, 8px); padding: 0.5rem 0.75rem; margin-bottom: 0.6rem; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+          <span style="font-size: 0.82rem; font-weight: 600; color: var(--peligro, #ef4444);">
+            ⚠️ Bloqueo cinemático: no se puede cerrar el lazo cerrado de 13 barras en ${mMet.pasosInvalidos || 180} de 180 pasos.
+          </span>
+          <span style="font-size: 0.75rem; color: var(--texto-secundario, #94a3b8);">
+            Ajuste barras b, j, c o k para restaurar el giro completo.
+          </span>
+        </div>
+      `;
+    }
+
+    contenedor.innerHTML = `
+      ${bannerAlerta}
+      <div style="position: relative; width: 100%; max-width: 100%; border-radius: var(--radio-sm, 12px); overflow: hidden; border: 1px solid var(--borde, rgba(148,163,184,0.2)); background: var(--bg-input, #0f172a);">
+        <canvas id="canvas-jansen" width="320" height="360" style="width: 100%; max-width: 100%; height: 370px; display: block; touch-action: none;"></canvas>
+      </div>
+
+      <div class="jansen-controles-bar" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-top: 0.65rem; gap: 0.65rem; background: var(--bg-tarjeta, rgba(30,41,59,0.7)); padding: 0.65rem 0.85rem; border-radius: var(--radio-sm, 10px); border: 1px solid var(--borde, rgba(148,163,184,0.2));">
+        <div style="display: flex; align-items: center; gap: 0.65rem; flex: 1; min-width: 220px;">
+          <button type="button" id="btn-jansen-play" class="btn-m3-tonal" style="padding: 0.45rem 0.9rem; font-size: 0.9rem; min-height: 42px; cursor: pointer; border-radius: 8px; white-space: nowrap;">
+            ${jansenPausado ? "▶ Reanudar" : "⏸ Pausar"}
+          </button>
+          <div style="display: flex; align-items: center; gap: 0.45rem; flex: 1; font-size: 0.9rem;">
+            <label for="slider-jansen-theta" style="font-weight: 700; white-space: nowrap;">θ:</label>
+            <input type="range" id="slider-jansen-theta" min="0" max="359" value="0" style="flex: 1; min-width: 90px; cursor: pointer;">
+            <span id="label-jansen-theta" style="font-family: monospace; font-size: 0.9rem; font-weight: 700; min-width: 38px;">0°</span>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap;">
+          <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.88rem; font-weight: 600; cursor: pointer; user-select: none;">
+            <input type="checkbox" id="check-jansen-cotas" ${mostrarCotasJansen ? "checked" : ""} style="cursor: pointer;">
+            <span>🏷️ Cotas (a..k)</span>
+          </label>
+          <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.88rem; font-weight: 600; cursor: pointer; user-select: none;">
+            <input type="checkbox" id="check-jansen-referencia" ${mostrarReferenciaJansen ? "checked" : ""} style="cursor: pointer;">
+            <span>Ref. Jansen</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="comparativa-azar" style="margin-top: 0.65rem; margin-bottom: 0;">
+        <div class="tarjeta-stat">
+          <div class="stat-etiqueta">Fitness Óptimo / Jansen</div>
+          <div class="stat-valor" style="color: ${esValido && mMet.fitness <= mRef.fitness ? 'var(--exito, #10b981)' : 'var(--primario, #3b82f6)'};">
+            ${mMet.fitness.toFixed(3)} <span style="font-size: 0.85rem; color: var(--texto-secundario, #94a3b8);">/ ${mRef.fitness.toFixed(3)}</span>
+          </div>
+          <div class="stat-sub">${esValido && mMet.fitness <= mRef.fitness ? '✓ Supera a Theo Jansen' : (esValido ? 'Cercano al óptimo histórico' : 'Penalización activa')}</div>
+        </div>
+        <div class="tarjeta-stat">
+          <div class="stat-etiqueta">Dimensiones (Ancho / Alto)</div>
+          <div class="stat-valor">${(mMet.anchoTotal || 0).toFixed(1)} / ${(mMet.alturaTotal || 0).toFixed(1)} u</div>
+          <div class="stat-sub">Límites: ${mMet.maxAncho} / ${mMet.maxAlto} u</div>
+        </div>
+        <div class="tarjeta-stat">
+          <div class="stat-etiqueta">Despeje / Obstáculo</div>
+          <div class="stat-valor" style="color: ${(mMet.despejeReal || 0) >= mMet.obstaculoAlto ? 'var(--exito, #10b981)' : 'var(--aviso, #f59e0b)'};">${(mMet.despejeReal || 0).toFixed(1)} u</div>
+          <div class="stat-sub">Exigido: ${mMet.obstaculoAlto} u (${(mMet.despejeReal || 0) >= mMet.obstaculoAlto ? '✓ Superado' : 'Inferior'})</div>
+        </div>
+        <div class="tarjeta-stat">
+          <div class="stat-etiqueta">Ataque f7 / Eficiencia f9</div>
+          <div class="stat-valor" style="color: ${(mMet.f7 || 1) <= mRef.f7 ? 'var(--exito, #10b981)' : 'var(--aviso, #f59e0b)'};">${(mMet.f7 || 1).toFixed(3)} / ${(mMet.f9 || 0).toFixed(3)}</div>
+          <div class="stat-sub">Ataque: ${(mMet.dxAtaque || 0).toFixed(1)} u | Efic: ${((mMet.f9 || 0) * 100).toFixed(1)}%</div>
+        </div>
+      </div>
+    `;
+
+    const canvas = contenedor.querySelector("canvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+
+    // Enlace de controles interactivos del toolbar
+    const btnPlay = contenedor.querySelector("#btn-jansen-play");
+    const sliderTheta = contenedor.querySelector("#slider-jansen-theta");
+    const labelTheta = contenedor.querySelector("#label-jansen-theta");
+    const chkCotas = contenedor.querySelector("#check-jansen-cotas");
+    const chkReferencia = contenedor.querySelector("#check-jansen-referencia");
+
+    let indicePasoAnimacion = 0;
+
+    if (btnPlay) {
+      btnPlay.addEventListener("click", () => {
+        jansenPausado = !jansenPausado;
+        btnPlay.textContent = jansenPausado ? "▶ Reanudar" : "⏸ Pausar";
+      });
+    }
+
+    if (sliderTheta) {
+      sliderTheta.addEventListener("input", (e) => {
+        const ang = parseInt(e.target.value, 10);
+        jansenPausado = true;
+        if (btnPlay) btnPlay.textContent = "▶ Reanudar";
+        if (labelTheta) labelTheta.textContent = `${ang}°`;
+        const totalP = pasosParaDibujar.length || 180;
+        indicePasoAnimacion = Math.floor((ang / 360) * totalP) % totalP;
+      });
+    }
+
+    if (chkCotas) {
+      chkCotas.addEventListener("change", (e) => {
+        mostrarCotasJansen = e.target.checked;
+      });
+    }
+
+    if (chkReferencia) {
+      chkReferencia.addEventListener("change", (e) => {
+        mostrarReferenciaJansen = e.target.checked;
+      });
+    }
+
+    // Pasos cinemáticos para dibujar
+    let pasosParaDibujar = esValido ? mMet.pasos : [];
+    if (pasosParaDibujar.length === 0) {
+      const pZero = ModeloPataJansen.resolverCinematica(0, arregloGenoma);
+      if (pZero) {
+        pasosParaDibujar = [pZero];
+      } else {
+        pasosParaDibujar = [{
+          theta: 0,
+          Y: { x: 0, y: 0 },
+          X: { x: -a, y: -l },
+          K: { x: 15, y: 0 },
+          D: { x: -a + b * 0.7, y: -l + b * 0.7 },
+          E: { x: -a, y: -l + d },
+          F: { x: -a + c * 0.7, y: -l - c * 0.7 },
+          G: { x: -a, y: -l - 30 },
+          H: { x: -a, y: -l - 70 }
+        }];
+      }
+    }
+
+    let minX = Math.min(0, -a, -JANSEN_VALORES_REFERENCIA[0], TRAYECTORIA_JANSEN_ORIGINAL.minX);
+    let maxX = Math.max(0, -a, -JANSEN_VALORES_REFERENCIA[0], TRAYECTORIA_JANSEN_ORIGINAL.maxX);
+    let minY = Math.min(0, -l, -JANSEN_VALORES_REFERENCIA[1], TRAYECTORIA_JANSEN_ORIGINAL.minY);
+    let maxY = Math.max(0, -l, -JANSEN_VALORES_REFERENCIA[1], TRAYECTORIA_JANSEN_ORIGINAL.maxY);
+
+    for (let s = 0; s < pasosParaDibujar.length; s++) {
+      const p = pasosParaDibujar[s];
+      [p.K, p.D, p.E, p.F, p.G, p.H].forEach(pt => {
+        if (pt) {
+          minX = Math.min(minX, pt.x);
+          maxX = Math.max(maxX, pt.x);
+          minY = Math.min(minY, pt.y);
+          maxY = Math.max(maxY, pt.y);
+        }
+      });
+    }
+
+    const margenMundo = 8.0;
+    minX -= margenMundo; maxX += margenMundo;
+    minY -= margenMundo; maxY += margenMundo;
+
+    const rangoX = maxX - minX || 1;
+    const rangoY = maxY - minY || 1;
+    const centroMundoX = (minX + maxX) / 2;
+    const centroMundoY = (minY + maxY) / 2;
+
+    const aCanvas = (x, y, anchoCSS, altoCSS, escala) => ({
+      x: anchoCSS / 2 + (x - centroMundoX) * escala,
+      y: altoCSS / 2 - (y - centroMundoY) * escala
+    });
+
+    const aMundo = (cx, cy, anchoCSS, altoCSS, escala) => ({
+      x: centroMundoX + (cx - anchoCSS / 2) / escala,
+      y: centroMundoY - (cy - altoCSS / 2) / escala
+    });
+
+    // Control de arrastre interactivo y multitáctil en el lienzo (Manipulación Directa de Manivela K, Pivote X y Pinch-Zoom)
+    let nodoArrastrado = null;
+    let escalaActual = 1;
+    let zoomManual = 1.0;
+    let pinchInicialDist = null;
+    let pinchInicialZoom = 1.0;
+    let touchInicioX = null;
+
+    const iniciarToqueJansen = (clientX, clientY, esTouch = false) => {
+      const rect = canvas.getBoundingClientRect();
+      const cx = clientX - rect.left;
+      const cy = clientY - rect.top;
+      const pasoAct = pasosParaDibujar[indicePasoAnimacion % pasosParaDibujar.length];
+      if (!pasoAct) return;
+
+      const anchoCSS = canvas.clientWidth || 850;
+      const altoCSS = canvas.clientHeight || 380;
+      const ptKCanv = pasoAct.K ? aCanvas(pasoAct.K.x, pasoAct.K.y, anchoCSS, altoCSS, escalaActual) : null;
+      const ptXCanv = pasoAct.X ? aCanvas(pasoAct.X.x, pasoAct.X.y, anchoCSS, altoCSS, escalaActual) : null;
+      const radioHit = esTouch ? 28 : 15;
+
+      if (ptKCanv && Math.hypot(cx - ptKCanv.x, cy - ptKCanv.y) <= radioHit) {
+        nodoArrastrado = "K";
+        jansenPausado = true;
+        if (btnPlay) btnPlay.textContent = "▶ Reanudar";
+        try { if (esTouch && navigator.vibrate) navigator.vibrate(10); } catch (_) {}
+      } else if (ptXCanv && Math.hypot(cx - ptXCanv.x, cy - ptXCanv.y) <= radioHit) {
+        nodoArrastrado = "X";
+        try { if (esTouch && navigator.vibrate) navigator.vibrate(10); } catch (_) {}
+      } else if (esTouch) {
+        nodoArrastrado = "SWIPE_THETA";
+        touchInicioX = cx;
+        jansenPausado = true;
+        if (btnPlay) btnPlay.textContent = "▶ Reanudar";
+      }
+    };
+
+    const moverToqueJansen = (clientX, clientY) => {
+      const rect = canvas.getBoundingClientRect();
+      const cx = clientX - rect.left;
+      const cy = clientY - rect.top;
+      const pasoAct = pasosParaDibujar[indicePasoAnimacion % pasosParaDibujar.length];
+      const anchoCSS = canvas.clientWidth || 850;
+      const altoCSS = canvas.clientHeight || 380;
+
+      if (!nodoArrastrado) {
+        if (pasoAct) {
+          const ptKCanv = pasoAct.K ? aCanvas(pasoAct.K.x, pasoAct.K.y, anchoCSS, altoCSS, escalaActual) : null;
+          const ptXCanv = pasoAct.X ? aCanvas(pasoAct.X.x, pasoAct.X.y, anchoCSS, altoCSS, escalaActual) : null;
+          const cercaK = ptKCanv && Math.hypot(cx - ptKCanv.x, cy - ptKCanv.y) <= 15;
+          const cercaX = ptXCanv && Math.hypot(cx - ptXCanv.x, cy - ptXCanv.y) <= 15;
+          canvas.style.cursor = (cercaK || cercaX) ? "grab" : "default";
+        }
+        return;
+      }
+
+      canvas.style.cursor = "grabbing";
+
+      if (nodoArrastrado === "K") {
+        const ptOCanv = aCanvas(0, 0, anchoCSS, altoCSS, escalaActual);
+        const dx = cx - ptOCanv.x;
+        const dy = -(cy - ptOCanv.y);
+        let angRad = Math.atan2(dy, dx);
+        if (angRad < 0) angRad += 2 * Math.PI;
+        const angGrados = Math.round((angRad * 180) / Math.PI) % 360;
+        const totalP = pasosParaDibujar.length || 180;
+        indicePasoAnimacion = Math.floor((angGrados / 360) * totalP) % totalP;
+        if (sliderTheta) sliderTheta.value = angGrados;
+        if (labelTheta) labelTheta.textContent = `${angGrados}°`;
+      } else if (nodoArrastrado === "SWIPE_THETA" && touchInicioX !== null) {
+        const deltaX = cx - touchInicioX;
+        touchInicioX = cx;
+        const totalP = pasosParaDibujar.length || 180;
+        const deltaPasos = Math.round((deltaX / Math.max(180, anchoCSS)) * totalP);
+        indicePasoAnimacion = ((indicePasoAnimacion + deltaPasos) % totalP + totalP) % totalP;
+        const angGrados = Math.round((indicePasoAnimacion / totalP) * 360) % 360;
+        if (sliderTheta) sliderTheta.value = angGrados;
+        if (labelTheta) labelTheta.textContent = `${angGrados}°`;
+      } else if (nodoArrastrado === "X") {
+        const posMundo = aMundo(cx, cy, anchoCSS, altoCSS, escalaActual);
+        const nuevoA = Math.max(10.0, Math.min(80.0, -posMundo.x));
+        const nuevoL = Math.max(1.0, Math.min(40.0, -posMundo.y));
+        if (typeof contexto.onParamChange === "function") {
+          contexto.onParamChange({
+            a: parseFloat(nuevoA.toFixed(1)),
+            l: parseFloat(nuevoL.toFixed(1))
+          });
+        }
+      }
+    };
+
+    const finArrastre = () => {
+      nodoArrastrado = null;
+      touchInicioX = null;
+      pinchInicialDist = null;
+      canvas.style.cursor = "default";
+    };
+
+    canvas.addEventListener("mousedown", (e) => iniciarToqueJansen(e.clientX, e.clientY, false));
+    canvas.addEventListener("mousemove", (e) => moverToqueJansen(e.clientX, e.clientY));
+    canvas.addEventListener("mouseup", finArrastre);
+    canvas.addEventListener("mouseleave", finArrastre);
+
+    canvas.addEventListener("touchstart", (e) => {
+      if (!e.touches) return;
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const t1 = e.touches[0], t2 = e.touches[1];
+        pinchInicialDist = Math.max(10, Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY));
+        pinchInicialZoom = zoomManual;
+        return;
+      }
+      if (e.touches.length === 1) {
+        iniciarToqueJansen(e.touches[0].clientX, e.touches[0].clientY, true);
+        if (nodoArrastrado === "K" || nodoArrastrado === "X") e.preventDefault();
+      }
+    }, { passive: false });
+
+    canvas.addEventListener("touchmove", (e) => {
+      if (!e.touches) return;
+      if (e.touches.length === 2 && pinchInicialDist) {
+        e.preventDefault();
+        const t1 = e.touches[0], t2 = e.touches[1];
+        const dist = Math.max(10, Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY));
+        zoomManual = Math.max(0.7, Math.min(2.6, pinchInicialZoom * (dist / pinchInicialDist)));
+        return;
+      }
+      if (e.touches.length === 1) {
+        if (nodoArrastrado) e.preventDefault();
+        moverToqueJansen(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: false });
+
+    canvas.addEventListener("touchend", finArrastre);
+    canvas.addEventListener("touchcancel", finArrastre);
+
+    const animar = () => {
+      if (!canvas.isConnected) {
+        this.detener();
+        return;
+      }
+
+      const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+      const maxAnchoMovil = typeof window !== "undefined" ? Math.max(260, window.innerWidth - 28) : 850;
+      const anchoCSS = Math.min(canvas.parentElement?.clientWidth || canvas.clientWidth || 340, maxAnchoMovil);
+      const altoCSS = canvas.clientHeight || 370;
+
+      if (canvas.width !== Math.round(anchoCSS * dpr) || canvas.height !== Math.round(altoCSS * dpr)) {
+        canvas.width = Math.round(anchoCSS * dpr);
+        canvas.height = Math.round(altoCSS * dpr);
+      }
+
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, anchoCSS, altoCSS);
+
+      const margenLateral = anchoCSS < 600 ? 18 : 60;
+      escalaActual = Math.min((anchoCSS - margenLateral) / rangoX, (altoCSS - margenLateral) / rangoY) * zoomManual;
+      const escala = escalaActual;
+
+      // Línea de suelo
+      const ySueloRef = esValido ? mMet.minYTotal : -92;
+      const ptSuelo = aCanvas(0, ySueloRef, anchoCSS, altoCSS, escala);
+      ctx.beginPath();
+      ctx.strokeStyle = "rgba(100, 116, 139, 0.4)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 6]);
+      ctx.moveTo(0, ptSuelo.y);
+      ctx.lineTo(anchoCSS, ptSuelo.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Cota del obstáculo
+      const yApoyoRef = esValido ? mMet.minYApoyo : -90;
+      const ptObstaculo = aCanvas(0, yApoyoRef + (mMet.obstaculoAlto || 15), anchoCSS, altoCSS, escala);
+      ctx.beginPath();
+      ctx.strokeStyle = "rgba(239, 68, 68, 0.5)";
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([3, 3]);
+      ctx.moveTo(0, ptObstaculo.y);
+      ctx.lineTo(anchoCSS, ptObstaculo.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = "rgba(239, 68, 68, 0.85)";
+      ctx.font = "10px system-ui";
+      ctx.fillText(`Obstáculo mínimo (${mMet.obstaculoAlto || 15} u)`, 12, ptObstaculo.y - 4);
+
+      // Trazo de referencia histórica de Jansen (curva gris punteada)
+      if (mostrarReferenciaJansen) {
+        ctx.beginPath();
+        ctx.strokeStyle = "rgba(148, 163, 184, 0.75)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        for (let s = 0; s < TRAYECTORIA_JANSEN_ORIGINAL.pasos.length; s++) {
+          const ptRef = aCanvas(TRAYECTORIA_JANSEN_ORIGINAL.pasos[s].H.x, TRAYECTORIA_JANSEN_ORIGINAL.pasos[s].H.y, anchoCSS, altoCSS, escala);
+          if (s === 0) ctx.moveTo(ptRef.x, ptRef.y);
+          else ctx.lineTo(ptRef.x, ptRef.y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Trazo de la curva del pie activo
+      if (esValido) {
+        for (let s = 0; s < mMet.pasos.length; s++) {
+          const p1 = aCanvas(mMet.pasos[s].H.x, mMet.pasos[s].H.y, anchoCSS, altoCSS, escala);
+          const sigIdx = (s + 1) % mMet.pasos.length;
+          const p2 = aCanvas(mMet.pasos[sigIdx].H.x, mMet.pasos[sigIdx].H.y, anchoCSS, altoCSS, escala);
+          const esApoyo = mMet.apoyoSet.has(s) && mMet.apoyoSet.has(sigIdx);
+
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          if (esApoyo) {
+            ctx.strokeStyle = "#f59e0b";
+            ctx.lineWidth = 3.5;
+          } else {
+            ctx.strokeStyle = "#10b981";
+            ctx.lineWidth = 1.5;
+          }
+          ctx.stroke();
+        }
+      }
+
+      const paso = pasosParaDibujar[indicePasoAnimacion % pasosParaDibujar.length];
+      const ptO = aCanvas(0, 0, anchoCSS, altoCSS, escala);
+      const ptK = paso.K ? aCanvas(paso.K.x, paso.K.y, anchoCSS, altoCSS, escala) : ptO;
+      const ptX = paso.X ? aCanvas(paso.X.x, paso.X.y, anchoCSS, altoCSS, escala) : ptO;
+      const ptD = paso.D ? aCanvas(paso.D.x, paso.D.y, anchoCSS, altoCSS, escala) : null;
+      const ptE = paso.E ? aCanvas(paso.E.x, paso.E.y, anchoCSS, altoCSS, escala) : null;
+      const ptF = paso.F ? aCanvas(paso.F.x, paso.F.y, anchoCSS, altoCSS, escala) : null;
+      const ptG = paso.G ? aCanvas(paso.G.x, paso.G.y, anchoCSS, altoCSS, escala) : null;
+      const ptH = paso.H ? aCanvas(paso.H.x, paso.H.y, anchoCSS, altoCSS, escala) : null;
+
+      // Triángulo superior D-E-X
+      if (ptD && ptE && ptX) {
+        ctx.beginPath();
+        ctx.moveTo(ptD.x, ptD.y);
+        ctx.lineTo(ptE.x, ptE.y);
+        ctx.lineTo(ptX.x, ptX.y);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(59, 130, 246, 0.12)";
+        ctx.fill();
+      }
+
+      // Triángulo medio E-F-G
+      if (ptE && ptF && ptG) {
+        ctx.beginPath();
+        ctx.moveTo(ptE.x, ptE.y);
+        ctx.lineTo(ptF.x, ptF.y);
+        ctx.lineTo(ptG.x, ptG.y);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(16, 185, 129, 0.12)";
+        ctx.fill();
+      }
+
+      // Triángulo inferior de contacto F-G-H
+      if (ptF && ptG && ptH) {
+        ctx.beginPath();
+        ctx.moveTo(ptF.x, ptF.y);
+        ctx.lineTo(ptG.x, ptG.y);
+        ctx.lineTo(ptH.x, ptH.y);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(245, 158, 11, 0.14)";
+        ctx.fill();
+      }
+
+      // 12 Barras del mecanismo de Theo Jansen con metadatos de cotas
+      const barrasConInfo = [
+        { pA: ptO, pB: ptK, color: "#ef4444", ancho: 3, id: "m", cota: 15.0 },
+        { pA: ptO, pB: ptX, color: "#94a3b8", ancho: 1.5, punteado: true, id: "X", cota: Math.hypot(a, l) },
+        { pA: ptK, pB: ptD, color: "#3b82f6", ancho: 2.2, id: "j", cota: j },
+        { pA: ptK, pB: ptF, color: "#3b82f6", ancho: 2.2, id: "k", cota: k },
+        { pA: ptX, pB: ptD, color: "#0284c7", ancho: 2.2, id: "b", cota: b },
+        { pA: ptX, pB: ptF, color: "#0284c7", ancho: 2.2, id: "c", cota: c },
+        { pA: ptX, pB: ptE, color: "#0284c7", ancho: 2.2, id: "d", cota: d },
+        { pA: ptD, pB: ptE, color: "#065f46", ancho: 2.2, id: "e", cota: e },
+        { pA: ptE, pB: ptG, color: "#059669", ancho: 2.2, id: "f", cota: f },
+        { pA: ptF, pB: ptG, color: "#059669", ancho: 2.2, id: "g", cota: g },
+        { pA: ptG, pB: ptH, color: "#d97706", ancho: 2.6, id: "h", cota: h },
+        { pA: ptF, pB: ptH, color: "#d97706", ancho: 2.6, id: "i", cota: i }
+      ];
+
+      const factorMovil = anchoCSS < 600 ? 1.35 : 1.0;
+      barrasConInfo.forEach(({ pA, pB, color, ancho, punteado }) => {
+        if (!pA || !pB) return;
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = ancho * factorMovil;
+        if (punteado) ctx.setLineDash([4, 4]);
+        ctx.moveTo(pA.x, pA.y);
+        ctx.lineTo(pB.x, pB.y);
+        ctx.stroke();
+        if (punteado) ctx.setLineDash([]);
+      });
+
+      // Dibujo de cotas y etiquetas de barras sobre el mecanismo
+      if (mostrarCotasJansen) {
+        ctx.font = anchoCSS < 600 ? "bold 11px system-ui" : "bold 9px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const altoBadge = anchoCSS < 600 ? 17 : 14;
+        barrasConInfo.forEach(bInfo => {
+          if (!bInfo.pA || !bInfo.pB || bInfo.id === "X") return;
+          const mx = (bInfo.pA.x + bInfo.pB.x) / 2;
+          const my = (bInfo.pA.y + bInfo.pB.y) / 2;
+          const texto = `${bInfo.id}: ${typeof bInfo.cota === "number" ? bInfo.cota.toFixed(1) : bInfo.cota}`;
+          const w = ctx.measureText(texto).width + (anchoCSS < 600 ? 10 : 6);
+          ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+          ctx.beginPath();
+          ctx.roundRect(mx - w / 2, my - altoBadge / 2, w, altoBadge, 4);
+          ctx.fill();
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(texto, mx, my);
+        });
+      }
+
+      // Nodos articulados
+      const nodos = [
+        { pt: ptO, nombre: "Y(0,0)", fija: true },
+        { pt: ptX, nombre: `X(-${a.toFixed(1)},-${l.toFixed(1)})`, fija: true, interactiva: true },
+        { pt: ptK, nombre: "K", fija: false, interactiva: true },
+        { pt: ptD, nombre: "D", fija: false },
+        { pt: ptE, nombre: "E", fija: false },
+        { pt: ptF, nombre: "F", fija: false },
+        { pt: ptG, nombre: "G", fija: false }
+      ];
+
+      nodos.forEach(n => {
+        if (!n.pt) return;
+        // Halo interactivo en nodos manipulables K y X
+        if (n.interactiva) {
+          ctx.beginPath();
+          ctx.arc(n.pt.x, n.pt.y, anchoCSS < 600 ? 13 : 9, 0, 2 * Math.PI);
+          ctx.strokeStyle = n.pt === ptK ? "rgba(239, 68, 68, 0.65)" : "rgba(59, 130, 246, 0.65)";
+          ctx.lineWidth = 2.0;
+          ctx.setLineDash([2, 2]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        ctx.beginPath();
+        ctx.arc(n.pt.x, n.pt.y, (n.fija ? 5.5 : 4) * factorMovil, 0, 2 * Math.PI);
+        ctx.fillStyle = n.fija ? "#1e293b" : "#ffffff";
+        ctx.fill();
+        ctx.strokeStyle = n.fija ? "#f8fafc" : "#0f172a";
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+      });
+
+      // Pie dinámico
+      if (ptH) {
+        const enApoyo = esValido && mMet.apoyoSet.has(indicePasoAnimacion % (mMet.pasos?.length || 180));
+        ctx.beginPath();
+        ctx.arc(ptH.x, ptH.y, 6.5, 0, 2 * Math.PI);
+        ctx.fillStyle = enApoyo ? "#f59e0b" : "#10b981";
+        ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // Actualización de ángulo y avance de ciclo si no está pausado
+      if (!jansenPausado && !nodoArrastrado && pasosParaDibujar.length > 1) {
+        indicePasoAnimacion = (indicePasoAnimacion + 1) % pasosParaDibujar.length;
+        const totalP = pasosParaDibujar.length || 180;
+        const angAct = Math.round((indicePasoAnimacion / totalP) * 360) % 360;
+        if (sliderTheta) sliderTheta.value = angAct;
+        if (labelTheta) labelTheta.textContent = `${angAct}°`;
+      }
+
+      this.animId = requestAnimationFrame(animar);
+    };
+
+    this.animId = requestAnimationFrame(animar);
+  }
+}
+
+// -------------------------------------------------------------------------
+// 2. VISUALIZADOR DE BRAZO ROBÓTICO (CINEMÁTICA INVERSA 3 ESLABONES)
+// -------------------------------------------------------------------------
+
+
 
 // -------------------------------------------------------------------------
 // 2. VISUALIZADOR DE BRAZO ROBÓTICO (CINEMÁTICA INVERSA 3 ESLABONES)
@@ -3798,6 +4401,8 @@ const visualizadoresRegistrados = {
   "linea-transmision-rf": new VisualizadorLineaRF(),
   "corte-chapa-nesting": new VisualizadorNesting(),
   "pata-caminante": new VisualizadorCaminante(),
+  "pata-jansen": new VisualizadorJansen(),
+  "mecanismo_jansen": new VisualizadorJansen(),
   "balanceo-fases-trifasico": new VisualizadorFases()
 };
 

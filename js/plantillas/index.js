@@ -14,6 +14,7 @@ import rf from "./linea-transmision-rf.js";
 import nesting from "./corte-chapa-nesting.js";
 import brazo from "./brazo-robotico.js";
 import caminante from "./pata-caminante.js";
+import jansen from "./pata-jansen.js";
 
 import { crearGrafoPorModelo } from "../engines/mecanismos.js";
 
@@ -32,7 +33,8 @@ export const PLANTILLAS_FIELES = {
   "linea-transmision-rf": rf,
   "corte-chapa-nesting": nesting,
   "balanceo-fases-trifasico": fases,
-  "pata-caminante": caminante
+  "pata-caminante": caminante,
+  "pata-jansen": jansen
 };
 
 // Asegura que todas las plantillas cuenten con su identificador y su grafo interactivo CAD 2D

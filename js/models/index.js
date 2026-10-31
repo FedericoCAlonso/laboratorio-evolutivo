@@ -5,6 +5,7 @@
 
 import { ModeloBalanceoFases } from "./fases.js";
 import { ModeloPataCaminante } from "./caminante.js";
+import { ModeloPataJansen } from "./jansen.js";
 import { ModeloBrazoRobotico } from "./brazo.js";
 import { ModeloCoheteLanding } from "./cohete.js";
 import { ModeloControladorPID } from "./pid.js";
@@ -25,6 +26,7 @@ import { PLANTILLAS_FIELES } from "../plantillas/index.js";
 export {
   ModeloBalanceoFases,
   ModeloPataCaminante,
+  ModeloPataJansen,
   ModeloBrazoRobotico,
   ModeloCoheteLanding,
   ModeloControladorPID,
@@ -56,7 +58,8 @@ export const MODELOS = [
   ModeloLineaTransmisionRF,
   ModeloCorteChapaNesting,
   ModeloBalanceoFases,
-  ModeloPataCaminante
+  ModeloPataCaminante,
+  ModeloPataJansen
 ];
 
 // Dota de nombre, etiqueta, grafo y código editable a cada modelo nativo, tomándolos de su plantilla fiel.

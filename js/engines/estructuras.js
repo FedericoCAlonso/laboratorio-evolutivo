@@ -3,6 +3,8 @@
 // MODELO DE DOMINIO MATEMÁTICO PURO (COMPATIBLE CON WEB WORKER Y NODE.JS)
 // =========================================================================
 
+import { ModeloPataJansen } from "../models/jansen.js";
+
 // Motor central de estática de celosías articuladas y cinemática planar
 export class MotorEstructurasCinematica {
   // Inicializa el motor con listas vacías de nudos y barras articuladas
@@ -178,6 +180,15 @@ export class MotorEstructurasCinematica {
       maxTensionMPa: Math.max(...tensionesMPa),
       hayFallaPandeo: pandeoDetectado.some(p => p === true)
     };
+  }
+
+  // Evalúa el fitness de la Pata Jansen delegando en su modelo de dominio
+  static evaluarJansenFitness(vars, opciones = {}) {
+    return ModeloPataJansen.evaluar(vars, opciones);
+  }
+
+  evaluarJansenFitness(vars, opciones = {}) {
+    return ModeloPataJansen.evaluar(vars, opciones);
   }
 }
 
