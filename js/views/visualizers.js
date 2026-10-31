@@ -41,6 +41,7 @@ import { simularTrayectoriaLorentz, calcularCampoMagneticoBz } from "../models/e
 import { simularAbsorbenteAcustico } from "../models/fonoabsorbente.js";
 import { simularLineaTransmisionRF } from "../models/linea-rf.js";
 import { simularCorteChapaNesting } from "../models/nesting.js";
+import { simularAntenaNasa } from "../models/antena.js";
 import { LienzoFuncionalRenderer, LienzoTopologicoRenderer } from "./renderers/index.js";
 import {
   ModeloPataJansen,
@@ -3755,7 +3756,378 @@ export class VisualizadorNesting {
 }
 
 // -------------------------------------------------------------------------
-// 17. VISUALIZADOR DE MODELOS DINÁMICOS LOW-CODE MULTI-NATURALEZA
+// 17. VISUALIZADOR DE ANTENA EVOLUTIVA NASA ST5 (BANDA X / 3D POLAR)
+// -------------------------------------------------------------------------
+export class VisualizadorAntena {
+  constructor() {
+    this.animId = null;
+    this.rotacionAzimut = 0.0;
+    this.inclinacionVista = 0.55; // Radianes de inclinación 3D
+  }
+
+  detener() {
+    if (this.animId !== null) {
+      cancelAnimationFrame(this.animId);
+      this.animId = null;
+    }
+  }
+
+  render(contenedor, genoma, entrada = {}, contexto = {}) {
+    if (!contenedor) return;
+    this.detener();
+
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 380;
+      canvas.style.width = "100%";
+      canvas.style.height = "380px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    const sim = simularAntenaNasa(genoma, entrada);
+
+    let arrastrando = false;
+    let ultimoX = 0;
+    let ultimoY = 0;
+
+    const onMouseDown = (e) => {
+      arrastrando = true;
+      ultimoX = e.clientX;
+      ultimoY = e.clientY;
+    };
+    const onMouseMove = (e) => {
+      if (!arrastrando) return;
+      const dx = e.clientX - ultimoX;
+      const dy = e.clientY - ultimoY;
+      this.rotacionAzimut += dx * 0.012;
+      this.inclinacionVista = Math.max(0.15, Math.min(1.25, this.inclinacionVista + dy * 0.008));
+      ultimoX = e.clientX;
+      ultimoY = e.clientY;
+    };
+    const onMouseUp = () => { arrastrando = false; };
+
+    canvas.onmousedown = onMouseDown;
+    if (typeof window !== "undefined") {
+      window.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("mouseup", onMouseUp);
+    }
+
+    const animar = () => {
+      if (!canvas.isConnected) {
+        this.detener();
+        if (typeof window !== "undefined") {
+          window.removeEventListener("mousemove", onMouseMove);
+          window.removeEventListener("mouseup", onMouseUp);
+        }
+        return;
+      }
+
+      const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+      const anchoCSS = canvas.clientWidth || 800;
+      const altoCSS = canvas.clientHeight || 380;
+
+      if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
+        canvas.width = anchoCSS * dpr;
+        canvas.height = altoCSS * dpr;
+      }
+
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, anchoCSS, altoCSS);
+
+      // Fondo aeroespacial
+      ctx.fillStyle = "#070a13";
+      ctx.fillRect(0, 0, anchoCSS, altoCSS);
+
+      // Rotación continua lenta si el usuario no está arrastrando
+      if (!arrastrando) {
+        this.rotacionAzimut += 0.007;
+      }
+
+      const esMovil = anchoCSS < 680;
+
+      // -------------------------------------------------------------
+      // PANEL IZQUIERDO: Antena de hilo 3D sobre el satélite NASA ST5
+      // -------------------------------------------------------------
+      const cAntenaX = esMovil ? anchoCSS * 0.5 : anchoCSS * 0.26;
+      const cAntenaY = esMovil ? altoCSS * 0.38 : altoCSS * 0.54;
+      const escala3D = esMovil ? 2.5 : 3.6;
+
+      // Proyección 3D isométrica/ortogonal con rotación e inclinación
+      const cosA = Math.cos(this.rotacionAzimut);
+      const sinA = Math.sin(this.rotacionAzimut);
+      const sinElev = Math.sin(this.inclinacionVista);
+      const cosElev = Math.cos(this.inclinacionVista);
+
+      const proyectar3D = (x, y, z) => {
+        const xr = x * cosA - y * sinA;
+        const yr = x * sinA + y * cosA;
+        const zr = z;
+        return {
+          px: cAntenaX + xr * escala3D,
+          py: cAntenaY - (yr * cosElev + zr * sinElev) * escala3D,
+          prof: yr * sinElev - zr * cosElev
+        };
+      };
+
+      // 1. Cubierta superior del micro-satélite ST5 (Chasis circular de aluminio/oro)
+      const radioDeck = 34.0; // mm
+      ctx.beginPath();
+      for (let a = 0; a <= 36; a++) {
+        const angD = (a / 36) * Math.PI * 2;
+        const pt = proyectar3D(radioDeck * Math.cos(angD), radioDeck * Math.sin(angD), 0.0);
+        if (a === 0) ctx.moveTo(pt.px, pt.py);
+        else ctx.lineTo(pt.px, pt.py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = "rgba(30, 41, 59, 0.75)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.35)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Cuadrículas radiales en la cubierta
+      for (let q = 0; q < 4; q++) {
+        const angQ = q * (Math.PI / 2);
+        const pEje = proyectar3D(radioDeck * Math.cos(angQ), radioDeck * Math.sin(angQ), 0.0);
+        const pCentro = proyectar3D(0, 0, 0);
+        ctx.beginPath();
+        ctx.strokeStyle = "rgba(148, 163, 184, 0.2)";
+        ctx.setLineDash([2, 3]);
+        ctx.moveTo(pCentro.px, pCentro.py);
+        ctx.lineTo(pEje.px, pEje.py);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Puerto coaxial de alimentación RF central
+      const pFeed = proyectar3D(0, 0, 0);
+      ctx.beginPath();
+      ctx.arc(pFeed.px, pFeed.py, 6, 0, Math.PI * 2);
+      ctx.fillStyle = "#f59e0b";
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Halo de excitación RF en el puerto central
+      ctx.beginPath();
+      ctx.arc(pFeed.px, pFeed.py, 12, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(245, 158, 11, 0.18)";
+      ctx.fill();
+
+      // 2. Trazado de los 4 brazos de hilo de cobre/oro (C4)
+      const coloresBrazos = ["#f59e0b", "#38bdf8", "#10b981", "#c084fc"];
+      const sombrasBrazos = ["rgba(245,158,11,0.3)", "rgba(56,189,248,0.3)", "rgba(16,185,129,0.3)", "rgba(192,132,252,0.3)"];
+
+      sim.geom.brazos.forEach((brazo, idx) => {
+        const pts2D = brazo.map(p => proyectar3D(p.x, p.y, p.z));
+
+        // Sombra proyectada en la cubierta del satélite (Z = 0)
+        ctx.beginPath();
+        brazo.forEach((p, sIdx) => {
+          const ptSombra = proyectar3D(p.x, p.y, 0.0);
+          if (sIdx === 0) ctx.moveTo(ptSombra.px, ptSombra.py);
+          else ctx.lineTo(ptSombra.px, ptSombra.py);
+        });
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
+        ctx.lineWidth = 2.0;
+        ctx.stroke();
+
+        // Resplandor del hilo conductor
+        ctx.beginPath();
+        pts2D.forEach((pt, sIdx) => {
+          if (sIdx === 0) ctx.moveTo(pt.px, pt.py);
+          else ctx.lineTo(pt.px, pt.py);
+        });
+        ctx.strokeStyle = sombrasBrazos[idx];
+        ctx.lineWidth = idx === 0 ? 6.5 : 4.5;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+
+        // Hilo metálico central
+        ctx.beginPath();
+        pts2D.forEach((pt, sIdx) => {
+          if (sIdx === 0) ctx.moveTo(pt.px, pt.py);
+          else ctx.lineTo(pt.px, pt.py);
+        });
+        ctx.strokeStyle = coloresBrazos[idx];
+        ctx.lineWidth = idx === 0 ? 3.2 : 2.4;
+        ctx.stroke();
+
+        // Nodos / Codos
+        pts2D.forEach((pt, sIdx) => {
+          if (sIdx === 0) return;
+          ctx.beginPath();
+          ctx.arc(pt.px, pt.py, sIdx === 3 ? 3.8 : 3.0, 0, Math.PI * 2);
+          ctx.fillStyle = sIdx === 3 ? "#ffffff" : coloresBrazos[idx];
+          ctx.fill();
+          ctx.strokeStyle = "#0f172a";
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+        });
+
+        // Etiquetas polares sobre el brazo maestro (brazo 0)
+        if (idx === 0) {
+          const pCodo1 = pts2D[1];
+          const pCodo2 = pts2D[2];
+          const pPunta = pts2D[3];
+
+          ctx.font = "bold 9px monospace";
+          ctx.fillStyle = "#fbbf24";
+          ctx.fillText(`Δθ₁: ${sim.geom.dTheta1.toFixed(0)}°`, pCodo1.px + 6, pCodo1.py - 6);
+          ctx.fillText(`Δθ₂: ${sim.geom.dTheta2.toFixed(0)}°`, pCodo2.px + 6, pCodo2.py - 6);
+          ctx.fillText(`L_arm: ${sim.geom.longitudArm.toFixed(1)}mm`, pPunta.px + 6, pPunta.py + 10);
+        }
+      });
+
+      // Rótulo del chasis satelital
+      ctx.fillStyle = "rgba(148, 163, 184, 0.75)";
+      ctx.font = "bold 10px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("CHASIS SATELITAL NASA ST5 (3D C4)", cAntenaX, esMovil ? altoCSS * 0.72 : altoCSS - 18);
+
+      // -------------------------------------------------------------
+      // PANEL DERECHO: Diagrama Polar de Radiación y Telemetría RF
+      // -------------------------------------------------------------
+      if (!esMovil) {
+        const cPolarX = anchoCSS * 0.76;
+        const cPolarY = altoCSS * 0.50;
+        const radioPolarMax = Math.min(altoCSS * 0.36, 120);
+
+        // Anillos de ganancia concéntricos (dB)
+        const nivelesDB = [-6, -3, 0, 3, 6];
+        nivelesDB.forEach(db => {
+          const rPx = ((db + 10) / 16) * radioPolarMax;
+          ctx.beginPath();
+          ctx.arc(cPolarX, cPolarY, rPx, 0, Math.PI * 2);
+          ctx.strokeStyle = db === 0 ? "rgba(148, 163, 184, 0.45)" : "rgba(148, 163, 184, 0.18)";
+          ctx.lineWidth = db === 0 ? 1.5 : 1;
+          ctx.setLineDash(db === 0 ? [] : [3, 3]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.fillStyle = "rgba(148, 163, 184, 0.65)";
+          ctx.font = "8px monospace";
+          ctx.textAlign = "left";
+          ctx.fillText(`${db > 0 ? "+" : ""}${db} dBi`, cPolarX + 4, cPolarY - rPx + 9);
+        });
+
+        // Ejes ortogonales Cenit / Horizonte
+        ctx.beginPath();
+        ctx.strokeStyle = "rgba(148, 163, 184, 0.25)";
+        ctx.moveTo(cPolarX - radioPolarMax, cPolarY);
+        ctx.lineTo(cPolarX + radioPolarMax, cPolarY);
+        ctx.moveTo(cPolarX, cPolarY - radioPolarMax);
+        ctx.lineTo(cPolarX, cPolarY + radioPolarMax);
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(148, 163, 184, 0.85)";
+        ctx.font = "9px Inter, system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText("Cenit (0°)", cPolarX, cPolarY - radioPolarMax - 6);
+        ctx.fillText("Horizonte (90°)", cPolarX + radioPolarMax - 14, cPolarY + 14);
+
+        // Sector cónico de enlace satélite-tierra (35° a 82°)
+        const rConoMin = ((-6 + 10) / 16) * radioPolarMax;
+        const rConoMax = ((6 + 10) / 16) * radioPolarMax;
+        const angC1 = (35 * Math.PI) / 180 - Math.PI / 2;
+        const angC2 = (82 * Math.PI) / 180 - Math.PI / 2;
+
+        ctx.beginPath();
+        ctx.arc(cPolarX, cPolarY, rConoMax, angC1, angC2);
+        ctx.arc(cPolarX, cPolarY, rConoMin, angC2, angC1, true);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(16, 185, 129, 0.12)";
+        ctx.fill();
+
+        // Lóbulo de radiación hemisférico
+        const ptsLobe = [];
+        sim.gananciaMuestras.forEach(m => {
+          const ang = (m.theta * Math.PI) / 180 - Math.PI / 2;
+          const rLobe = Math.max(12, ((m.ganancia + 10) / 16) * radioPolarMax);
+          ptsLobe.push({
+            x: cPolarX + rLobe * Math.cos(ang),
+            y: cPolarY + rLobe * Math.sin(ang)
+          });
+        });
+
+        // Espejado respecto al cenit para lóbulo polar completo 2D
+        const ptsCompletos = [...ptsLobe];
+        for (let j = ptsLobe.length - 1; j >= 0; j--) {
+          const p = ptsLobe[j];
+          ptsCompletos.push({
+            x: cPolarX - (p.x - cPolarX),
+            y: p.y
+          });
+        }
+
+        ctx.beginPath();
+        ptsCompletos.forEach((pt, j) => {
+          if (j === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        });
+        ctx.closePath();
+        const gradLobe = ctx.createRadialGradient(cPolarX, cPolarY, 15, cPolarX, cPolarY, radioPolarMax);
+        gradLobe.addColorStop(0, "rgba(56, 189, 248, 0.25)");
+        gradLobe.addColorStop(0.7, "rgba(245, 158, 11, 0.35)");
+        gradLobe.addColorStop(1, "rgba(239, 68, 68, 0.55)");
+        ctx.fillStyle = gradLobe;
+        ctx.fill();
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 2.2;
+        ctx.stroke();
+
+        // HUD Telemetría RF en esquina superior derecha
+        const hudX = anchoCSS - 210;
+        const hudY = 16;
+        ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+        ctx.beginPath();
+        ctx.roundRect(hudX, hudY, 196, 108, 8);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(59, 130, 246, 0.35)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        const vswrOk = sim.vswr <= 1.5;
+        const vswrColor = vswrOk ? "#10b981" : (sim.vswr <= 2.0 ? "#f59e0b" : "#ef4444");
+
+        ctx.textAlign = "left";
+        ctx.font = "bold 11px Inter, system-ui";
+        ctx.fillStyle = "#60a5fa";
+        ctx.fillText("📡 TELEMETRÍA RF - BANDA X", hudX + 10, hudY + 18);
+
+        ctx.font = "10px monospace";
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillText(`Freq: ${sim.geom.frecuencia.toFixed(2)} GHz (λ=${sim.geom.lambda.toFixed(1)}mm)`, hudX + 10, hudY + 36);
+        ctx.fillText(`Z_in: ${sim.R_in.toFixed(1)} + j${sim.X_in >= 0 ? "+" : ""}${sim.X_in.toFixed(1)} Ω`, hudX + 10, hudY + 52);
+
+        ctx.fillStyle = vswrColor;
+        ctx.font = "bold 11px monospace";
+        ctx.fillText(`ROE/VSWR: ${sim.vswr.toFixed(2)} : 1 ${vswrOk ? "✓" : ""}`, hudX + 10, hudY + 70);
+
+        ctx.font = "10px monospace";
+        ctx.fillStyle = "#f8fafc";
+        ctx.fillText(`G_pico: +${sim.gananciaPico.toFixed(2)} dBi | AR: ${sim.axialRatio.toFixed(2)}`, hudX + 10, hudY + 86);
+        ctx.fillText(`Ondulación: ±${sim.ondulacion.toFixed(2)} dB`, hudX + 10, hudY + 100);
+      }
+
+      this.animId = requestAnimationFrame(animar);
+    };
+
+    this.animId = requestAnimationFrame(animar);
+  }
+}
+
+// -------------------------------------------------------------------------
+// 18. VISUALIZADOR DE MODELOS DINÁMICOS LOW-CODE MULTI-NATURALEZA
 // -------------------------------------------------------------------------
 export class VisualizadorDinamico {
   constructor() {
@@ -3945,7 +4317,14 @@ export class VisualizadorDinamico {
       return;
     }
 
-    // 11. Representación de Distribución de Recursos / Cargas
+    // 11. Representación de Antena de Hilo 3D NASA ST5 y Lóbulo Polar
+    if (tipo === "antena_3d_polar" || tipo === "antena_hilo_3d" || modelo?.id === "antena-nasa") {
+      this.subVisualizadorActivo = new VisualizadorAntena();
+      this.subVisualizadorActivo.render(contenedor, genoma, entrada, contexto);
+      return;
+    }
+
+    // 12. Representación de Distribución de Recursos / Cargas
     if (tipo === "distribucion_recursos") {
       this._renderizarDistribucionRecursos(contenedor, genoma, varsDef, contexto);
       return;
@@ -4403,7 +4782,8 @@ const visualizadoresRegistrados = {
   "pata-caminante": new VisualizadorCaminante(),
   "pata-jansen": new VisualizadorJansen(),
   "mecanismo_jansen": new VisualizadorJansen(),
-  "balanceo-fases-trifasico": new VisualizadorFases()
+  "balanceo-fases-trifasico": new VisualizadorFases(),
+  "antena-nasa": new VisualizadorAntena()
 };
 
 const visualizadorDinamicoCompartido = new VisualizadorDinamico();

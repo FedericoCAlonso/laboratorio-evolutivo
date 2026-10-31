@@ -15,6 +15,7 @@ import nesting from "./corte-chapa-nesting.js";
 import brazo from "./brazo-robotico.js";
 import caminante from "./pata-caminante.js";
 import jansen from "./pata-jansen.js";
+import antena from "./antena-nasa.js";
 
 import { crearGrafoPorModelo } from "../engines/mecanismos.js";
 
@@ -34,7 +35,8 @@ export const PLANTILLAS_FIELES = {
   "corte-chapa-nesting": nesting,
   "balanceo-fases-trifasico": fases,
   "pata-caminante": caminante,
-  "pata-jansen": jansen
+  "pata-jansen": jansen,
+  "antena-nasa": antena
 };
 
 // Asegura que todas las plantillas cuenten con su identificador y su grafo interactivo CAD 2D

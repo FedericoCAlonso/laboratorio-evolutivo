@@ -189,6 +189,15 @@ export class EditorGraficoView {
           const ey = n.escalaY || 1;
           n.y = parseFloat((n.signoY !== undefined ? oy + n.signoY * Math.abs(val) * ey : oy + val * ey).toFixed(2));
         }
+        if (n.variableIman === nom || (n.variableY === nom && n.imanDipolo !== undefined)) {
+          n.imanDipolo = val;
+        }
+        if (n.variableCarga === nom || (n.variableY === nom && n.cargaElectrica !== undefined)) {
+          n.cargaElectrica = val;
+        }
+        if (n.variableTemp === nom || (n.variableY === nom && n.temperaturaFuente !== undefined)) {
+          n.temperaturaFuente = val;
+        }
       });
 
       // 3. Radio de motores vinculados
@@ -298,6 +307,7 @@ export class EditorGraficoView {
               <option value="acustica-beamforming">🔊 Arreglo Acústico y Beamforming</option>
               <option value="superficie-fonoabsorbente">🔇 Superficie Fonoabsorbente (Cuñas)</option>
               <option value="linea-transmision-rf">📶 Línea de Transmisión RF (Smith)</option>
+              <option value="antena-nasa">📡 Antena Evolutiva NASA ST5 (Banda X)</option>
               <option value="corte-chapa-nesting">✂️ Corte de Chapa y Anidado 2D</option>
               <option value="controlador-pid">📈 Sintonizador PID (Lazo Control)</option>
               <option value="filtro-rlc">🔌 Síntesis de Filtro Analógico RLC</option>
@@ -822,6 +832,12 @@ export class EditorGraficoView {
           const rawY = (arrastrandoNodo.y - oy) / ey;
           const valY = parseFloat((arrastrandoNodo.signoY !== undefined ? Math.abs(rawY) : rawY).toFixed(2));
           this.valoresVariables[arrastrandoNodo.variableY] = valY;
+          if (arrastrandoNodo.variableIman || arrastrandoNodo.id.startsWith("bobina")) {
+            arrastrandoNodo.imanDipolo = valY;
+          }
+          if (arrastrandoNodo.variableCarga || arrastrandoNodo.id.startsWith("placa")) {
+            arrastrandoNodo.cargaElectrica = valY;
+          }
           if (typeof this.onVariableModificada === "function") {
             this.onVariableModificada({ nombre: arrastrandoNodo.variableY, valor: valY });
           }
@@ -1035,20 +1051,48 @@ export class EditorGraficoView {
     if (!this.dom.listaVariablesVivas) return;
 
     const mapaVars = new Map();
-    // 1. Nodos con variables de coordenada (ej. a, l)
+    // 1. Nodos con variables de coordenada (ej. a, l, i1..i4, vSup, vInf)
     (this.grafo.nodos || []).forEach(n => {
       if (n.variableX) {
+        let valX = this.valoresVariables[n.variableX];
+        if (valX === undefined) {
+          const ox = n.offsetX || 0, ex = n.escalaX || 1;
+          const raw = (n.x - ox) / ex;
+          valX = n.signoX !== undefined ? Math.abs(raw) : raw;
+        }
         mapaVars.set(n.variableX, {
           nombre: n.variableX,
-          valor: parseFloat(Math.abs(n.x).toFixed(2)),
-          origen: `Nodo ${n.id}`
+          valor: parseFloat(Number(valX).toFixed(2)),
+          origen: `Nodo ${n.nombre || n.id}`
         });
       }
       if (n.variableY) {
+        let valY = this.valoresVariables[n.variableY];
+        if (valY === undefined) {
+          const oy = n.offsetY || 0, ey = n.escalaY || 1;
+          const raw = (n.y - oy) / ey;
+          valY = n.signoY !== undefined ? Math.abs(raw) : raw;
+        }
         mapaVars.set(n.variableY, {
           nombre: n.variableY,
-          valor: parseFloat(Math.abs(n.y).toFixed(2)),
-          origen: `Nodo ${n.id}`
+          valor: parseFloat(Number(valY).toFixed(2)),
+          origen: `Nodo ${n.nombre || n.id}`
+        });
+      }
+      if (n.variableIman && !mapaVars.has(n.variableIman)) {
+        const valI = this.valoresVariables[n.variableIman] !== undefined ? this.valoresVariables[n.variableIman] : (n.imanDipolo || 0);
+        mapaVars.set(n.variableIman, {
+          nombre: n.variableIman,
+          valor: parseFloat(Number(valI).toFixed(2)),
+          origen: `Imán ${n.nombre || n.id}`
+        });
+      }
+      if (n.variableCarga && !mapaVars.has(n.variableCarga)) {
+        const valC = this.valoresVariables[n.variableCarga] !== undefined ? this.valoresVariables[n.variableCarga] : (n.cargaElectrica || 0);
+        mapaVars.set(n.variableCarga, {
+          nombre: n.variableCarga,
+          valor: parseFloat(Number(valC).toFixed(2)),
+          origen: `Carga ${n.nombre || n.id}`
         });
       }
     });
@@ -1120,7 +1164,7 @@ export class EditorGraficoView {
       inp.addEventListener("input", (e) => {
         const nom = inp.dataset.cadVar;
         const nuevoVal = parseFloat(e.target.value);
-        if (isNaN(nuevoVal) || nuevoVal <= 0) return;
+        if (isNaN(nuevoVal) || !isFinite(nuevoVal)) return;
         this.valoresVariables[nom] = nuevoVal;
         this.actualizarValoresVariables({ [nom]: nuevoVal });
         if (typeof this.onVariableModificada === "function") {
@@ -1266,11 +1310,11 @@ export class EditorGraficoView {
           </div>
           <div style="border-top: 1px solid #334155; padding-top: 0.4rem; display: flex; gap: 0.35rem;">
             <div style="flex: 1;">
-              <label style="font-size: 0.68rem; color: #94a3b8;">🧲 Imán (Bz)</label>
+              <label style="font-size: 0.68rem; color: #94a3b8;">🧲 Imán (Bz) ${nodo.variableIman ? `[${nodo.variableIman}]` : ""}</label>
               <input type="number" id="insp-nodo-iman" step="any" value="${nodo.imanDipolo || 0}" style="width: 100%; padding: 0.22rem 0.3rem; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #fff;">
             </div>
             <div style="flex: 1;">
-              <label style="font-size: 0.68rem; color: #94a3b8;">⚡ Carga (q)</label>
+              <label style="font-size: 0.68rem; color: #94a3b8;">⚡ Carga (q) ${nodo.variableCarga ? `[${nodo.variableCarga}]` : ""}</label>
               <input type="number" id="insp-nodo-carga" step="any" value="${nodo.cargaElectrica || 0}" style="width: 100%; padding: 0.22rem 0.3rem; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #fff;">
             </div>
             <div style="flex: 1;">
@@ -1278,6 +1322,24 @@ export class EditorGraficoView {
               <input type="number" id="insp-nodo-temp" step="any" value="${nodo.temperaturaFuente || 25}" style="width: 100%; padding: 0.22rem 0.3rem; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #fff;">
             </div>
           </div>
+
+          <!-- Vinculación con variable de optimización -->
+          <div style="background: rgba(59, 130, 246, 0.1); padding: 0.55rem; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3); margin-top: 0.35rem;">
+            <div style="font-weight: 700; color: #60a5fa; font-size: 0.8rem; margin-bottom: 0.25rem;">⚡ Variable de Decisión Vinculada</div>
+            <div style="display: flex; gap: 0.35rem;">
+              <select id="insp-nodo-eje-var" style="width: 80px; padding: 0.3rem; background: #0f172a; border: 1px solid #3b82f6; border-radius: 6px; color: #fff; font-size: 0.8rem;">
+                <option value="Y" ${nodo.variableY ? "selected" : ""}>Eje Y</option>
+                <option value="X" ${nodo.variableX ? "selected" : ""}>Eje X</option>
+                <option value="iman" ${nodo.variableIman ? "selected" : ""}>🧲 Imán</option>
+                <option value="carga" ${nodo.variableCarga ? "selected" : ""}>⚡ Carga</option>
+              </select>
+              <input type="text" id="insp-nodo-var" value="${nodo.variableY || nodo.variableX || nodo.variableIman || nodo.variableCarga || ""}" placeholder="Ej: i1, x1, vSup..." style="flex: 1; padding: 0.3rem 0.45rem; font-size: 0.85rem; background: #0f172a; border: 1px solid #3b82f6; border-radius: 6px; color: #fff; font-family: monospace;">
+            </div>
+            <button type="button" id="insp-nodo-vincular" class="btn-m3-filled" style="width: 100%; min-height: 34px; margin-top: 0.35rem; padding: 0.3rem; font-size: 0.82rem;">
+              Asociar a Variables de Algoritmo
+            </button>
+          </div>
+
           <button type="button" id="insp-nodo-borrar" style="margin-top: 0.25rem; padding: 0.3rem; background: rgba(239,68,68,0.2); color: #ef4444; border: 1px solid #ef4444; border-radius: 4px; cursor: pointer; font-size: 0.74rem;">
             🗑️ Eliminar Nodo
           </button>
@@ -1291,7 +1353,10 @@ export class EditorGraficoView {
       this.dom.inspectorContenido.querySelector("#insp-nodo-x")?.addEventListener("input", (e) => {
         nodo.x = parseFloat(e.target.value) || 0;
         if (nodo.variableX) {
-          const valX = parseFloat(Math.abs(nodo.x).toFixed(1));
+          const ox = nodo.offsetX || 0;
+          const ex = nodo.escalaX || 1;
+          const rawX = (nodo.x - ox) / ex;
+          const valX = parseFloat((nodo.signoX !== undefined ? Math.abs(rawX) : rawX).toFixed(2));
           this.valoresVariables[nodo.variableX] = valX;
           if (typeof this.onVariableModificada === "function") {
             this.onVariableModificada({ nombre: nodo.variableX, valor: valX });
@@ -1302,8 +1367,17 @@ export class EditorGraficoView {
       this.dom.inspectorContenido.querySelector("#insp-nodo-y")?.addEventListener("input", (e) => {
         nodo.y = parseFloat(e.target.value) || 0;
         if (nodo.variableY) {
-          const valY = parseFloat(Math.abs(nodo.y).toFixed(1));
+          const oy = nodo.offsetY || 0;
+          const ey = nodo.escalaY || 1;
+          const rawY = (nodo.y - oy) / ey;
+          const valY = parseFloat((nodo.signoY !== undefined ? Math.abs(rawY) : rawY).toFixed(2));
           this.valoresVariables[nodo.variableY] = valY;
+          if (nodo.variableIman || (nodo.id && nodo.id.startsWith("bobina"))) {
+            nodo.imanDipolo = valY;
+          }
+          if (nodo.variableCarga || (nodo.id && nodo.id.startsWith("placa"))) {
+            nodo.cargaElectrica = valY;
+          }
           if (typeof this.onVariableModificada === "function") {
             this.onVariableModificada({ nombre: nodo.variableY, valor: valY });
           }
@@ -1320,15 +1394,71 @@ export class EditorGraficoView {
       });
       this.dom.inspectorContenido.querySelector("#insp-nodo-iman")?.addEventListener("input", (e) => {
         nodo.imanDipolo = parseFloat(e.target.value) || 0;
+        const varIman = nodo.variableIman || (nodo.variableY && nodo.id && nodo.id.startsWith("bobina") ? nodo.variableY : null);
+        if (varIman) {
+          this.valoresVariables[varIman] = nodo.imanDipolo;
+          const oy = nodo.offsetY || 0;
+          const ey = nodo.escalaY || 1;
+          nodo.y = parseFloat((oy + nodo.imanDipolo * ey).toFixed(2));
+          if (typeof this.onVariableModificada === "function") {
+            this.onVariableModificada({ nombre: varIman, valor: nodo.imanDipolo });
+          }
+        }
         this._notificarCambioGrafo();
       });
       this.dom.inspectorContenido.querySelector("#insp-nodo-carga")?.addEventListener("input", (e) => {
         nodo.cargaElectrica = parseFloat(e.target.value) || 0;
+        const varCarga = nodo.variableCarga || (nodo.variableY && nodo.id && nodo.id.startsWith("placa") ? nodo.variableY : null);
+        if (varCarga) {
+          this.valoresVariables[varCarga] = nodo.cargaElectrica;
+          const oy = nodo.offsetY || 0;
+          const ey = nodo.escalaY || 1;
+          nodo.y = parseFloat((oy + nodo.cargaElectrica * ey).toFixed(2));
+          if (typeof this.onVariableModificada === "function") {
+            this.onVariableModificada({ nombre: varCarga, valor: nodo.cargaElectrica });
+          }
+        }
         this._notificarCambioGrafo();
       });
       this.dom.inspectorContenido.querySelector("#insp-nodo-temp")?.addEventListener("input", (e) => {
         nodo.temperaturaFuente = parseFloat(e.target.value) || 25;
+        const varTemp = nodo.variableTemp || (nodo.variableY && nodo.id && nodo.id.startsWith("chip") ? nodo.variableY : null);
+        if (varTemp) {
+          this.valoresVariables[varTemp] = nodo.temperaturaFuente;
+          if (typeof this.onVariableModificada === "function") {
+            this.onVariableModificada({ nombre: varTemp, valor: nodo.temperaturaFuente });
+          }
+        }
         this._notificarCambioGrafo();
+      });
+      this.dom.inspectorContenido.querySelector("#insp-nodo-vincular")?.addEventListener("click", () => {
+        const canal = this.dom.inspectorContenido.querySelector("#insp-nodo-eje-var")?.value || "Y";
+        const varName = (this.dom.inspectorContenido.querySelector("#insp-nodo-var")?.value || "").trim();
+        if (varName) {
+          if (canal === "Y") {
+            nodo.variableY = varName;
+          } else if (canal === "X") {
+            nodo.variableX = varName;
+          } else if (canal === "iman") {
+            nodo.variableIman = varName;
+          } else if (canal === "carga") {
+            nodo.variableCarga = varName;
+          }
+          const valActual = canal === "iman" ? (nodo.imanDipolo || 1) : (canal === "carga" ? (nodo.cargaElectrica || 10) : (canal === "X" ? nodo.x : nodo.y));
+          this.valoresVariables[varName] = valActual;
+          if (typeof this.onVariableVinculada === "function") {
+            this.onVariableVinculada({
+              nombre: varName,
+              etiqueta: `${varName}: Propiedad ${canal} de ${nodo.nombre}`,
+              tipo: "continuo",
+              min: valActual < 0 ? parseFloat((valActual * 1.5).toFixed(1)) : Math.max(0.1, parseFloat((valActual * 0.5).toFixed(1))),
+              max: valActual > 0 ? parseFloat((valActual * 1.5).toFixed(1)) : parseFloat((valActual * 0.5).toFixed(1)),
+              valorNominal: valActual
+            });
+          }
+          this._actualizarPanelVariablesVinculadas();
+          this._notificarCambioGrafo();
+        }
       });
       this.dom.inspectorContenido.querySelector("#insp-nodo-borrar")?.addEventListener("click", () => {
         this.grafo.nodos = this.grafo.nodos.filter(n => n.id !== id);
@@ -1397,6 +1527,34 @@ export class EditorGraficoView {
           this.valoresVariables[varNom] = barra.longitud;
           if (typeof this.onVariableModificada === "function") {
             this.onVariableModificada({ nombre: varNom, valor: barra.longitud });
+          }
+        } else {
+          // Si no tiene variable asignada, mueve el nodo B libre para que la geometría refleje la nueva longitud
+          const nA = this.grafo.nodos.find(n => n.id === barra.nodoA);
+          const nB = this.grafo.nodos.find(n => n.id === barra.nodoB);
+          if (nA && nB && nB.tipo !== "fijo") {
+            const dx = nB.x - nA.x;
+            const dy = nB.y - nA.y;
+            const distActual = Math.hypot(dx, dy) || 1;
+            const factor = barra.longitud / distActual;
+            nB.x = parseFloat((nA.x + dx * factor).toFixed(2));
+            nB.y = parseFloat((nA.y + dy * factor).toFixed(2));
+            if (nB.variableX) {
+              const ox = nB.offsetX || 0, ex = nB.escalaX || 1;
+              const valX = parseFloat(((nB.x - ox) / ex).toFixed(2));
+              this.valoresVariables[nB.variableX] = valX;
+              if (typeof this.onVariableModificada === "function") {
+                this.onVariableModificada({ nombre: nB.variableX, valor: valX });
+              }
+            }
+            if (nB.variableY) {
+              const oy = nB.offsetY || 0, ey = nB.escalaY || 1;
+              const valY = parseFloat(((nB.y - oy) / ey).toFixed(2));
+              this.valoresVariables[nB.variableY] = valY;
+              if (typeof this.onVariableModificada === "function") {
+                this.onVariableModificada({ nombre: nB.variableY, valor: valY });
+              }
+            }
           }
         }
         sincronizarPosicionesNodosGrafo(this.grafo, this.valoresVariables, this.thetaActual);
@@ -2032,7 +2190,15 @@ export class EditorGraficoView {
       const sc = this.mundoAPantalla(nAct.x, nAct.y);
       let infoTxt = `${nAct.nombre}: (${nAct.x.toFixed(1)}, ${nAct.y.toFixed(1)})`;
       if (nAct.variableX && nAct.variableY) {
-        infoTxt = `${nAct.variableX}=${Math.abs(nAct.x).toFixed(1)}, ${nAct.variableY}=${Math.abs(nAct.y).toFixed(1)}`;
+        const vx = this.valoresVariables[nAct.variableX] !== undefined ? this.valoresVariables[nAct.variableX] : nAct.x;
+        const vy = this.valoresVariables[nAct.variableY] !== undefined ? this.valoresVariables[nAct.variableY] : nAct.y;
+        infoTxt = `${nAct.variableX}=${vx.toFixed(1)}, ${nAct.variableY}=${vy.toFixed(1)}`;
+      } else if (nAct.variableY) {
+        const vy = this.valoresVariables[nAct.variableY] !== undefined ? this.valoresVariables[nAct.variableY] : nAct.y;
+        infoTxt = `${nAct.nombre}: ${nAct.variableY} = ${vy.toFixed(1)}`;
+      } else if (nAct.variableX) {
+        const vx = this.valoresVariables[nAct.variableX] !== undefined ? this.valoresVariables[nAct.variableX] : nAct.x;
+        infoTxt = `${nAct.nombre}: ${nAct.variableX} = ${vx.toFixed(1)}`;
       }
       ctx.font = "bold 10px monospace";
       const wTip = ctx.measureText(infoTxt).width + 14;

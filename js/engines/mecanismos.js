@@ -37,11 +37,15 @@ export class GrafoMecanismoMultifisica {
       tipo: nodo.tipo || "libre", // 'fijo' | 'libre' | 'deslizante'
       anguloGuia: Number(nodo.anguloGuia !== undefined ? nodo.anguloGuia : 0.0),
       masa: Number(nodo.masa !== undefined ? nodo.masa : 1.0),
-      carga: Number(nodo.carga !== undefined ? nodo.carga : 0.0),
+      carga: Number(nodo.carga !== undefined ? nodo.carga : (nodo.cargaElectrica !== undefined ? nodo.cargaElectrica : 0.0)),
+      cargaElectrica: Number(nodo.cargaElectrica !== undefined ? nodo.cargaElectrica : (nodo.carga !== undefined ? nodo.carga : 0.0)),
       imanDipolo: Number(nodo.imanDipolo !== undefined ? nodo.imanDipolo : 0.0),
       temperaturaFuente: Number(nodo.temperaturaFuente !== undefined ? nodo.temperaturaFuente : 0.0),
       variableX: nodo.variableX || null,
       variableY: nodo.variableY || null,
+      variableIman: nodo.variableIman || null,
+      variableCarga: nodo.variableCarga || null,
+      variableTemp: nodo.variableTemp || null,
       signoX: nodo.signoX !== undefined ? Number(nodo.signoX) : undefined,
       signoY: nodo.signoY !== undefined ? Number(nodo.signoY) : undefined,
       offsetX: nodo.offsetX !== undefined ? Number(nodo.offsetX) : 0,
@@ -632,10 +636,14 @@ export function simularCicloMecanismo(grafo, vars = {}, opciones = {}) {
     });
     grafo.nodos?.forEach(n => {
       if (n.variableX && varsEfectivas[n.variableX] === undefined) {
-        varsEfectivas[n.variableX] = Math.abs(n.x);
+        const ox = n.offsetX || 0, ex = n.escalaX || 1;
+        const raw = (n.x - ox) / ex;
+        varsEfectivas[n.variableX] = parseFloat((n.signoX !== undefined ? Math.abs(raw) : raw).toFixed(2));
       }
       if (n.variableY && varsEfectivas[n.variableY] === undefined) {
-        varsEfectivas[n.variableY] = Math.abs(n.y);
+        const oy = n.offsetY || 0, ey = n.escalaY || 1;
+        const raw = (n.y - oy) / ey;
+        varsEfectivas[n.variableY] = parseFloat((n.signoY !== undefined ? Math.abs(raw) : raw).toFixed(2));
       }
     });
     grafo.motores?.forEach(m => {
@@ -1083,12 +1091,12 @@ export function crearGrafoConfinamientoEM(vars = {}) {
   const vInf = vars.vInf !== undefined ? Number(vars.vInf) : -80.0;
 
   grafo.agregarNodo({ id: "inyector", nombre: "Inyector Haz q+ (-40,0)", x: -40.0, y: 0.0, tipo: "fijo", carga: 1.0 });
-  grafo.agregarNodo({ id: "bobina1", nombre: "Bobina 1 Sup-Izq (i1)", x: -18.0, y: 16.0 + i1 * 0.5, tipo: "libre", variableY: "i1", offsetY: 16.0, escalaY: 0.5, imanDipolo: i1 || 4.0 });
-  grafo.agregarNodo({ id: "bobina2", nombre: "Bobina 2 Sup-Der (i2)", x: 18.0, y: 16.0 + i2 * 0.5, tipo: "libre", variableY: "i2", offsetY: 16.0, escalaY: 0.5, imanDipolo: i2 || -4.0 });
-  grafo.agregarNodo({ id: "bobina3", nombre: "Bobina 3 Inf-Izq (i3)", x: -18.0, y: -16.0 + i3 * 0.5, tipo: "libre", variableY: "i3", offsetY: -16.0, escalaY: 0.5, imanDipolo: i3 || -4.0 });
-  grafo.agregarNodo({ id: "bobina4", nombre: "Bobina 4 Inf-Der (i4)", x: 18.0, y: -16.0 + i4 * 0.5, tipo: "libre", variableY: "i4", offsetY: -16.0, escalaY: 0.5, imanDipolo: i4 || 4.0 });
-  grafo.agregarNodo({ id: "placa_sup", nombre: "Placa Deflectora Sup (vSup)", x: 0.0, y: 24.0 + vSup * 0.02, tipo: "libre", variableY: "vSup", offsetY: 24.0, escalaY: 0.02, carga: vSup });
-  grafo.agregarNodo({ id: "placa_inf", nombre: "Placa Deflectora Inf (vInf)", x: 0.0, y: -24.0 + vInf * 0.02, tipo: "libre", variableY: "vInf", offsetY: -24.0, escalaY: 0.02, carga: vInf });
+  grafo.agregarNodo({ id: "bobina1", nombre: "Bobina 1 Sup-Izq (i1)", x: -18.0, y: 16.0 + i1 * 0.5, tipo: "libre", variableY: "i1", variableIman: "i1", offsetY: 16.0, escalaY: 0.5, imanDipolo: i1 });
+  grafo.agregarNodo({ id: "bobina2", nombre: "Bobina 2 Sup-Der (i2)", x: 18.0, y: 16.0 + i2 * 0.5, tipo: "libre", variableY: "i2", variableIman: "i2", offsetY: 16.0, escalaY: 0.5, imanDipolo: i2 });
+  grafo.agregarNodo({ id: "bobina3", nombre: "Bobina 3 Inf-Izq (i3)", x: -18.0, y: -16.0 + i3 * 0.5, tipo: "libre", variableY: "i3", variableIman: "i3", offsetY: -16.0, escalaY: 0.5, imanDipolo: i3 });
+  grafo.agregarNodo({ id: "bobina4", nombre: "Bobina 4 Inf-Der (i4)", x: 18.0, y: -16.0 + i4 * 0.5, tipo: "libre", variableY: "i4", variableIman: "i4", offsetY: -16.0, escalaY: 0.5, imanDipolo: i4 });
+  grafo.agregarNodo({ id: "placa_sup", nombre: "Placa Deflectora Sup (vSup)", x: 0.0, y: 24.0 + vSup * 0.02, tipo: "libre", variableY: "vSup", variableCarga: "vSup", offsetY: 24.0, escalaY: 0.02, cargaElectrica: vSup });
+  grafo.agregarNodo({ id: "placa_inf", nombre: "Placa Deflectora Inf (vInf)", x: 0.0, y: -24.0 + vInf * 0.02, tipo: "libre", variableY: "vInf", variableCarga: "vInf", offsetY: -24.0, escalaY: 0.02, cargaElectrica: vInf });
   grafo.agregarNodo({ id: "foco_lorentz", nombre: "Punto Focal Lorentz", x: 0.0, y: 3.0, tipo: "libre" });
   grafo.agregarNodo({ id: "detector", nombre: "Detector Salida (38,6)", x: 38.0, y: 6.0, tipo: "fijo" });
 
@@ -1384,10 +1392,80 @@ export function crearGrafoBalanceoFases(vars = {}) {
   return grafo;
 }
 
+// Genera el grafo interactivo para la Antena Evolutiva NASA ST5 (4 brazos C4 con hilos segmentados)
+export function crearGrafoAntenaNASA(vars = {}) {
+  const grafo = new GrafoMecanismoMultifisica();
+  const L1 = vars.L1 !== undefined ? Number(vars.L1) : 14.2;
+  const dTheta1 = vars.dTheta1 !== undefined ? Number(vars.dTheta1) : 38.0;
+  const L2 = vars.L2 !== undefined ? Number(vars.L2) : 17.5;
+  const dTheta2 = vars.dTheta2 !== undefined ? Number(vars.dTheta2) : -48.0;
+  const L3 = vars.L3 !== undefined ? Number(vars.L3) : 15.0;
+  const dTheta3 = vars.dTheta3 !== undefined ? Number(vars.dTheta3) : 42.0;
+
+  const toRad = Math.PI / 180;
+  const theta1 = (45.0 + dTheta1 * 0.4) * toRad;
+  const theta2 = theta1 + dTheta1 * toRad;
+  const theta3 = theta2 + dTheta2 * toRad;
+
+  grafo.agregarNodo({ id: "feed", nombre: "Puerto Alimentación Central (0,0)", x: 0.0, y: 0.0, tipo: "fijo", carga: 1.0 });
+
+  // Puntos base para el brazo 1
+  const p1_x = L1 * Math.cos(theta1);
+  const p1_y = L1 * Math.sin(theta1);
+  const p2_x = p1_x + L2 * Math.cos(theta2);
+  const p2_y = p1_y + L2 * Math.sin(theta2);
+  const p3_x = p2_x + L3 * Math.cos(theta3);
+  const p3_y = p2_y + L3 * Math.sin(theta3);
+
+  const coloresBrazos = ["#f59e0b", "#38bdf8", "#10b981", "#a855f7"];
+
+  for (let b = 0; b < 4; b++) {
+    const rot = b * (Math.PI / 2);
+    const cosR = Math.cos(rot);
+    const sinR = Math.sin(rot);
+
+    const rotar = (x, y) => ({
+      x: parseFloat((x * cosR - y * sinR).toFixed(2)),
+      y: parseFloat((x * sinR + y * cosR).toFixed(2))
+    });
+
+    const c1 = rotar(p1_x, p1_y);
+    const c2 = rotar(p2_x, p2_y);
+    const c3 = rotar(p3_x, p3_y);
+
+    const id1 = `nodo_b${b}_c1`;
+    const id2 = `nodo_b${b}_c2`;
+    const id3 = `nodo_b${b}_c3`;
+
+    if (b === 0) {
+      // Brazo maestro con variables directamente arrastrables en CAD
+      grafo.agregarNodo({ id: id1, nombre: "Codo 1 (L1, Δθ1)", x: c1.x, y: c1.y, tipo: "libre", variableX: "L1", variableY: "dTheta1", offsetY: c1.y - dTheta1, escalaY: 1.0 });
+      grafo.agregarNodo({ id: id2, nombre: "Codo 2 (L2, Δθ2)", x: c2.x, y: c2.y, tipo: "libre", variableX: "L2", variableY: "dTheta2", offsetY: c2.y - dTheta2, escalaY: 1.0 });
+      grafo.agregarNodo({ id: id3, nombre: "Extremo 3 (L3, Δθ3)", x: c3.x, y: c3.y, tipo: "libre", variableX: "L3", variableY: "dTheta3", offsetY: c3.y - dTheta3, escalaY: 1.0 });
+    } else {
+      grafo.agregarNodo({ id: id1, nombre: `Brazo ${b + 1} Codo 1`, x: c1.x, y: c1.y, tipo: "libre" });
+      grafo.agregarNodo({ id: id2, nombre: `Brazo ${b + 1} Codo 2`, x: c2.x, y: c2.y, tipo: "libre" });
+      grafo.agregarNodo({ id: id3, nombre: `Brazo ${b + 1} Extremo`, x: c3.x, y: c3.y, tipo: "libre" });
+    }
+
+    const col = coloresBrazos[b];
+    grafo.agregarBarra({ id: `barra_b${b}_1`, nombre: `Segmento 1 (Brazo ${b + 1})`, nodoA: "feed", nodoB: id1, longitud: L1, variableAsociada: b === 0 ? "L1" : null, color: col, grosor: 2.8 });
+    grafo.agregarBarra({ id: `barra_b${b}_2`, nombre: `Segmento 2 (Brazo ${b + 1})`, nodoA: id1, nodoB: id2, longitud: L2, variableAsociada: b === 0 ? "L2" : null, color: col, grosor: 2.8 });
+    grafo.agregarBarra({ id: `barra_b${b}_3`, nombre: `Segmento 3 (Brazo ${b + 1})`, nodoA: id2, nodoB: id3, longitud: L3, variableAsociada: b === 0 ? "L3" : null, color: col, grosor: 2.8 });
+  }
+
+  grafo.agregarSensor({ id: "sensor_vswr", nombre: "vswr", nodoId: "feed", magnitudes: ["posicion", "campo_electrico"], color: "#f59e0b" });
+  grafo.agregarSensor({ id: "sensor_directividad", nombre: "radiacion_lobe", nodoId: "nodo_b0_c3", magnitudes: ["posicion", "trayectoria"], color: "#38bdf8" });
+
+  return grafo;
+}
+
 // Factoría unificada que construye el grafo CAD 2D correspondiente a cualquier identificador de modelo
 export function crearGrafoPorModelo(id, vars = {}) {
   const clave = String(id || "").replace(/_/g, "-");
   switch (clave) {
+    case "antena-nasa":
+      return crearGrafoAntenaNASA(vars);
     case "brazo-robotico":
       return crearGrafoBrazoRobotico(vars);
     case "pata-jansen":

@@ -1028,24 +1028,46 @@ return [suavidad, errZancada];`;
       }
     });
 
-    // 2. Nodos con variables de posición (como a y l en X_fijo)
+    // 2. Nodos con variables de posición (como a y l en X_fijo, i1..i4, vSup, vInf)
     grafo.nodos?.forEach(n => {
       if (n.variableX) {
-        const valX = parseFloat(Math.abs(n.x).toFixed(1));
+        const ox = n.offsetX || 0, ex = n.escalaX || 1;
+        const rawX = (n.x - ox) / ex;
+        const valX = parseFloat((n.signoX !== undefined ? Math.abs(rawX) : rawX).toFixed(2));
         this._asegurarVariableEnTabla({
           nombre: n.variableX,
           valor: valX,
-          min: Math.max(0.1, Number((valX * 0.7).toFixed(1))),
-          max: Number((valX * 1.3).toFixed(1))
+          min: valX < 0 ? Number((valX * 1.3).toFixed(1)) : Math.max(0.1, Number((valX * 0.7).toFixed(1))),
+          max: valX > 0 ? Number((valX * 1.3).toFixed(1)) : Number((valX * 0.7).toFixed(1))
         });
       }
       if (n.variableY) {
-        const valY = parseFloat(Math.abs(n.y).toFixed(1));
+        const oy = n.offsetY || 0, ey = n.escalaY || 1;
+        const rawY = (n.y - oy) / ey;
+        const valY = parseFloat((n.signoY !== undefined ? Math.abs(rawY) : rawY).toFixed(2));
         this._asegurarVariableEnTabla({
           nombre: n.variableY,
           valor: valY,
-          min: Math.max(0.1, Number((valY * 0.7).toFixed(1))),
-          max: Number((valY * 1.3).toFixed(1))
+          min: valY < 0 ? Number((valY * 1.3).toFixed(1)) : Math.max(0.1, Number((valY * 0.7).toFixed(1))),
+          max: valY > 0 ? Number((valY * 1.3).toFixed(1)) : Number((valY * 0.7).toFixed(1))
+        });
+      }
+      if (n.variableIman) {
+        const valI = n.imanDipolo !== undefined ? n.imanDipolo : 1;
+        this._asegurarVariableEnTabla({
+          nombre: n.variableIman,
+          valor: valI,
+          min: valI < 0 ? Number((valI * 1.3).toFixed(1)) : Math.max(0.1, Number((valI * 0.7).toFixed(1))),
+          max: valI > 0 ? Number((valI * 1.3).toFixed(1)) : Number((valI * 0.7).toFixed(1))
+        });
+      }
+      if (n.variableCarga) {
+        const valC = n.cargaElectrica !== undefined ? n.cargaElectrica : 10;
+        this._asegurarVariableEnTabla({
+          nombre: n.variableCarga,
+          valor: valC,
+          min: valC < 0 ? Number((valC * 1.3).toFixed(1)) : Math.max(0.1, Number((valC * 0.7).toFixed(1))),
+          max: valC > 0 ? Number((valC * 1.3).toFixed(1)) : Number((valC * 0.7).toFixed(1))
         });
       }
     });
@@ -1078,10 +1100,10 @@ return [suavidad, errZancada];`;
 
     if (slider) {
       if (numVal < parseFloat(slider.min)) {
-        slider.min = (numVal * 0.8).toFixed(1);
+        slider.min = (numVal < 0 ? numVal * 1.25 : numVal * 0.8).toFixed(1);
       }
       if (numVal > parseFloat(slider.max)) {
-        slider.max = (numVal * 1.2).toFixed(1);
+        slider.max = (numVal > 0 ? numVal * 1.25 : numVal * 0.8).toFixed(1);
       }
       slider.value = numVal;
     }
@@ -1103,10 +1125,10 @@ return [suavidad, errZancada];`;
         const inpNominal = fila.querySelector(".var-nominal");
         const hintEl = fila.querySelector(".var-etiqueta-hint");
         if (inpMin && numVal < parseFloat(inpMin.value)) {
-          inpMin.value = Math.max(0.1, Number((numVal * 0.7).toFixed(1)));
+          inpMin.value = Number((numVal < 0 ? numVal * 1.3 : numVal * 0.7).toFixed(1));
         }
         if (inpMax && numVal > parseFloat(inpMax.value)) {
-          inpMax.value = Number((numVal * 1.3).toFixed(1));
+          inpMax.value = Number((numVal > 0 ? numVal * 1.3 : numVal * 0.7).toFixed(1));
         }
         if (inpNominal) {
           inpNominal.value = numVal;
@@ -1119,8 +1141,8 @@ return [suavidad, errZancada];`;
         this._asegurarVariableEnTabla({
           nombre,
           valor: numVal,
-          min: Math.max(0.1, Number((numVal * 0.7).toFixed(1))),
-          max: Number((numVal * 1.3).toFixed(1))
+          min: numVal < 0 ? Number((numVal * 1.3).toFixed(1)) : Math.max(0.1, Number((numVal * 0.7).toFixed(1))),
+          max: numVal > 0 ? Number((numVal * 1.3).toFixed(1)) : Number((numVal * 0.7).toFixed(1))
         });
       }
     }
