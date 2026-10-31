@@ -3,8 +3,8 @@
 // ARQUITECTURA MVVM (MODEL - VIEW - VIEWMODEL) EN VANILLA JS / ES MODULES
 // =========================================================================
 
-import { AppViewModel } from "./viewmodels/app-viewmodel.js?v=3.0";
-import { AppView } from "./views/app-view.js?v=3.0";
+import { AppViewModel } from "./viewmodels/app-viewmodel.js?v=3.1";
+import { AppView } from "./views/app-view.js?v=3.1";
 
 // Referencias de la aplicación para control y depuración
 let viewModel = null;

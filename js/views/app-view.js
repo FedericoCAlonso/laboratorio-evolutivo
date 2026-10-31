@@ -3,11 +3,11 @@
 // ARQUITECTURA MVVM - ENLACE BIDIRECCIONAL ENTRE EL VIEWMODEL Y EL DOM
 // =========================================================================
 
-import { GraficoView } from "./grafico-view.js?v=3.0";
-import { ModalesView } from "./modales-view.js?v=3.0";
-import { EstudioView } from "./estudio-view.js?v=3.0";
-import { obtenerVisualizador, detenerTodosLosVisualizadores } from "./visualizers.js?v=3.0";
-import { obtenerPlantillaSimulacion } from "../builder.js?v=3.0";
+import { GraficoView } from "./grafico-view.js?v=3.1";
+import { ModalesView } from "./modales-view.js?v=3.1";
+import { EstudioView } from "./estudio-view.js?v=3.1";
+import { obtenerVisualizador, detenerTodosLosVisualizadores } from "./visualizers.js?v=3.1";
+import { obtenerPlantillaSimulacion } from "../builder.js?v=3.1";
 import {
   construirFormularioModelo,
   obtenerDatosEntradaModelo,
@@ -95,6 +95,7 @@ export class AppView {
       panelSensoresMovil: document.getElementById("panel-sensores-movil"),
       badgeEstadoSensores: document.getElementById("badge-estado-sensores"),
       btnActivarGiroscopio: document.getElementById("btn-activar-giroscopio"),
+      btnCerrarSensoresMovil: document.getElementById("btn-cerrar-sensores-movil"),
       btnShakeMutar: document.getElementById("btn-shake-mutar"),
       selectModoSensorMovil: document.getElementById("select-modo-sensor-movil"),
       sliderInclinacionMovil: document.getElementById("slider-inclinacion-movil"),
@@ -210,31 +211,90 @@ export class AppView {
     this.dom.btnBnavEstudio?.classList.toggle("activo", vistaActiva === "estudio");
   }
 
-  // Alterna la visibilidad del panel de control por sensores físicos del celular y activa el giroscopio si se abre.
+  // Manejador del evento deviceorientation del navegador (inclinación)
+  _onDeviceOrientation = (e) => {
+    if (!this.sensoresMovilActivos) return;
+    const gamma = typeof e.gamma === "number" ? e.gamma : 0; // Inclinación Izq/Der (-90 a 90)
+    const beta = typeof e.beta === "number" ? e.beta : 0;   // Inclinación Adelante/Atrás (-180 a 180)
+    const normGamma = Math.max(-60, Math.min(60, gamma));
+    const angGrados = Math.round(((normGamma + 60) / 120) * 359) % 360;
+    this._aplicarAnguloInclinacion(angGrados, Math.round(gamma), Math.round(beta));
+  };
+
+  // Manejador del evento devicemotion del navegador (acelerómetro y sacudida / shake)
+  _onDeviceMotion = (e) => {
+    if (!this.sensoresMovilActivos) return;
+    const acc = e.accelerationIncludingGravity || e.acceleration;
+    if (!acc) return;
+    const mag = Math.hypot(acc.x || 0, acc.y || 0, acc.z || 0);
+    if (mag > 21.5) {
+      const ahora = Date.now();
+      if (ahora - this.ultimoShakeMs > 1200) {
+        this.ultimoShakeMs = ahora;
+        this._ejecutarAccionShake();
+      }
+    }
+  };
+
+  // Alterna la visibilidad del panel de control por sensores físicos del celular. Si se cierra, apaga los sensores.
   _alternarPanelSensoresMovil() {
     if (!this.dom.panelSensoresMovil) return;
     const oculto = this.dom.panelSensoresMovil.style.display === "none";
-    this.dom.panelSensoresMovil.style.display = oculto ? "flex" : "none";
-    this.dom.btnBnavSensores?.classList.toggle("activo", oculto);
-    if (oculto && !this.sensoresMovilActivos) {
-      this._activarSensoresHardwareMovil();
+    if (oculto) {
+      this.dom.panelSensoresMovil.style.display = "flex";
+      this.dom.btnBnavSensores?.classList.add("activo");
+      if (!this.sensoresMovilActivos) {
+        this._activarSensoresHardwareMovil();
+      }
+    } else {
+      this.dom.panelSensoresMovil.style.display = "none";
+      this.dom.btnBnavSensores?.classList.remove("activo");
+      if (this.sensoresMovilActivos) {
+        this._desactivarSensoresHardwareMovil(true);
+      }
     }
+  }
+
+  // Desactiva por completo el giroscopio y acelerómetro del celular removiendo los listeners de window.
+  _desactivarSensoresHardwareMovil(notificarUsuario = true) {
+    this.sensoresMovilActivos = false;
+
+    if (typeof window !== "undefined") {
+      window.removeEventListener("deviceorientation", this._onDeviceOrientation);
+      window.removeEventListener("devicemotion", this._onDeviceMotion);
+      this._listenersSensoresRegistrados = false;
+    }
+
+    if (this.dom.badgeEstadoSensores) {
+      this.dom.badgeEstadoSensores.textContent = "Apagado";
+      this.dom.badgeEstadoSensores.className = "badge-sensor-off";
+    }
+
+    if (this.dom.btnActivarGiroscopio) {
+      this.dom.btnActivarGiroscopio.textContent = "🧭 Activar Giroscopio / Acelerómetro";
+      this.dom.btnActivarGiroscopio.className = "btn-m3-filled";
+    }
+
+    if (this.dom.lecturaSensoresMovil) {
+      this.dom.lecturaSensoresMovil.textContent = "γ: 0° · β: 0° · θ: 0°";
+    }
+
+    if (notificarUsuario) {
+      this.modalesView.notificar("🛑 Sensores apagados (acelerómetro y giroscopio desconectados)");
+    }
+  }
+
+  // Alterna entre encender y apagar el giroscopio y acelerómetro
+  async _conmutarSensoresHardwareMovil() {
+    if (this.sensoresMovilActivos) {
+      this._desactivarSensoresHardwareMovil(true);
+      return;
+    }
+    await this._activarSensoresHardwareMovil();
   }
 
   // Solicita permisos (iOS 13+) y enlaza DeviceOrientationEvent y DeviceMotionEvent del celular.
   async _activarSensoresHardwareMovil() {
-    if (this.sensoresMovilActivos) {
-      this.sensoresMovilActivos = false;
-      if (this.dom.badgeEstadoSensores) {
-        this.dom.badgeEstadoSensores.textContent = "Pausado";
-        this.dom.badgeEstadoSensores.className = "badge-sensor-off";
-      }
-      if (this.dom.btnActivarGiroscopio) {
-        this.dom.btnActivarGiroscopio.textContent = "🧭 Activar Giroscopio / Acelerómetro";
-      }
-      return;
-    }
-
     try {
       if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
         const perm = await DeviceOrientationEvent.requestPermission();
@@ -256,35 +316,16 @@ export class AppView {
       this.dom.badgeEstadoSensores.className = "badge-sensor-on";
     }
     if (this.dom.btnActivarGiroscopio) {
-      this.dom.btnActivarGiroscopio.textContent = "⏸ Pausar Giroscopio";
+      this.dom.btnActivarGiroscopio.textContent = "🛑 Apagar Sensores / Acelerómetro";
+      this.dom.btnActivarGiroscopio.className = "btn-peligro";
     }
 
-    if (!this._listenersSensoresRegistrados && typeof window !== "undefined") {
+    if (typeof window !== "undefined") {
+      window.removeEventListener("deviceorientation", this._onDeviceOrientation);
+      window.removeEventListener("devicemotion", this._onDeviceMotion);
+      window.addEventListener("deviceorientation", this._onDeviceOrientation, { passive: true });
+      window.addEventListener("devicemotion", this._onDeviceMotion, { passive: true });
       this._listenersSensoresRegistrados = true;
-
-      window.addEventListener("deviceorientation", (e) => {
-        if (!this.sensoresMovilActivos) return;
-        const gamma = typeof e.gamma === "number" ? e.gamma : 0; // Inclinación Izq/Der (-90 a 90)
-        const beta = typeof e.beta === "number" ? e.beta : 0;   // Inclinación Adelante/Atrás (-180 a 180)
-        // Mapea la inclinación del teléfono a un ángulo continuo de 0° a 359°
-        const normGamma = Math.max(-60, Math.min(60, gamma));
-        const angGrados = Math.round(((normGamma + 60) / 120) * 359) % 360;
-        this._aplicarAnguloInclinacion(angGrados, Math.round(gamma), Math.round(beta));
-      }, { passive: true });
-
-      window.addEventListener("devicemotion", (e) => {
-        if (!this.sensoresMovilActivos) return;
-        const acc = e.accelerationIncludingGravity || e.acceleration;
-        if (!acc) return;
-        const mag = Math.hypot(acc.x || 0, acc.y || 0, acc.z || 0);
-        if (mag > 21.5) {
-          const ahora = Date.now();
-          if (ahora - this.ultimoShakeMs > 1200) {
-            this.ultimoShakeMs = ahora;
-            this._ejecutarAccionShake();
-          }
-        }
-      }, { passive: true });
     }
 
     this.modalesView.notificar("📡 Giroscopio activo: inclina el celular para mover el mecanismo o agítalo para mutar");
@@ -598,13 +639,35 @@ export class AppView {
     // Controles de Sensores Móviles (Giroscopio, Inclinación y Agitar/Shake)
     this.dom.btnAbrirSensoresMovil?.addEventListener("click", () => this._alternarPanelSensoresMovil());
     this.dom.btnBnavSensores?.addEventListener("click", () => this._alternarPanelSensoresMovil());
-    this.dom.btnActivarGiroscopio?.addEventListener("click", () => this._activarSensoresHardwareMovil());
+    this.dom.btnCerrarSensoresMovil?.addEventListener("click", () => this._alternarPanelSensoresMovil());
+    this.dom.btnActivarGiroscopio?.addEventListener("click", () => this._conmutarSensoresHardwareMovil());
     this.dom.btnShakeMutar?.addEventListener("click", () => this._ejecutarAccionShake());
     this.dom.sliderInclinacionMovil?.addEventListener("input", (e) => {
       const ang = parseInt(e.target.value, 10) || 0;
       const gammaSim = Math.round(((ang / 359) * 120) - 60);
       this._aplicarAnguloInclinacion(ang, gammaSim, 0);
     });
+
+    // Gestión del ciclo de vida móvil: liberar acelerómetro al cambiar de app o suspender pantalla
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden && this.sensoresMovilActivos) {
+          this._desactivarSensoresHardwareMovil(false);
+          this._sensoresReactivarAlVolver = true;
+        } else if (!document.hidden && this._sensoresReactivarAlVolver) {
+          this._sensoresReactivarAlVolver = false;
+          this._activarSensoresHardwareMovil();
+        }
+      });
+    }
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("pagehide", () => {
+        if (this.sensoresMovilActivos) {
+          this._desactivarSensoresHardwareMovil(false);
+        }
+      });
+    }
 
     this.dom.btnBnavBiblioteca?.addEventListener("click", () => {
       this._abrirBiblioteca();
