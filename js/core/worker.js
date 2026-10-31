@@ -3,7 +3,7 @@
 // =========================================================================
 
 import { Motor } from "./motor.js";
-import { obtenerModeloPorId, registrarModeloDinamico } from "../models/index.js";
+import { obtenerModeloPorId, registrarModeloDinamico } from "../../catalogo/index.js";
 import { compilarModeloDinamico } from "../builder.js";
 
 // Instancia activa del motor evolutivo.

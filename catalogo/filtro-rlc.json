@@ -1,0 +1,187 @@
+{
+  "$schema": "./schema-modelo.json",
+  "id": "filtro-rlc",
+  "version": "1.0",
+  "nombre": "Síntesis de Filtro Analógico RLC",
+  "descripcion": "Optimiza los valores de componentes pasivos R, L y C para sintetizar un filtro pasabanda sintonizado con ancho de banda y atenuación deseados.",
+  "categoria": "Electrónica y Señales",
+  "dificultad": "Principiante",
+  "tags": [
+    "electrónica",
+    "filtro",
+    "rlc",
+    "frecuencia",
+    "resonancia",
+    "bode"
+  ],
+  "tipoVisualizacion": "filtro_rlc",
+  "variables": [
+    {
+      "nombre": "logR",
+      "etiqueta": "log10(R) con R en Ohm (10 a 10k)",
+      "tipo": "continuo",
+      "min": 1,
+      "max": 4
+    },
+    {
+      "nombre": "logL",
+      "etiqueta": "log10(L) con L en Henrios (0.1 mH a 1 H)",
+      "tipo": "continuo",
+      "min": -4,
+      "max": 0
+    },
+    {
+      "nombre": "logC",
+      "etiqueta": "log10(C) con C en Faradios (1 nF a 100 uF)",
+      "tipo": "continuo",
+      "min": -9,
+      "max": -4
+    }
+  ],
+  "codigoEvaluacion": "// Especificación por defecto del modelo nativo\nconst fDeseada = 1000.0, bwDeseado = 200.0;\n\n// Componentes a partir de sus logaritmos\nconst R = Math.pow(10, vars.logR);\nconst L = Math.pow(10, vars.logL);\nconst C = Math.pow(10, vars.logC);\n\n// Resonancia, factor de calidad y ancho de banda real\nconst w0 = 1.0 / Math.sqrt(L * C);\nconst f0 = w0 / (2 * Math.PI);\nconst Q = (1.0 / R) * Math.sqrt(L / C);\nconst bwReal = Q > 0 ? f0 / Q : 99999;\n\n// Barrido logarítmico de 70 puntos entre 20 Hz y 50 kHz\nconst fMin = 20.0, fMax = 50000.0, numPuntos = 70;\nconst respuesta = [];\nfor (let i = 0; i < numPuntos; i++) {\n  const f = Math.pow(10, Math.log10(fMin) + (i / (numPuntos - 1)) * (Math.log10(fMax) - Math.log10(fMin)));\n  const w = 2 * Math.PI * f;\n\n  // H(jw) = j*w*(w0/Q) / ((w0^2 - w^2) + j*w*(w0/Q))\n  const numImag = w * (w0 / Math.max(0.01, Q));\n  const denReal = (w0 * w0) - (w * w);\n  const denImag = numImag;\n  const modNum = Math.hypot(0, numImag);\n  const modDen = Math.hypot(denReal, denImag);\n  const gananciaLineal = modDen > 0 ? modNum / modDen : 0;\n  respuesta.push({ f, gananciaDB: 20 * Math.log10(Math.max(1e-6, gananciaLineal)) });\n}\n\n// Atenuación en banda de parada a 0.25*f y 4*f de la frecuencia deseada\nconst pBaja = respuesta.find(p => p.f >= fDeseada * 0.25);\nconst pAlta = respuesta.find(p => p.f >= fDeseada * 4.0);\nconst atenuacionBaja = pBaja ? -pBaja.gananciaDB : 0;\nconst atenuacionAlta = pAlta ? -pAlta.gananciaDB : 0;\n\nconst errorFrecuencia = Math.abs(f0 - fDeseada);\nconst errorAnchoBanda = Math.abs(bwReal - bwDeseado);\nconst objSintonia = errorFrecuencia;\nconst objSelectividad = errorAnchoBanda + Math.max(0, 15 - atenuacionBaja) * 5 + Math.max(0, 15 - atenuacionAlta) * 5;\nreturn [objSintonia, objSelectividad];",
+  "grafo": {
+    "nodos": [
+      {
+        "id": "vin",
+        "nombre": "Entrada Vin(f)",
+        "x": -45,
+        "y": 0,
+        "tipo": "fijo",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": null,
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 1
+      },
+      {
+        "id": "nodo_r",
+        "nombre": "Resistor R (logR)",
+        "x": -15,
+        "y": 20,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": "logR",
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 8
+      },
+      {
+        "id": "nodo_l",
+        "nombre": "Inductor L (logL)",
+        "x": 15,
+        "y": -12,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": "logL",
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 6
+      },
+      {
+        "id": "nodo_c",
+        "nombre": "Capacitor C (logC)",
+        "x": 45,
+        "y": -19.5,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": "logC",
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 3
+      }
+    ],
+    "barras": [
+      {
+        "id": "rama_r",
+        "nombre": "Impedancia R",
+        "nodoA": "vin",
+        "nodoB": "nodo_r",
+        "longitud": 32,
+        "variableAsociada": null,
+        "signoTrilateracion": 1,
+        "color": "#ef4444",
+        "grosor": 3.2,
+        "esAuxiliar": false
+      },
+      {
+        "id": "rama_l",
+        "nombre": "Reactancia ωL",
+        "nodoA": "nodo_r",
+        "nodoB": "nodo_l",
+        "longitud": 32,
+        "variableAsociada": null,
+        "signoTrilateracion": 1,
+        "color": "#3b82f6",
+        "grosor": 3.2,
+        "esAuxiliar": false
+      },
+      {
+        "id": "rama_c",
+        "nombre": "Reactancia 1/ωC",
+        "nodoA": "nodo_l",
+        "nodoB": "nodo_c",
+        "longitud": 32,
+        "variableAsociada": null,
+        "signoTrilateracion": 1,
+        "color": "#10b981",
+        "grosor": 3.2,
+        "esAuxiliar": false
+      }
+    ],
+    "cuerposRigidos": [],
+    "motores": [],
+    "transmisiones": [],
+    "sensores": [
+      {
+        "id": "sensor_rlc",
+        "nombre": "vout_bode",
+        "nodoId": "nodo_c",
+        "magnitudes": [
+          "posicion"
+        ],
+        "color": "#38bdf8"
+      }
+    ],
+    "capasFisicas": []
+  }
+}

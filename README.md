@@ -78,9 +78,17 @@ Optimizador genético con modelos matemáticos intercambiables, evolución multi
 │   │   ├── grafico-view.js # Renderizador de curva de convergencia y dispersión de Pareto
 │   │   ├── modales-view.js # Gestor de diálogos modales y biblioteca de simulaciones
 │   │   └── visualizers.js  # Visualizadores cinemáticos y multifísicos interactivos
-│   ├── engines/            # 4 Motores fundamentales de simulación física y cinemática
-│   ├── models/             # 15 Modelos nativos especializados
-│   └── plantillas/         # Plantillas prediseñadas para el Estudio de Modelado
+│   ├── engines/            # 5 Motores fundamentales de simulación física y cinemática
+│   │   ├── campos.js       # Campos electromagnéticos, térmicos y potenciales
+│   │   ├── dinamica.js     # Balística, descenso retropropulsado, órbitas y control PID
+│   │   ├── estructuras.js  # Celosías, brazos robóticos y cinemática de Theo Jansen
+│   │   ├── mecanismos.js   # Editor CAD multicuerpo y grafos cinemáticos
+│   │   ├── ondas.js        # Acústica, absorción porosa y beamforming
+│   │   └── topologia.js    # Nesting 2D de chapa, líneas de transmisión RF y carta de Smith
+├── catalogo/               # 16 Modelos declarativos JSON configurables y schema
+│   ├── *.json              # Definición pura de variables, cotas CAD y código de aptitud
+│   ├── schema-modelo.json  # Esquema JSON formal de validación
+│   └── index.js            # Cargador y registro unificado para Web Workers y UI
 ├── LICENSE                 # Términos de copyright
 └── README.md
 ```

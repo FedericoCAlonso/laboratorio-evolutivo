@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DefinicionModeloOptimizacion",
+  "description": "Esquema declarativo para modelos de optimización configurables",
+  "type": "object",
+  "required": ["id", "nombre", "tipoVisualizacion", "variables", "codigoEvaluacion"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": { "type": "string" },
+    "version": { "type": "string" },
+    "nombre": { "type": "string" },
+    "descripcion": { "type": "string" },
+    "categoria": { "type": "string" },
+    "dificultad": { "type": "string", "enum": ["Principiante", "Intermedio", "Avanzado"] },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "tipoVisualizacion": { "type": "string" },
+    "variables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["nombre", "tipo", "min", "max"],
+        "properties": {
+          "nombre": { "type": "string" },
+          "etiqueta": { "type": "string" },
+          "tipo": { "type": "string", "enum": ["continuo", "entero", "categorico"] },
+          "min": { "type": "number" },
+          "max": { "type": "number" },
+          "valorNominal": { "type": "number" },
+          "unidad": { "type": "string" },
+          "precision": { "type": "number" },
+          "paso": { "type": "number" }
+        }
+      }
+    },
+    "parametrosEntrada": { "type": "array" },
+    "codigoEvaluacion": { "type": "string" },
+    "grafo": {
+      "type": "object",
+      "properties": {
+        "nodos": { "type": "array" },
+        "barras": { "type": "array" },
+        "motores": { "type": "array" },
+        "sensores": { "type": "array" }
+      }
+    }
+  }
+}

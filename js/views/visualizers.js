@@ -27,27 +27,41 @@ if (typeof globalThis.requestAnimationFrame === "undefined") {
   globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
 }
 
-import { resolverCinematicaBrazo, distanciaPuntoASegmento } from "../models/brazo.js";
-import { simularDescensoCohete } from "../models/cohete.js";
-import { simularRespuestaPID } from "../models/pid.js";
-import { ModeloPataCaminante } from "../models/caminante.js";
-import { simularTrayectoriaParticula, calcularPotencialPunto, calcularCampoVectorial } from "../models/potencial.js";
-import { simularManiobraOrbital } from "../models/orbita.js";
-import { simularRespuestaFiltroRLC } from "../models/filtro.js";
-import { resolverEstaticaArmadura } from "../models/armadura.js";
-import { simularCampoTermico } from "../models/termico.js";
-import { simularArregloAcustico } from "../models/acustica.js";
-import { simularTrayectoriaLorentz, calcularCampoMagneticoBz } from "../models/electromagnetismo.js";
-import { simularAbsorbenteAcustico } from "../models/fonoabsorbente.js";
-import { simularLineaTransmisionRF } from "../models/linea-rf.js";
-import { simularCorteChapaNesting } from "../models/nesting.js";
-import { LienzoFuncionalRenderer, LienzoTopologicoRenderer } from "./renderers/index.js";
 import {
-  ModeloPataJansen,
+  resolverCinematicaBrazo,
+  distanciaPuntoASegmento,
+  resolverEstaticaArmadura,
+  obtenerMetricasCaminante,
+  resolverCinematicaCaminante,
+  resolverCinematicaJansen,
+  obtenerMetricasJansen,
   JANSEN_VALORES_REFERENCIA,
   TRAYECTORIA_JANSEN_ORIGINAL,
   obtenerColorAceleracionJansen
-} from "../models/jansen.js";
+} from "../engines/estructuras.js";
+import {
+  simularDescensoCohete,
+  simularRespuestaPID,
+  simularManiobraOrbital,
+  simularRespuestaFiltroRLC
+} from "../engines/dinamica.js";
+import {
+  simularTrayectoriaParticula,
+  calcularPotencialPunto,
+  calcularCampoVectorial,
+  simularCampoTermico,
+  simularTrayectoriaLorentz,
+  calcularCampoMagneticoBz
+} from "../engines/campos.js";
+import {
+  simularArregloAcustico,
+  simularAbsorbenteAcustico
+} from "../engines/ondas.js";
+import {
+  simularLineaTransmisionRF,
+  simularCorteChapaNesting
+} from "../engines/topologia.js";
+import { LienzoFuncionalRenderer, LienzoTopologicoRenderer } from "./renderers/index.js";
 
 let jansenPausado = false;
 let mostrarCotasJansen = false;
@@ -86,8 +100,8 @@ export class VisualizadorJansen {
     const k = typeof genoma?.k === "number" ? genoma.k : (Array.isArray(genoma) ? genoma[11] : 61.9);
     const arregloGenoma = [a, l, b, c, d, e, f, g, h, i, j, k];
 
-    const mMet = ModeloPataJansen.obtenerMetricasDetalladas(arregloGenoma, entrada);
-    const mRef = ModeloPataJansen.obtenerMetricasDetalladas(JANSEN_VALORES_REFERENCIA, entrada);
+    const mMet = obtenerMetricasJansen(arregloGenoma, entrada);
+    const mRef = obtenerMetricasJansen(JANSEN_VALORES_REFERENCIA, entrada);
     const esValido = mMet.valido && mMet.pasos && mMet.pasos.length > 0;
 
     let bannerAlerta = "";
@@ -206,7 +220,7 @@ export class VisualizadorJansen {
     // Pasos cinemáticos para dibujar
     let pasosParaDibujar = esValido ? mMet.pasos : [];
     if (pasosParaDibujar.length === 0) {
-      const pZero = ModeloPataJansen.resolverCinematica(0, arregloGenoma);
+      const pZero = resolverCinematicaJansen(0, arregloGenoma);
       if (pZero) {
         pasosParaDibujar = [pZero];
       } else {
@@ -1368,7 +1382,7 @@ export class VisualizadorCaminante {
     if (!contenedor) return;
     this.detener();
 
-    const m = ModeloPataCaminante.obtenerMetricasDetalladas(genoma, entrada);
+    const m = obtenerMetricasCaminante(genoma, entrada);
 
     if (!m.valido || m.pasos.length === 0) {
       contenedor.innerHTML = `

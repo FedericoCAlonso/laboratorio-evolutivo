@@ -2,7 +2,7 @@
 // TEST DE INTEGRACIÓN: VERIFICACIÓN ARQUITECTURA MVVM
 // =========================================================================
 
-import { MODELOS, obtenerModeloPorId } from "./js/models/index.js";
+import { MODELOS, obtenerModeloPorId } from "./catalogo/index.js";
 import { compilarModeloDinamico, clonarModeloExistente } from "./js/builder.js";
 import {
   VisualizadorBrazo,

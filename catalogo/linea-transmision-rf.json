@@ -1,0 +1,195 @@
+{
+  "$schema": "./schema-modelo.json",
+  "id": "linea-transmision-rf",
+  "version": "1.0",
+  "nombre": "Línea de Transmisión RF (Carta de Smith)",
+  "descripcion": "Optimiza los parámetros de una red de adaptación en línea de transmisión (longitud e impedancia de secciones y stubs) para minimizar la ROE y reflejar cero potencia en alta frecuencia.",
+  "categoria": "Electrónica y Señales",
+  "dificultad": "Avanzado",
+  "tags": [
+    "rf",
+    "línea de transmisión",
+    "impedancia",
+    "carta de smith",
+    "ondas estacionarias"
+  ],
+  "tipoVisualizacion": "linea_transmision_smith",
+  "variables": [
+    {
+      "nombre": "longitudLinea",
+      "etiqueta": "Longitud sección de línea (m)",
+      "tipo": "continuo",
+      "min": 0.01,
+      "max": 0.12
+    },
+    {
+      "nombre": "z0Seccion",
+      "etiqueta": "Z0 sección de línea (Ω)",
+      "tipo": "continuo",
+      "min": 30,
+      "max": 110
+    },
+    {
+      "nombre": "longitudStub",
+      "etiqueta": "Longitud stub paralelo (m)",
+      "tipo": "continuo",
+      "min": 0.005,
+      "max": 0.06
+    },
+    {
+      "nombre": "z0Stub",
+      "etiqueta": "Z0 del stub (Ω)",
+      "tipo": "continuo",
+      "min": 35,
+      "max": 90
+    }
+  ],
+  "codigoEvaluacion": "// Parámetros del entorno (valores por defecto del modelo nativo)\nconst fCentral = 1e9, z0Sistema = 50.0, rCarga = 85.0, xCarga = 40.0;\n\n// Acota los genes a rangos físicos\nconst lTrafo = Math.max(0.005, Math.min(0.15, vars.longitudLinea));\nconst z0Trafo = Math.max(25.0, Math.min(120.0, vars.z0Seccion));\nconst lStub = Math.max(0.002, Math.min(0.08, vars.longitudStub || 0.02));\nconst z0Stub = Math.max(30.0, Math.min(100.0, vars.z0Stub || 50.0));\n\n// Barrido de frecuencia +-25% (para el peor caso de ROE) e impedancia en la central\nconst barrido = topologia.simularBarridoSmith(fCentral * 0.75, fCentral * 1.25, 40, {\n  longitudMetros: lTrafo, z0: z0Trafo, zCargaR: rCarga, zCargaX: xCarga, velPropagacion: 2e8\n});\nconst central = topologia.calcularImpedanciaLinea(fCentral, lTrafo, z0Trafo, rCarga, xCarga, 2e8);\n\n// Compensación reactiva del stub paralelo: Y_total = Y_linea + Y_stub\nconst bStub = -1.0 / (z0Stub * Math.tan((2.0 * Math.PI * fCentral * lStub) / 2e8 || 0.1));\nconst mod2 = central.zinR * central.zinR + central.zinX * central.zinX || 1.0;\nconst gIn = central.zinR / mod2;\nconst bTotal = central.zinX / mod2 + bStub * 0.35;\nconst denY = gIn * gIn + bTotal * bTotal || 1e-4;\nconst zR = gIn / denY;\nconst zX = -bTotal / denY;\n\n// Coeficiente de reflexión y ROE finales\nconst denR = zR + z0Sistema;\nconst dMag2 = denR * denR + zX * zX;\nconst gU = ((zR - z0Sistema) * denR + zX * zX) / dMag2;\nconst gV = (zX * denR - (zR - z0Sistema) * zX) / dMag2;\nconst mag = Math.hypot(gU, gV);\nconst roe = (1.0 + Math.min(0.999, mag)) / Math.max(0.001, 1.0 - Math.min(0.999, mag));\n\n// Objetivo 1: desvío de ROE; objetivo 2: longitud física total en mm\nconst objROE = (roe - 1.0) * 12.0 + (roe > 2.0 ? (roe - 2.0) * 20.0 : 0.0);\nconst longitudMm = (lTrafo + lStub) * 1000.0;\nreturn [Math.max(0.001, objROE), Math.max(5.0, longitudMm)];",
+  "grafo": {
+    "nodos": [
+      {
+        "id": "gen_rf",
+        "nombre": "Generador RF 50Ω",
+        "x": -45,
+        "y": 0,
+        "tipo": "fijo",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": null,
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 1
+      },
+      {
+        "id": "nodo_stub",
+        "nombre": "Unión Stub (z0Stub)",
+        "x": -15,
+        "y": 0,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": "z0Stub",
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": -15,
+        "escalaX": 1,
+        "escalaY": 0.3
+      },
+      {
+        "id": "punta_stub",
+        "nombre": "Extremo Stub (longitudStub)",
+        "x": -15,
+        "y": -15,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": "longitudStub",
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "signoY": -1,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 600
+      },
+      {
+        "id": "carga_rf",
+        "nombre": "Antena Carga (longitudLinea, z0Seccion)",
+        "x": 10,
+        "y": 6,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": "longitudLinea",
+        "variableY": "z0Seccion",
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "signoX": 1,
+        "offsetX": -15,
+        "offsetY": -15,
+        "escalaX": 500,
+        "escalaY": 0.3
+      }
+    ],
+    "barras": [
+      {
+        "id": "linea_alimentacion",
+        "nombre": "Línea 50Ω",
+        "nodoA": "gen_rf",
+        "nodoB": "nodo_stub",
+        "longitud": 30,
+        "variableAsociada": null,
+        "signoTrilateracion": 1,
+        "color": "#38bdf8",
+        "grosor": 3.5,
+        "esAuxiliar": false
+      },
+      {
+        "id": "stub_paralelo",
+        "nombre": "Stub Reactivo Paralelo",
+        "nodoA": "nodo_stub",
+        "nodoB": "punta_stub",
+        "longitud": 15,
+        "variableAsociada": null,
+        "signoTrilateracion": 1,
+        "color": "#f59e0b",
+        "grosor": 3.5,
+        "esAuxiliar": false
+      },
+      {
+        "id": "seccion_adaptadora",
+        "nombre": "Transformador Impedancia Z0",
+        "nodoA": "nodo_stub",
+        "nodoB": "carga_rf",
+        "longitud": 25,
+        "variableAsociada": null,
+        "signoTrilateracion": 1,
+        "color": "#10b981",
+        "grosor": 4.5,
+        "esAuxiliar": false
+      }
+    ],
+    "cuerposRigidos": [],
+    "motores": [],
+    "transmisiones": [],
+    "sensores": [
+      {
+        "id": "sensor_rf",
+        "nombre": "puerto_rf",
+        "nodoId": "carga_rf",
+        "magnitudes": [
+          "posicion"
+        ],
+        "color": "#10b981"
+      }
+    ],
+    "capasFisicas": []
+  }
+}

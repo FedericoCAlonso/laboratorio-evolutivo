@@ -1,0 +1,209 @@
+{
+  "$schema": "./schema-modelo.json",
+  "id": "orbita-transferencia",
+  "version": "1.0",
+  "nombre": "Transferencia Orbital (Hohmann / Kepler)",
+  "descripcion": "Optimiza los impulsos vectoriales Δv de un satélite en un campo gravitatorio central para transferirse a una órbita circular superior con mínimo combustible.",
+  "categoria": "Aeroespacial y Balística",
+  "dificultad": "Avanzado",
+  "tags": [
+    "órbita",
+    "hohmann",
+    "kepler",
+    "mecánica celeste",
+    "delta-v"
+  ],
+  "tipoVisualizacion": "orbita_transferencia",
+  "variables": [
+    {
+      "nombre": "dv1T",
+      "etiqueta": "Δv1 tangencial: impulso prograde inicial",
+      "tipo": "continuo",
+      "min": 1,
+      "max": 12
+    },
+    {
+      "nombre": "dv1R",
+      "etiqueta": "Δv1 radial: corrección radial inicial",
+      "tipo": "continuo",
+      "min": -3,
+      "max": 3
+    },
+    {
+      "nombre": "tEspera",
+      "etiqueta": "Tiempo de arco de transferencia",
+      "tipo": "continuo",
+      "min": 2.5,
+      "max": 12
+    },
+    {
+      "nombre": "dv2T",
+      "etiqueta": "Δv2 tangencial: circularización",
+      "tipo": "continuo",
+      "min": 0.5,
+      "max": 10
+    }
+  ],
+  "codigoEvaluacion": "const { dv1T, dv1R, tEspera, dv2T } = vars;\n// Entorno por defecto del modelo nativo\nconst mu = 10000.0, rInicial = 35.0, rObjetivo = 75.0, rPlaneta = 18.0;\n\n// Estado inicial: órbita circular en el eje X más el primer impulso\nconst v0 = Math.sqrt(mu / rInicial);\nlet x = rInicial, y = 0.0, vx = dv1R, vy = v0 + dv1T;\n\nconst dt = 0.04;\nconst tiempoTotal = Math.max(tEspera + 6.0, 15.0);\nconst pasos = Math.round(tiempoTotal / dt);\nlet colisionPlaneta = false;\nlet segundoEncendidoAplicado = false;\n\nfor (let k = 1; k <= pasos; k++) {\n  const tActual = k * dt;\n\n  // Segundo impulso prograde en la dirección instantánea de la velocidad\n  if (!segundoEncendidoAplicado && tActual >= tEspera) {\n    const velMag = Math.hypot(vx, vy);\n    if (velMag > 0.001) {\n      vx += (vx / velMag) * dv2T;\n      vy += (vy / velMag) * dv2T;\n    }\n    segundoEncendidoAplicado = true;\n  }\n\n  if (Math.hypot(x, y) < rPlaneta) colisionPlaneta = true;\n\n  // Gravedad central a = -mu/r^3 * r_vec, integración de Euler semi-implícita\n  const r = Math.hypot(x, y);\n  const r3 = r * r * r || 1;\n  vx += -(mu / r3) * x * dt;\n  vy += -(mu / r3) * y * dt;\n  x += vx * dt;\n  y += vy * dt;\n}\n\n// Elementos orbitales finales: momento angular y excentricidad de Laplace-Runge-Lenz\nconst rFinal = Math.hypot(x, y);\nconst h = x * vy - y * vx;\nconst ex = (vy * h) / mu - x / rFinal;\nconst ey = -(vx * h) / mu - y / rFinal;\nconst excentricidadFinal = Math.hypot(ex, ey);\nconst errorRadio = Math.abs(rFinal - rObjetivo);\nconst deltaVTotal = Math.hypot(dv1T, dv1R) + Math.abs(dv2T);\n\n// Penalización por colisión con el planeta\nconst penalizacion = colisionPlaneta ? 400 : 0;\nconst objCombustible = deltaVTotal + (penalizacion > 0 ? 15.0 : 0);\nconst objPrecision = errorRadio * 2.0 + excentricidadFinal * 40.0 + penalizacion;\nreturn [objCombustible, objPrecision];",
+  "grafo": {
+    "nodos": [
+      {
+        "id": "planeta",
+        "nombre": "Planeta Central (0,0)",
+        "x": 0,
+        "y": 0,
+        "tipo": "fijo",
+        "anguloGuia": 0,
+        "masa": 100,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": null,
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 1
+      },
+      {
+        "id": "periastro",
+        "nombre": "Periastro Impulso Δv₁",
+        "x": 36,
+        "y": 0,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": "dv1T",
+        "variableY": "dv1R",
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 25,
+        "offsetY": 0,
+        "escalaX": 2,
+        "escalaY": 3
+      },
+      {
+        "id": "arco_transferencia",
+        "nombre": "Arco Hohmann (tEspera)",
+        "x": 0,
+        "y": 54.5,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": "tEspera",
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "signoY": 1,
+        "offsetX": 0,
+        "offsetY": 30,
+        "escalaX": 1,
+        "escalaY": 3.5
+      },
+      {
+        "id": "apoastro",
+        "nombre": "Apoastro Inserción Δv₂",
+        "x": -65.5,
+        "y": 0,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": "dv2T",
+        "variableY": null,
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "signoX": -1,
+        "offsetX": -55,
+        "offsetY": 0,
+        "escalaX": 2.5,
+        "escalaY": 1
+      }
+    ],
+    "barras": [
+      {
+        "id": "radio_leo",
+        "nombre": "Radio Inicial LEO",
+        "nodoA": "planeta",
+        "nodoB": "periastro",
+        "longitud": 35,
+        "variableAsociada": null,
+        "signoTrilateracion": 1,
+        "color": "#38bdf8",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      },
+      {
+        "id": "semieje_1",
+        "nombre": "Tramo Ascenso Elíptico",
+        "nodoA": "periastro",
+        "nodoB": "arco_transferencia",
+        "longitud": 65,
+        "variableAsociada": null,
+        "signoTrilateracion": 1,
+        "color": "#f59e0b",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      },
+      {
+        "id": "semieje_2",
+        "nombre": "Tramo Inserción GEO",
+        "nodoA": "arco_transferencia",
+        "nodoB": "apoastro",
+        "longitud": 85,
+        "variableAsociada": null,
+        "signoTrilateracion": 1,
+        "color": "#10b981",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      },
+      {
+        "id": "radio_geo",
+        "nombre": "Radio Objetivo GEO",
+        "nodoA": "planeta",
+        "nodoB": "apoastro",
+        "longitud": 75,
+        "variableAsociada": null,
+        "signoTrilateracion": 1,
+        "color": "#6366f1",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      }
+    ],
+    "cuerposRigidos": [],
+    "motores": [],
+    "transmisiones": [],
+    "sensores": [
+      {
+        "id": "sensor_orbita",
+        "nombre": "satelite",
+        "nodoId": "apoastro",
+        "magnitudes": [
+          "posicion",
+          "velocidad",
+          "trayectoria"
+        ],
+        "color": "#10b981"
+      }
+    ],
+    "capasFisicas": []
+  }
+}

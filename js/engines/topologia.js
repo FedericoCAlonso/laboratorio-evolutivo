@@ -214,4 +214,163 @@ export class MotorFuncionalTopologico {
   }
 }
 
+
+
+
+// =========================================================================
+// SOLVERS ESPECÍFICOS DE TOPOLOGÍA, CORTE Y LÍNEAS RF
+// =========================================================================
+
+export const PIEZAS_DEFECTO = [
+  { id: 1, w: 220, h: 140, color: "#38bdf8" }, // Pieza A (Panel grande)
+  { id: 2, w: 180, h: 120, color: "#34d399" }, // Pieza B (Soporte)
+  { id: 3, w: 140, h: 90,  color: "#f59e0b" }, // Pieza C (Refuerzo)
+  { id: 4, w: 160, h: 110, color: "#ec4899" }, // Pieza D (Brida)
+  { id: 5, w: 110, h: 80,  color: "#818cf8" }, // Pieza E (Tapa)
+  { id: 6, w: 90,  h: 60,  color: "#a78bfa" }  // Pieza F (Guía)
+];
+
+// Simula la colocación espacial y calcula el desperdicio porcentual de corte en la chapa
+export function simularCorteChapaNesting(genoma, entrada) {
+  const anchoChapa = Number(entrada?.anchoChapaMm !== undefined ? entrada.anchoChapaMm : 500.0);
+  const altoChapa = Number(entrada?.altoChapaMm !== undefined ? entrada.altoChapaMm : 350.0);
+
+  const numPiezas = PIEZAS_DEFECTO.length;
+
+  // Genoma de 12 genes:
+  // [0..5]: Prioridades de orden de colocación (peso continuo de ordenamiento)
+  // [6..11]: Umbrales de decisión de rotación a 90° (si > 0.5 se rota)
+  const prioridades = genoma.slice(0, numPiezas);
+  const rotaciones = genoma.slice(numPiezas, numPiezas * 2);
+
+  // Asocia cada pieza con su prioridad y orientación dada por el genoma
+  const piezasPreparadas = PIEZAS_DEFECTO.map((p, idx) => {
+    const rotar = (rotaciones[idx] !== undefined ? rotaciones[idx] : 0.0) > 0.5;
+    return {
+      id: p.id,
+      w: rotar ? p.h : p.w,
+      h: rotar ? p.w : p.h,
+      prioridad: prioridades[idx] !== undefined ? prioridades[idx] : idx,
+      color: p.color
+    };
+  }).sort((a, b) => b.prioridad - a.prioridad);
+
+  // Ejecuta la heurística de anidado 2D del motor topológico
+  const resNesting = MotorFuncionalTopologico.resolverNesting2D(anchoChapa, altoChapa, piezasPreparadas);
+
+  // Calcula la envolvente real ocupada (ancho y alto máximo alcanzado por las piezas)
+  let maxAlcanzadoX = 0.0;
+  let maxAlcanzadoY = 0.0;
+
+  resNesting.piezasColocadas.forEach((pz) => {
+    const bordeDer = pz.x + pz.w;
+    const bordeInf = pz.y + pz.h;
+    if (bordeDer > maxAlcanzadoX) maxAlcanzadoX = bordeDer;
+    if (bordeInf > maxAlcanzadoY) maxAlcanzadoY = bordeInf;
+  });
+
+  return {
+    anchoChapa,
+    altoChapa,
+    piezasColocadas: resNesting.piezasColocadas,
+    piezasNoColocadas: resNesting.piezasNoColocadas,
+    porcentajeAprovechamiento: resNesting.porcentajeAprovechamiento,
+    porcentajeDesperdicio: resNesting.porcentajeDesperdicio,
+    areaUtilizada: resNesting.areaUtilizada,
+    areaTotalChapa: resNesting.areaTotalChapa,
+    maxAlcanzadoX,
+    maxAlcanzadoY,
+    anchoUtilizadoMm: maxAlcanzadoX,
+    todasColocadas: resNesting.piezasNoColocadas === 0
+  };
+}
+
+// Objeto de definición del modelo para el motor evolutivo
+
+
+export function simularLineaTransmisionRF(genoma, entrada) {
+  // Frecuencia central de operación (ej: 1.0 GHz para telecomunicaciones / ISM)
+  const fCentralHz = Number(entrada?.frecuenciaCentralHz !== undefined ? entrada.frecuenciaCentralHz : 1e9);
+  const z0Sistema = Number(entrada?.z0Sistema !== undefined ? entrada.z0Sistema : 50.0);
+  const rCarga = Number(entrada?.rCarga !== undefined ? entrada.rCarga : 85.0);
+  const xCarga = Number(entrada?.xCarga !== undefined ? entrada.xCarga : 40.0);
+
+  // 4 genes continuos del genoma:
+  // [longitudMetros, z0Seccion, stubMetros, z0Stub]
+  const [lMetros, z0Sec, lStub, z0St] = genoma;
+
+  const longitudTransformador = Math.max(0.005, Math.min(0.15, lMetros));
+  const z0Transformador = Math.max(25.0, Math.min(120.0, z0Sec));
+  const longitudStub = Math.max(0.002, Math.min(0.08, lStub || 0.02));
+  const z0Stub = Math.max(30.0, Math.min(100.0, z0St || 50.0));
+
+  // Barrido de frecuencia de +-25% alrededor de la frecuencia central (50 puntos)
+  const fMin = fCentralHz * 0.75;
+  const fMax = fCentralHz * 1.25;
+  const numPuntos = 40;
+
+  const barrido = MotorFuncionalTopologico.simularBarridoSmith(fMin, fMax, numPuntos, {
+    longitudMetros: longitudTransformador,
+    z0: z0Transformador,
+    zCargaR: rCarga,
+    zCargaX: xCarga,
+    velPropagacion: 2e8 // 200,000 km/s en dieléctrico típico de teflón/FR4 (c * 0.66)
+  });
+
+  // Cálculo en la frecuencia central exacta
+  const resCentral = MotorFuncionalTopologico.calcularImpedanciaLinea(
+    fCentralHz,
+    longitudTransformador,
+    z0Transformador,
+    rCarga,
+    xCarga,
+    2e8
+  );
+
+  // Efecto de compensación reactiva del stub paralelo: Y_total = Y_linea + Y_stub
+  const bStub = -1.0 / (z0Stub * Math.tan((2.0 * Math.PI * fCentralHz * longitudStub) / 2e8 || 0.1));
+  const gIn = resCentral.zinR / (resCentral.zinR * resCentral.zinR + resCentral.zinX * resCentral.zinX || 1.0);
+  const bInTotal = (resCentral.zinX / (resCentral.zinR * resCentral.zinR + resCentral.zinX * resCentral.zinX || 1.0)) + bStub * 0.35;
+
+  const denY = gIn * gIn + bInTotal * bInTotal || 1e-4;
+  const zCompR = gIn / denY;
+  const zCompX = -bInTotal / denY;
+
+  // Reflexión final compensada
+  const numR = zCompR - z0Sistema;
+  const numX = zCompX;
+  const denR = zCompR + z0Sistema;
+  const denX = zCompX;
+  const dMag2 = denR * denR + denX * denX;
+  const gammaU = (numR * denR + numX * denX) / dMag2;
+  const gammaV = (numX * denR - numR * denX) / dMag2;
+  const magGamma = Math.hypot(gammaU, gammaV);
+  const roeFinal = (1.0 + Math.min(0.999, magGamma)) / Math.max(0.001, 1.0 - Math.min(0.999, magGamma));
+  const perdidasRetornoDb = -20.0 * Math.log10(Math.max(1e-4, magGamma));
+
+  return {
+    fCentralHz,
+    z0Sistema,
+    rCarga,
+    xCarga,
+    longitudTransformador,
+    z0Transformador,
+    longitudStub,
+    z0Stub,
+    zinR: zCompR,
+    zinX: zCompX,
+    gammaU,
+    gammaV,
+    magGamma,
+    roe: roeFinal,
+    perdidasRetornoDb,
+    peorROE: Math.max(roeFinal, barrido.peorROE),
+    puntosSmith: barrido.puntos,
+    longitudTotalMm: (longitudTransformador + longitudStub) * 1000.0,
+    adaptacionOptima: roeFinal <= 1.35
+  };
+}
+
+// Objeto de definición del modelo para el motor evolutivo
+
 export default MotorFuncionalTopologico;

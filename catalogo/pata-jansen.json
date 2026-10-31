@@ -1,0 +1,488 @@
+{
+  "$schema": "./schema-modelo.json",
+  "id": "pata-jansen",
+  "version": "1.0",
+  "nombre": "Pata Cinemática de Theo Jansen (13 Barras)",
+  "descripcion": "Optimización mecatrónica multiobjetivo de las 12 barras del mecanismo caminante de Theo Jansen para maximizar suavidad inercial y precisión de zancada superando obstáculos.",
+  "categoria": "Robótica y Cinemática",
+  "dificultad": "Avanzado",
+  "tags": [
+    "theo jansen",
+    "strandbeest",
+    "13 barras",
+    "cinemática de lazo cerrado",
+    "locomoción"
+  ],
+  "tipoVisualizacion": "mecanismo_jansen",
+  "variables": [
+    {
+      "nombre": "a",
+      "etiqueta": "a: Offset horizontal manivela Y al pivote fijo X (-a, -l)",
+      "tipo": "continuo",
+      "min": 26.6,
+      "max": 49.4,
+      "valorNominal": 38
+    },
+    {
+      "nombre": "l",
+      "etiqueta": "l: Offset vertical manivela Y al pivote fijo X (-a, -l)",
+      "tipo": "continuo",
+      "min": 5.46,
+      "max": 10.14,
+      "valorNominal": 7.8
+    },
+    {
+      "nombre": "b",
+      "etiqueta": "b: Eslabón superior de acople pivote fijo X al nodo D",
+      "tipo": "continuo",
+      "min": 29.05,
+      "max": 53.95,
+      "valorNominal": 41.5
+    },
+    {
+      "nombre": "c",
+      "etiqueta": "c: Biela motriz inferior desde pivote fijo X al nodo F",
+      "tipo": "continuo",
+      "min": 27.51,
+      "max": 51.09,
+      "valorNominal": 39.3
+    },
+    {
+      "nombre": "d",
+      "etiqueta": "d: Balancín de transferencia pivote fijo X al nodo E",
+      "tipo": "continuo",
+      "min": 28.07,
+      "max": 52.13,
+      "valorNominal": 40.1
+    },
+    {
+      "nombre": "e",
+      "etiqueta": "e: Eslabón superior de cierre nodo D al nodo E",
+      "tipo": "continuo",
+      "min": 39.06,
+      "max": 72.54,
+      "valorNominal": 55.8
+    },
+    {
+      "nombre": "f",
+      "etiqueta": "f: Eslabón del muslo superior nodo E al nodo G",
+      "tipo": "continuo",
+      "min": 27.58,
+      "max": 51.22,
+      "valorNominal": 39.4
+    },
+    {
+      "nombre": "g",
+      "etiqueta": "g: Eslabón del muslo inferior nodo F al nodo G",
+      "tipo": "continuo",
+      "min": 25.69,
+      "max": 47.71,
+      "valorNominal": 36.7
+    },
+    {
+      "nombre": "h",
+      "etiqueta": "h: Pierna inferior de apoyo desde nodo G al pie H",
+      "tipo": "continuo",
+      "min": 45.99,
+      "max": 85.41,
+      "valorNominal": 65.7
+    },
+    {
+      "nombre": "i",
+      "etiqueta": "i: Tirante de talón desde nodo F al pie de contacto H",
+      "tipo": "continuo",
+      "min": 34.3,
+      "max": 63.7,
+      "valorNominal": 49
+    },
+    {
+      "nombre": "j",
+      "etiqueta": "j: Biela de manivela K al nodo de balancín D",
+      "tipo": "continuo",
+      "min": 35,
+      "max": 65,
+      "valorNominal": 50
+    },
+    {
+      "nombre": "k",
+      "etiqueta": "k: Biela de manivela K al nodo de guía inferior F",
+      "tipo": "continuo",
+      "min": 43.33,
+      "max": 80.47,
+      "valorNominal": 61.9
+    }
+  ],
+  "codigoEvaluacion": "// Fitness multiobjetivo de la Pata de Theo Jansen (180 pasos)\n// Barreras duras: 1000+ lazo no cierra, 500 saltos bruscos, 800 viola gálibo/despeje\nconst modoOptimizacion = \"multiobjetivo\";\nconst maxAncho = 80;\nconst maxAlto = 40;\nconst obstaculoAlto = 15;\nconst zancadaObjetivo = 4.0;\nconst criterioSuavidad = \"pico\";\nconst limitePico = 30;\nconst w1 = 3.0, w2 = 1.0, w3 = 1.0, w4 = 1.0, w5 = 0.5, w7 = 1.0, w9 = 1.0;\n\nreturn estructuras.evaluarJansenFitness(vars, {\n  modoOptimizacion, maxAncho, maxAlto, obstaculoAlto,\n  zancadaObjetivo, criterioSuavidad, limitePico,\n  w1, w2, w3, w4, w5, w7, w9\n});",
+  "grafo": {
+    "nodos": [
+      {
+        "id": "Y_fijo",
+        "nombre": "Y: Centro Manivela (0,0)",
+        "x": 0,
+        "y": 0,
+        "tipo": "fijo",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": null,
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 1
+      },
+      {
+        "id": "X_fijo",
+        "nombre": "X: Pivote Fijo Frame (-a, -l)",
+        "x": -38,
+        "y": -7.8,
+        "tipo": "fijo",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": "a",
+        "variableY": "l",
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "signoX": -1,
+        "signoY": -1,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 1
+      },
+      {
+        "id": "K_manivela",
+        "nombre": "K: Pin de Manivela Motriz",
+        "x": 15,
+        "y": 0,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": null,
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 1
+      },
+      {
+        "id": "D_nodo",
+        "nombre": "D: Nodo Triángulo Superior",
+        "x": -24.01,
+        "y": 31.27,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": null,
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 1
+      },
+      {
+        "id": "E_nodo",
+        "nombre": "E: Nodo Balancín Posterior",
+        "x": -74.79,
+        "y": 8.14,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": null,
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 1
+      },
+      {
+        "id": "F_nodo",
+        "nombre": "F: Nodo Biela Inferior",
+        "x": -26.95,
+        "y": -45.52,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": null,
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 1
+      },
+      {
+        "id": "G_nodo",
+        "nombre": "G: Nodo Muslo Articulado",
+        "x": -59.23,
+        "y": -28.05,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": null,
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 1
+      },
+      {
+        "id": "H_pie",
+        "nombre": "H: Pie de Contacto con el Suelo",
+        "x": -43.16,
+        "y": -91.76,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": null,
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 1
+      }
+    ],
+    "barras": [
+      {
+        "id": "barra_j",
+        "nombre": "Barra j: Manivela K a Balancín D",
+        "nodoA": "K_manivela",
+        "nodoB": "D_nodo",
+        "longitud": 50,
+        "variableAsociada": "j",
+        "signoTrilateracion": -1,
+        "color": "#3b82f6",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      },
+      {
+        "id": "barra_k",
+        "nombre": "Barra k: Manivela K a Guía F",
+        "nodoA": "K_manivela",
+        "nodoB": "F_nodo",
+        "longitud": 61.9,
+        "variableAsociada": "k",
+        "signoTrilateracion": 1,
+        "color": "#3b82f6",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      },
+      {
+        "id": "barra_b",
+        "nombre": "Barra b: Pivote X a Nodo D",
+        "nodoA": "X_fijo",
+        "nodoB": "D_nodo",
+        "longitud": 41.5,
+        "variableAsociada": "b",
+        "signoTrilateracion": -1,
+        "color": "#0284c7",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      },
+      {
+        "id": "barra_c",
+        "nombre": "Barra c: Pivote X a Nodo F",
+        "nodoA": "X_fijo",
+        "nodoB": "F_nodo",
+        "longitud": 39.3,
+        "variableAsociada": "c",
+        "signoTrilateracion": 1,
+        "color": "#0284c7",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      },
+      {
+        "id": "barra_d",
+        "nombre": "Barra d: Pivote X a Nodo E",
+        "nodoA": "X_fijo",
+        "nodoB": "E_nodo",
+        "longitud": 40.1,
+        "variableAsociada": "d",
+        "signoTrilateracion": -1,
+        "color": "#0284c7",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      },
+      {
+        "id": "barra_e",
+        "nombre": "Barra e: Eslabón D a Nodo E",
+        "nodoA": "D_nodo",
+        "nodoB": "E_nodo",
+        "longitud": 55.8,
+        "variableAsociada": "e",
+        "signoTrilateracion": -1,
+        "color": "#065f46",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      },
+      {
+        "id": "barra_f",
+        "nombre": "Barra f: Muslo E a Nodo G",
+        "nodoA": "E_nodo",
+        "nodoB": "G_nodo",
+        "longitud": 39.4,
+        "variableAsociada": "f",
+        "signoTrilateracion": 1,
+        "color": "#059669",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      },
+      {
+        "id": "barra_g",
+        "nombre": "Barra g: Muslo F a Nodo G",
+        "nodoA": "F_nodo",
+        "nodoB": "G_nodo",
+        "longitud": 36.7,
+        "variableAsociada": "g",
+        "signoTrilateracion": 1,
+        "color": "#059669",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      },
+      {
+        "id": "barra_h",
+        "nombre": "Barra h: Pierna G a Pie H",
+        "nodoA": "G_nodo",
+        "nodoB": "H_pie",
+        "longitud": 65.7,
+        "variableAsociada": "h",
+        "signoTrilateracion": 1,
+        "color": "#d97706",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      },
+      {
+        "id": "barra_i",
+        "nombre": "Barra i: Tirante F a Pie H",
+        "nodoA": "F_nodo",
+        "nodoB": "H_pie",
+        "longitud": 49,
+        "variableAsociada": "i",
+        "signoTrilateracion": 1,
+        "color": "#d97706",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      }
+    ],
+    "cuerposRigidos": [
+      {
+        "id": "triangulo_D_E_X",
+        "nombre": "Triángulo Superior D-E-X",
+        "nodos": [
+          "D_nodo",
+          "E_nodo",
+          "X_fijo"
+        ],
+        "color": "rgba(59, 130, 246, 0.12)",
+        "bordeColor": "#2563eb"
+      },
+      {
+        "id": "triangulo_E_F_G",
+        "nombre": "Triángulo Medio E-F-G",
+        "nodos": [
+          "E_nodo",
+          "F_nodo",
+          "G_nodo"
+        ],
+        "color": "rgba(16, 185, 129, 0.12)",
+        "bordeColor": "#2563eb"
+      },
+      {
+        "id": "triangulo_F_G_H",
+        "nombre": "Triángulo Inferior F-G-H",
+        "nodos": [
+          "F_nodo",
+          "G_nodo",
+          "H_pie"
+        ],
+        "color": "rgba(245, 158, 11, 0.14)",
+        "bordeColor": "#2563eb"
+      }
+    ],
+    "motores": [
+      {
+        "id": "motor_manivela_jansen",
+        "nombre": "Motor Rotativo Manivela (m=15 mm)",
+        "tipo": "rotativo",
+        "nodoPivote": "Y_fijo",
+        "nodoExtremo": "K_manivela",
+        "longitudManivela": 15,
+        "velocidadAngular": 1,
+        "anguloInicial": 0,
+        "carreraMin": 10,
+        "carreraMax": 50,
+        "variableAsociada": "m"
+      }
+    ],
+    "transmisiones": [],
+    "sensores": [
+      {
+        "id": "sensor_pie_jansen",
+        "nombre": "pie",
+        "nodoId": "H_pie",
+        "magnitudes": [
+          "trayectoria",
+          "posicion",
+          "velocidad",
+          "aceleracion",
+          "zancada",
+          "despeje"
+        ],
+        "color": "#f59e0b"
+      }
+    ],
+    "capasFisicas": []
+  }
+}

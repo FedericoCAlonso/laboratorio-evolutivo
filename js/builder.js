@@ -11,7 +11,7 @@ import {
   simularCicloMecanismo,
   crearGrafoBrazoRobotico
 } from "./engines/mecanismos.js";
-import { PLANTILLAS_FIELES } from "./plantillas/index.js";
+import { CATALOGO_PREDEFINIDO } from "../catalogo/definiciones.js";
 
 // Plantillas preconfiguradas para inspirar y servir de base a nuevas simulaciones de diversas naturalezas.
 export const PLANTILLAS_SIMULACION = {
@@ -202,11 +202,11 @@ PLANTILLAS_SIMULACION["superficie-fonoabsorbente"] = PLANTILLAS_SIMULACION["fono
 PLANTILLAS_SIMULACION["linea-transmision-rf"] = PLANTILLAS_SIMULACION["linea_rf"];
 PLANTILLAS_SIMULACION["corte-chapa-nesting"] = PLANTILLAS_SIMULACION["corte_chapa"];
 
-// Sustituye las plantillas por las versiones fieles a cada modelo nativo (mismas variables y misma evaluación).
-for (const [id, plantilla] of Object.entries(PLANTILLAS_FIELES)) {
-  if (!plantilla) continue;
-  PLANTILLAS_SIMULACION[id] = plantilla;
-  const alias = id.replace(/-/g, "_");
+// Sustituye las plantillas por las versiones declarativas oficiales del catálogo JSON.
+for (const plantilla of CATALOGO_PREDEFINIDO) {
+  if (!plantilla || !plantilla.id) continue;
+  PLANTILLAS_SIMULACION[plantilla.id] = plantilla;
+  const alias = plantilla.id.replace(/-/g, "_");
   PLANTILLAS_SIMULACION[alias] = plantilla;
 }
 

@@ -4,7 +4,7 @@
 // =========================================================================
 
 import { Motor } from "../core/motor.js";
-import { MODELOS, obtenerModeloPorId, registrarModeloDinamico, eliminarModeloDinamicoDelRegistro, cargarModelosDinamicosEnRegistro } from "../models/index.js";
+import { MODELOS, obtenerModeloPorId, registrarModeloDinamico, eliminarModeloDinamicoDelRegistro, cargarModelosDinamicosEnRegistro } from "../../catalogo/index.js";
 import { compilarModeloDinamico, validarDefinicionModelo, clonarModeloExistente } from "../builder.js";
 import {
   guardarConfiguracion,
@@ -433,8 +433,13 @@ export class AppViewModel {
   guardarModeloDinamico(defCruda, esEdicion = false, idExistente = null) {
     validarDefinicionModelo(defCruda);
 
-    if (esEdicion && idExistente) {
+    const modeloExistente = idExistente ? obtenerModeloPorId(idExistente) : null;
+    const esCatalogo = modeloExistente?.esCatalogoOriginal || false;
+
+    if (esEdicion && idExistente && !esCatalogo) {
       defCruda.id = idExistente;
+    } else {
+      delete defCruda.id;
     }
 
     const compilado = compilarModeloDinamico(defCruda);

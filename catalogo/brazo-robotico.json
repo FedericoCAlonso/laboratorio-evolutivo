@@ -1,0 +1,228 @@
+{
+  "$schema": "./schema-modelo.json",
+  "id": "brazo-robotico",
+  "version": "1.0",
+  "nombre": "Brazo Robótico (Cinemática Inversa)",
+  "descripcion": "Manipulador planar de 3 eslabones articulados que optimiza la orientación de sus articulaciones para alcanzar un punto objetivo evadiendo un obstáculo circular.",
+  "categoria": "Robótica y Cinemática",
+  "dificultad": "Intermedio",
+  "tags": [
+    "robótica",
+    "cinemática inversa",
+    "brazo scara",
+    "eslabones"
+  ],
+  "tipoVisualizacion": "brazo_robotico",
+  "variables": [
+    {
+      "nombre": "theta1",
+      "etiqueta": "theta1: Ángulo eslabón base θ₁ (-180° a 180°)",
+      "tipo": "continuo",
+      "min": -180,
+      "max": 180
+    },
+    {
+      "nombre": "theta2",
+      "etiqueta": "theta2: Ángulo eslabón codo θ₂ (-180° a 180°)",
+      "tipo": "continuo",
+      "min": -180,
+      "max": 180
+    },
+    {
+      "nombre": "theta3",
+      "etiqueta": "theta3: Ángulo efector muñeca θ₃ (-180° a 180°)",
+      "tipo": "continuo",
+      "min": -180,
+      "max": 180
+    }
+  ],
+  "codigoEvaluacion": "// Parámetros del escenario (editables): objetivo, obstáculo circular y longitudes de eslabones\nconst objetivo = { x: 55, y: 40 };\nconst obstaculo = { x: 30, y: 20, radio: 16 };\nconst [L1, L2, L3] = [45, 35, 25];\n\n// Cinemática directa: ángulos acumulados a lo largo de la cadena\nconst a1 = (vars.theta1 * Math.PI) / 180;\nconst a2 = a1 + (vars.theta2 * Math.PI) / 180;\nconst a3 = a2 + (vars.theta3 * Math.PI) / 180;\nconst p0 = { x: 0, y: 0 };\nconst p1 = { x: L1 * Math.cos(a1), y: L1 * Math.sin(a1) };\nconst p2 = { x: p1.x + L2 * Math.cos(a2), y: p1.y + L2 * Math.sin(a2) };\nconst p3 = { x: p2.x + L3 * Math.cos(a3), y: p2.y + L3 * Math.sin(a3) };\n\n// Distancia mínima del obstáculo a un segmento AB\nconst distSegmento = (p, a, b) => {\n  const abx = b.x - a.x, aby = b.y - a.y;\n  const l2 = abx * abx + aby * aby;\n  if (l2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);\n  const t = Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / l2));\n  return Math.hypot(p.x - (a.x + t * abx), p.y - (a.y + t * aby));\n};\nconst minDist = Math.min(\n  distSegmento(obstaculo, p0, p1),\n  distSegmento(obstaculo, p1, p2),\n  distSegmento(obstaculo, p2, p3)\n);\n\n// Objetivos: precisión (con penalización de colisión) y esfuerzo angular normalizado\nconst distObjetivo = Math.hypot(p3.x - objetivo.x, p3.y - objetivo.y);\nconst penColision = minDist < obstaculo.radio ? 300 + (obstaculo.radio - minDist) * 15 : 0;\nconst esfuerzo = (Math.abs(vars.theta1) + Math.abs(vars.theta2) + Math.abs(vars.theta3)) / 540;\n\nreturn [distObjetivo + penColision, esfuerzo + (penColision > 0 ? 2.0 : 0)];",
+  "grafo": {
+    "nodos": [
+      {
+        "id": "base_fija",
+        "nombre": "Base Fija Robótica (0,0)",
+        "x": 0,
+        "y": 0,
+        "tipo": "fijo",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": null,
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 1
+      },
+      {
+        "id": "codo_1",
+        "nombre": "Articulación 1 (Hombro)",
+        "x": 45,
+        "y": 0,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": null,
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 1
+      },
+      {
+        "id": "codo_2",
+        "nombre": "Articulación 2 (Codo)",
+        "x": 80,
+        "y": 0,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": null,
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 1
+      },
+      {
+        "id": "efector_final",
+        "nombre": "Efector Final (Pinza / Herramienta)",
+        "x": 105,
+        "y": 0,
+        "tipo": "libre",
+        "anguloGuia": 0,
+        "masa": 1,
+        "carga": 0,
+        "cargaElectrica": 0,
+        "imanDipolo": 0,
+        "temperaturaFuente": 0,
+        "variableX": null,
+        "variableY": null,
+        "variableIman": null,
+        "variableCarga": null,
+        "variableTemp": null,
+        "offsetX": 0,
+        "offsetY": 0,
+        "escalaX": 1,
+        "escalaY": 1
+      }
+    ],
+    "barras": [
+      {
+        "id": "barra_l1",
+        "nombre": "Eslabón 1 (L=45 mm)",
+        "nodoA": "base_fija",
+        "nodoB": "codo_1",
+        "longitud": 45,
+        "variableAsociada": null,
+        "signoTrilateracion": 1,
+        "color": "#3b82f6",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      },
+      {
+        "id": "barra_l2",
+        "nombre": "Eslabón 2 (L=35 mm)",
+        "nodoA": "codo_1",
+        "nodoB": "codo_2",
+        "longitud": 35,
+        "variableAsociada": null,
+        "signoTrilateracion": 1,
+        "color": "#0284c7",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      },
+      {
+        "id": "barra_l3",
+        "nombre": "Eslabón 3 (L=25 mm)",
+        "nodoA": "codo_2",
+        "nodoB": "efector_final",
+        "longitud": 25,
+        "variableAsociada": null,
+        "signoTrilateracion": 1,
+        "color": "#065f46",
+        "grosor": 2.5,
+        "esAuxiliar": false
+      }
+    ],
+    "cuerposRigidos": [],
+    "motores": [
+      {
+        "id": "motor_hombro",
+        "nombre": "Motor Hombro θ₁",
+        "tipo": "rotativo",
+        "nodoPivote": "base_fija",
+        "nodoExtremo": "codo_1",
+        "longitudManivela": 45,
+        "velocidadAngular": 1,
+        "anguloInicial": 0.5235987755982988,
+        "carreraMin": 10,
+        "carreraMax": 50,
+        "variableAsociada": "theta1"
+      },
+      {
+        "id": "motor_codo",
+        "nombre": "Motor Codo θ₂",
+        "tipo": "rotativo",
+        "nodoPivote": "codo_1",
+        "nodoExtremo": "codo_2",
+        "longitudManivela": 35,
+        "velocidadAngular": 1,
+        "anguloInicial": 0.7853981633974483,
+        "carreraMin": 10,
+        "carreraMax": 50,
+        "variableAsociada": "theta2"
+      },
+      {
+        "id": "motor_muneca",
+        "nombre": "Motor Muñeca θ₃",
+        "tipo": "rotativo",
+        "nodoPivote": "codo_2",
+        "nodoExtremo": "efector_final",
+        "longitudManivela": 25,
+        "velocidadAngular": 1,
+        "anguloInicial": -0.3490658503988659,
+        "carreraMin": 10,
+        "carreraMax": 50,
+        "variableAsociada": "theta3"
+      }
+    ],
+    "transmisiones": [],
+    "sensores": [
+      {
+        "id": "sensor_efector",
+        "nombre": "efector",
+        "nodoId": "efector_final",
+        "magnitudes": [
+          "posicion",
+          "velocidad",
+          "aceleracion",
+          "trayectoria"
+        ],
+        "color": "#10b981"
+      }
+    ],
+    "capasFisicas": []
+  }
+}

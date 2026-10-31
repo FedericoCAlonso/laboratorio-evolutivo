@@ -277,4 +277,420 @@ export class MotorCamposUnificados {
   }
 }
 
+
+
+
+// =========================================================================
+// SOLVERS ESPECÍFICOS DE SIMULACIÓN DE CAMPOS Y POTENCIAL
+// =========================================================================
+
+export function calcularPotencialPunto(x, y, electrodos, cargasFijas) {
+  let v = 0;
+  const eps = 1.5; // Factor de suavizado para evitar singularidades en r = 0
+
+  // Contribución de cargas fijas de borde y emisor/colector
+  for (let i = 0; i < cargasFijas.length; i++) {
+    const c = cargasFijas[i];
+    const d = Math.hypot(x - c.x, y - c.y);
+    v += (c.q * 100) / Math.sqrt(d * d + eps * eps);
+  }
+
+  // Contribución de los electrodos deflectores móviles del genoma
+  for (let i = 0; i < electrodos.length; i++) {
+    const e = electrodos[i];
+    const d = Math.hypot(x - e.x, y - e.y);
+    v += (e.q * 100) / Math.sqrt(d * d + eps * eps);
+  }
+
+  return v;
+}
+
+// Calcula el gradiente del campo eléctrico E = -grad(V) mediante diferencias finitas centrales.
+export function calcularCampoVectorial(x, y, electrodos, cargasFijas) {
+  const h = 0.5;
+  const vXMas = calcularPotencialPunto(x + h, y, electrodos, cargasFijas);
+  const vXMenos = calcularPotencialPunto(x - h, y, electrodos, cargasFijas);
+  const vYMas = calcularPotencialPunto(x, y + h, electrodos, cargasFijas);
+  const vYMenos = calcularPotencialPunto(x, y - h, electrodos, cargasFijas);
+
+  // E = - dV/dr
+  const ex = -(vXMas - vXMenos) / (2 * h);
+  const ey = -(vYMas - vYMenos) / (2 * h);
+
+  return { ex, ey };
+}
+
+// Simula la trayectoria dinámica de una partícula cargada dentro del campo de potencial mediante integración por pasos.
+export function simularTrayectoriaParticula(genoma, entrada) {
+  // Coordenadas de emisor y colector
+  const emisorX = Number(entrada?.emisorX !== undefined ? entrada.emisorX : -45);
+  const emisorY = Number(entrada?.emisorY !== undefined ? entrada.emisorY : 0);
+  const colectorX = Number(entrada?.colectorX !== undefined ? entrada.colectorX : 45);
+  const colectorY = Number(entrada?.colectorY !== undefined ? entrada.colectorY : 0);
+  const vInicial = Number(entrada?.velocidadInicial !== undefined ? entrada.velocidadInicial : 14.0);
+  const cargaParticula = Number(entrada?.cargaParticula !== undefined ? entrada.cargaParticula : 1.0);
+
+  // 2 o 3 electrodos deflectores optimizados en el genoma: [x1, y1, q1, x2, y2, q2]
+  const electrodos = [
+    { x: genoma[0], y: genoma[1], q: genoma[2] },
+    { x: genoma[3], y: genoma[4], q: genoma[5] }
+  ];
+
+  if (genoma.length >= 9) {
+    electrodos.push({ x: genoma[6], y: genoma[7], q: genoma[8] });
+  }
+
+  // Cargas fijas de contorno y obstáculo prohibitivo central
+  const cargasFijas = [
+    { x: 0, y: 0, q: 1.8 },      // Barrera de potencial central repulsora
+    { x: emisorX, y: emisorY, q: 0.5 }, // Emisor
+    { x: colectorX, y: colectorY, q: -1.2 } // Colector atractor
+  ];
+
+  let x = emisorX;
+  let y = emisorY;
+  let vx = vInicial;
+  let vy = 0.0;
+  const dt = 0.05;
+  const masa = 1.0;
+
+  const trayectoria = [{ x, y, vx, vy, t: 0 }];
+  let distanciaMinimaColector = Infinity;
+  let energiaCinematicaTotal = 0;
+  let colisionObstaculo = false;
+  let tiempoEscape = 0;
+
+  for (let paso = 0; paso < 200; paso++) {
+    // Distancia al colector diana
+    const distColector = Math.hypot(x - colectorX, y - colectorY);
+    if (distColector < distanciaMinimaColector) {
+      distanciaMinimaColector = distColector;
+    }
+
+    // Detección de colisión con la barrera de potencial central fija (|r| < 6)
+    const distCentro = Math.hypot(x, y);
+    if (distCentro < 6.0) {
+      colisionObstaculo = true;
+    }
+
+    // Si alcanza el colector (distancia < 3.5), se considera llegada exitosa
+    if (distColector < 3.5) {
+      break;
+    }
+
+    // Fuerza electrostática F = q * E
+    const { ex, ey } = calcularCampoVectorial(x, y, electrodos, cargasFijas);
+    const fx = cargaParticula * ex;
+    const fy = cargaParticula * ey;
+
+    const ax = fx / masa;
+    const ay = fy / masa;
+
+    vx += ax * dt;
+    vy += ay * dt;
+    x += vx * dt;
+    y += vy * dt;
+
+    energiaCinematicaTotal += 0.5 * masa * (vx * vx + vy * vy) * dt;
+    trayectoria.push({ x, y, vx, vy, t: (paso + 1) * dt });
+
+    // Si escapa de los límites razonables del campo [-60, 60]
+    if (Math.abs(x) > 65 || Math.abs(y) > 45) {
+      tiempoEscape = (paso + 1) * dt;
+      break;
+    }
+  }
+
+  const exitoLlegada = distanciaMinimaColector < 3.5;
+
+  return {
+    electrodos,
+    cargasFijas,
+    trayectoria,
+    distanciaMinimaColector,
+    energiaCinematicaTotal,
+    colisionObstaculo,
+    exitoLlegada,
+    emisorX,
+    emisorY,
+    colectorX,
+    colectorY
+  };
+}
+
+// Objeto de definición del modelo para el motor evolutivo.
+
+
+export function calcularCampoMagneticoBz(x, y, bobinas) {
+  let bz = 0.0;
+  const rNucleo2 = 4.0; // Radio efectivo del núcleo para evitar singularidades en r = 0
+
+  for (let i = 0; i < bobinas.length; i++) {
+    const bob = bobinas[i];
+    const dx = x - bob.x;
+    const dy = y - bob.y;
+    const dist2 = dx * dx + dy * dy;
+    // Bz decrece con la distancia al eje del solenoide / dipolo
+    bz += (bob.corriente * 40.0) / Math.pow(dist2 + rNucleo2, 1.25);
+  }
+
+  return bz;
+}
+
+// Calcula el campo eléctrico Ex, Ey generado por las dos placas deflectoras superior e inferior.
+export function calcularCampoElectrico(x, y, vSuperior, vInferior) {
+  const dPlacas = 32.0; // Distancia entre placas en el eje Y
+  // Campo uniforme principal en el canal central con decaimiento en los extremos X
+  const amortiguacionBorde = 1.0 / (1.0 + Math.pow(x / 30.0, 4));
+  const ey = ((vInferior - vSuperior) / dPlacas) * amortiguacionBorde;
+  const ex = -((vSuperior + vInferior) * 0.015 * (x / 30.0)) * amortiguacionBorde;
+
+  return { ex, ey };
+}
+
+// Simula la trayectoria de un haz de partículas cargadas bajo la fuerza de Lorentz F = q*(E + v x B).
+export function simularTrayectoriaLorentz(genoma, entrada) {
+  const q = Number(entrada?.cargaParticula !== undefined ? entrada.cargaParticula : 1.0);
+  const m = 1.0; // Masa unitaria de la partícula
+  const vInyeccion = Number(entrada?.velocidadInyeccion !== undefined ? entrada.velocidadInyeccion : 24.0);
+  const yObjetivo = Number(entrada?.posicionSalidaY !== undefined ? entrada.posicionSalidaY : 6.0);
+  const dispersionHaz = Number(entrada?.dispersionHaz !== undefined ? entrada.dispersionHaz : 2.5);
+
+  // 6 genes del genoma:
+  // [I1, I2, I3, I4]: Corrientes de 4 electroimanes en Amperios [-12 A, 12 A]
+  // [V_sup, V_inf]: Voltajes de placas deflectoras en Voltios [-250 V, 250 V]
+  const [i1, i2, i3, i4, vSup, vInf] = genoma;
+
+  // Posiciones de los 4 electroimanes en la cámara de vacío
+  const bobinas = [
+    { x: -18.0, y: 16.0, corriente: i1 }, // Bobina Superior Izquierda
+    { x: 18.0, y: 16.0, corriente: i2 },  // Bobina Superior Derecha
+    { x: -18.0, y: -16.0, corriente: i3 },// Bobina Inferior Izquierda
+    { x: 18.0, y: -16.0, corriente: i4 }  // Bobina Inferior Derecha
+  ];
+
+  // Geometría de la cámara de vacío
+  const xMin = -45.0;
+  const xMax = 42.0;
+  const yLimite = 24.0;
+  const xSalida = 38.0;
+
+  // Simulación de un haz compuesto de 5 partículas representativas con leve dispersión angular
+  const numParticulas = 5;
+  const trayectorias = [];
+  const dt = 0.035;
+  const maxPasos = 180;
+
+  let particulasTransmitidas = 0;
+  let sumaErrorSalida = 0.0;
+  let colisionesPared = 0;
+
+  for (let p = 0; p < numParticulas; p++) {
+    // Dispersión angular normalizada del haz en la rendija de inyección
+    const factorDisp = numParticulas === 1 ? 0 : (p / (numParticulas - 1) - 0.5) * 2.0;
+    const anguloEntradaRad = (factorDisp * dispersionHaz * Math.PI) / 180.0;
+    const yEntrada = factorDisp * 1.5;
+
+    let x = -40.0;
+    let y = yEntrada;
+    let vx = vInyeccion * Math.cos(anguloEntradaRad);
+    let vy = vInyeccion * Math.sin(anguloEntradaRad);
+
+    const camino = [{ x, y, vx, vy, t: 0 }];
+    let colision = false;
+    let salioPorColimador = false;
+
+    for (let paso = 1; paso <= maxPasos; paso++) {
+      const bz = calcularCampoMagneticoBz(x, y, bobinas);
+      const { ex, ey } = calcularCampoElectrico(x, y, vSup, vInf);
+
+      // Aceleración por Fuerza de Lorentz: a = (q/m) * (E + v x B)
+      // En 2D: (vx, vy, 0) x (0, 0, Bz) = (vy*Bz, -vx*Bz, 0)
+      const ax = (q / m) * (ex + vy * bz);
+      const ay = (q / m) * (ey - vx * bz);
+
+      // Integración numérica por método semi-implícito Euler-Cromer
+      vx += ax * dt;
+      vy += ay * dt;
+      x += vx * dt;
+      y += vy * dt;
+
+      camino.push({ x, y, vx, vy, t: paso * dt });
+
+      // Verificación de choque contra las paredes de la cámara de confinamiento
+      if (Math.abs(y) >= yLimite || x < xMin) {
+        colision = true;
+        colisionesPared++;
+        break;
+      }
+
+      // Verificación de llegada al plano del detector / colimador de salida
+      if (x >= xSalida) {
+        const errorY = Math.abs(y - yObjetivo);
+        if (errorY <= 4.0) {
+          salioPorColimador = true;
+          particulasTransmitidas++;
+        }
+        sumaErrorSalida += errorY;
+        break;
+      }
+    }
+
+    if (!salioPorColimador && !colision) {
+      sumaErrorSalida += Math.abs(y - yObjetivo) + 12.0;
+    }
+
+    trayectorias.push({
+      camino,
+      colision,
+      salioPorColimador,
+      yFinal: camino[camino.length - 1].y
+    });
+  }
+
+  // Eficiencia de transmisión del haz (0 % a 100 %)
+  const tasaTransmision = (particulasTransmitidas / numParticulas) * 100.0;
+  const errorPromedioSalida = sumaErrorSalida / numParticulas;
+
+  // Consumo total de potencia eléctrica Joule: P = sum(I^2 * R_bobina) + V^2 / R_placa
+  const potenciaBobinasWatts = (i1 * i1 + i2 * i2 + i3 * i3 + i4 * i4) * 0.8;
+  const potenciaDeflectoresWatts = (vSup * vSup + vInf * vInf) * 0.0012;
+  const potenciaTotalWatts = potenciaBobinasWatts + potenciaDeflectoresWatts;
+
+  // Intensidad máxima de campo magnético |Bz| en la cámara
+  let maxAbsBz = 0.0;
+  bobinas.forEach((b) => {
+    const mag = Math.abs(b.corriente);
+    if (mag > maxAbsBz) maxAbsBz = mag;
+  });
+
+  return {
+    bobinas,
+    vSuperior: vSup,
+    vInferior: vInf,
+    yObjetivo,
+    xSalida,
+    trayectorias,
+    particulasTransmitidas,
+    tasaTransmision,
+    errorPromedioSalida,
+    colisionesPared,
+    potenciaTotalWatts,
+    maxAbsBz: maxAbsBz * 0.12 // Valor relativo en Teslas
+  };
+}
+
+// Objeto de definición del modelo para el motor evolutivo.
+
+
+export function simularCampoTermico(genoma, entrada) {
+  const tAmbiente = Number(entrada?.temperaturaAmbiente !== undefined ? entrada.temperaturaAmbiente : 25.0); // °C
+  const kConductividad = Number(entrada?.conductividadPlaca !== undefined ? entrada.conductividadPlaca : 1.5); // W/(m·K)
+
+  const anchoPlaca = 100.0; // mm [-50, 50]
+  const altoPlaca = 80.0;   // mm [-40, 40]
+
+  // Potencias térmicas disipadas por los 4 circuitos integrados en Watts:
+  const potencias = [25.0, 18.0, 12.0, 10.0];
+  const radiosChip = [9.0, 7.5, 6.5, 6.0]; // mm (radio físico de seguridad de cada encapsulado)
+
+  // 8 genes continuos: [x1, y1, x2, y2, x3, y3, x4, y4]
+  const chips = [
+    { x: genoma[0], y: genoma[1], q: potencias[0], r: radiosChip[0], nombre: "CPU" },
+    { x: genoma[2], y: genoma[3], q: potencias[1], r: radiosChip[1], nombre: "GPU" },
+    { x: genoma[4], y: genoma[5], q: potencias[2], r: radiosChip[2], nombre: "VRM" },
+    { x: genoma[6], y: genoma[7], q: potencias[3], r: radiosChip[3], nombre: "MEM" }
+  ];
+
+  // Verificación de solapamiento físico entre componentes y desborde de bordes
+  let solapamientoMm = 0;
+  for (let i = 0; i < chips.length; i++) {
+    for (let j = i + 1; j < chips.length; j++) {
+      const dist = Math.hypot(chips[i].x - chips[j].x, chips[i].y - chips[j].y);
+      const radioMinimo = chips[i].r + chips[j].r + 3.0; // 3 mm de separación mínima
+      if (dist < radioMinimo) {
+        solapamientoMm += (radioMinimo - dist);
+      }
+    }
+
+    // Distancia al borde perimetral disipador
+    const margenX = (anchoPlaca / 2) - Math.abs(chips[i].x);
+    const margenY = (altoPlaca / 2) - Math.abs(chips[i].y);
+    if (margenX < chips[i].r) solapamientoMm += (chips[i].r - margenX) * 2;
+    if (margenY < chips[i].r) solapamientoMm += (chips[i].r - margenY) * 2;
+  }
+
+  // Muestreo del campo térmico en una grilla de 32x26 puntos
+  const nx = 32;
+  const ny = 26;
+  let tMax = tAmbiente;
+  let xHotspot = 0;
+  let yHotspot = 0;
+  const grilla = [];
+
+  // Función local para evaluar la temperatura en cualquier punto (x, y) de la placa
+  const calcularTemperaturaPunto = (x, y) => {
+    let t = tAmbiente;
+    const factorEnfriamientoBorde = Math.min(
+      (anchoPlaca / 2) - Math.abs(x),
+      (altoPlaca / 2) - Math.abs(y)
+    ) / 15.0;
+    const factorConveccion = Math.max(0.2, Math.min(1.0, factorEnfriamientoBorde));
+
+    for (let i = 0; i < chips.length; i++) {
+      const c = chips[i];
+      const d = Math.hypot(x - c.x, y - c.y);
+      // Disipación térmica gaussiana / Green en placa delgada con disipador perimetral
+      const deltaT = (c.q / (kConductividad * 0.45)) * Math.exp(-(d * d) / 380.0);
+      t += deltaT * factorConveccion;
+    }
+    return t;
+  };
+
+  for (let iy = 0; iy < ny; iy++) {
+    const y = - (altoPlaca / 2) + (iy / (ny - 1)) * altoPlaca;
+    const fila = [];
+    for (let ix = 0; ix < nx; ix++) {
+      const x = - (anchoPlaca / 2) + (ix / (nx - 1)) * anchoPlaca;
+      const t = calcularTemperaturaPunto(x, y);
+      if (t > tMax) {
+        tMax = t;
+        xHotspot = x;
+        yHotspot = y;
+      }
+      fila.push(t);
+    }
+    grilla.push(fila);
+  }
+
+  // Temperatura en el centro de cada componente
+  chips.forEach(c => {
+    c.temperatura = calcularTemperaturaPunto(c.x, c.y);
+  });
+
+  // Varianza térmica para homogeneidad de la disipación
+  let sumaT = 0;
+  let cant = 0;
+  grilla.forEach(f => f.forEach(t => { sumaT += t; cant++; }));
+  const tPromedio = sumaT / (cant || 1);
+
+  return {
+    chips,
+    grilla,
+    nx,
+    ny,
+    anchoPlaca,
+    altoPlaca,
+    tAmbiente,
+    tMax,
+    tPromedio,
+    xHotspot,
+    yHotspot,
+    solapamientoMm,
+    sinSolapamiento: solapamientoMm === 0
+  };
+}
+
+// Objeto de definición del modelo para el motor evolutivo.
+
 export default MotorCamposUnificados;

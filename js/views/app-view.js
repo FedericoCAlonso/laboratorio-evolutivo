@@ -1025,11 +1025,11 @@ export class AppView {
   // Convierte cualquier modelo nativo o dinámico a una definición lista para ser editada o adaptada en el Estudio.
   _obtenerDefinicionEditable(modelo) {
     if (!modelo) return { def: null, esEdicion: false };
-    if (modelo.esDinamico && modelo.definicionCruda) {
+    if (modelo.esDinamico && !modelo.esCatalogoOriginal && modelo.definicionCruda) {
       return { def: modelo.definicionCruda, esEdicion: true };
     }
 
-    const plantilla = obtenerPlantillaSimulacion(modelo.id) || {};
+    const plantilla = obtenerPlantillaSimulacion(modelo.id) || modelo.definicionCruda || {};
     const genomaCrudo = modelo.variables || (modelo.crearGenoma ? modelo.crearGenoma() : []);
 
     const varsLista = (plantilla.variables && plantilla.variables.length > 0)
@@ -1043,9 +1043,12 @@ export class AppView {
           valorNominal: v.valorNominal !== undefined ? v.valorNominal : undefined
         }));
 
+    const nombreBase = plantilla.nombre || modelo.nombre || `${modelo.id}`;
+    const nombreCopia = nombreBase.startsWith("Copia de ") ? nombreBase : `Copia de ${nombreBase}`;
+
     const def = {
-      id: modelo.id,
-      nombre: plantilla.nombre || modelo.nombre || `${modelo.id} (Editable)`,
+      id: undefined, // Fuerza generación de nuevo identificador dinámico
+      nombre: nombreCopia,
       descripcion: plantilla.descripcion || modelo.descripcion,
       tipoVisualizacion: plantilla.tipoVisualizacion || modelo.tipoVisualizacion || "calibracion",
       grafo: plantilla.grafo || modelo.grafo || (modelo.definicionCruda?.grafo) || null,
@@ -1055,7 +1058,7 @@ export class AppView {
       codigoEvaluacion: plantilla.codigoEvaluacion || `// Función de aptitud para ${modelo.nombre}\n// Variables disponibles: ${varsLista.map(v => 'vars.' + v.nombre).join(', ')}\nreturn Math.abs(vars.${varsLista[0]?.nombre || 'var1'} - 50);`
     };
 
-    return { def, esEdicion: true };
+    return { def, esEdicion: false };
   }
 }
 

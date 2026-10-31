@@ -5,7 +5,7 @@
 
 import { VisualizadorDinamico } from "./visualizers.js?v=3.1";
 import { obtenerPlantillaSimulacion } from "../builder.js?v=3.1";
-import { PLANTILLAS_FIELES } from "../plantillas/index.js?v=3.1";
+import { CATALOGO_PREDEFINIDO, CATALOGO_POR_ID } from "../../catalogo/definiciones.js?v=3.1";
 import { HINTS_VISUALIZACION, mostrarAlerta } from "../ui.js?v=3.1";
 import { MotorCamposUnificados } from "../engines/campos.js?v=3.1";
 import { MotorEstructurasCinematica } from "../engines/estructuras.js?v=3.1";
@@ -69,11 +69,11 @@ export class EstudioView {
     const sel = this.dom?.selectPlantilla;
     if (!sel || typeof document === "undefined" || typeof document.createElement !== "function") return;
     sel.innerHTML = `<option value="">💡 Cargar Plantilla...</option>`;
-    Object.entries(PLANTILLAS_FIELES).forEach(([id, plant]) => {
+    CATALOGO_PREDEFINIDO.forEach((plant) => {
       if (!plant) return;
       const opt = document.createElement("option");
-      opt.value = id;
-      opt.textContent = plant.nombre || id;
+      opt.value = plant.id;
+      opt.textContent = plant.nombre || plant.id;
       sel.appendChild(opt);
     });
   }
@@ -435,7 +435,7 @@ export class EstudioView {
     if (idEfectivo) {
       this.modeloIdActual = idEfectivo;
     }
-    if (this.dom.selectPlantilla && idEfectivo && PLANTILLAS_FIELES[idEfectivo]) {
+    if (this.dom.selectPlantilla && idEfectivo && CATALOGO_POR_ID[idEfectivo]) {
       this.dom.selectPlantilla.value = idEfectivo;
     }
 
