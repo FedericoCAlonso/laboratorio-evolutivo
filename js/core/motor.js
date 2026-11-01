@@ -91,15 +91,41 @@ export class Motor {
     const Sp = Array.from({ length: N }, () => []);
     const np = new Int32Array(N);
 
+    for (let i = 0; i < N; i++) {
+      individuos[i]._idx = i;
+    }
+
     for (let p = 0; p < N; p++) {
-      individuos[p]._idx = p;
       const fitP = individuos[p].fitness;
-      for (let q = 0; q < N; q++) {
-        if (p === q) continue;
+      const esArrP = Array.isArray(fitP);
+      const lenP = esArrP ? fitP.length : 1;
+
+      for (let q = p + 1; q < N; q++) {
         const fitQ = individuos[q].fitness;
-        if (this.domina(fitP, fitQ)) {
+        let pDomina = false;
+        let qDomina = false;
+
+        if (esArrP && Array.isArray(fitQ)) {
+          let pMejor = false;
+          let qMejor = false;
+          for (let m = 0; m < lenP; m++) {
+            const vp = fitP[m];
+            const vq = fitQ[m];
+            if (vp < vq) pMejor = true;
+            else if (vp > vq) qMejor = true;
+          }
+          pDomina = pMejor && !qMejor;
+          qDomina = qMejor && !pMejor;
+        } else {
+          pDomina = fitP < fitQ;
+          qDomina = fitQ < fitP;
+        }
+
+        if (pDomina) {
           Sp[p].push(q);
-        } else if (this.domina(fitQ, fitP)) {
+          np[q]++;
+        } else if (qDomina) {
+          Sp[q].push(p);
           np[p]++;
         }
       }
@@ -269,14 +295,14 @@ export class Motor {
   }
 
   // Registra las estadísticas de la generación actual en los historiales y notifica al observador.
-  registrarEstadisticas() {
+  registrarEstadisticas(emitirEvento = true) {
     if (this.esMultiobjetivo) {
       // Extracción y ordenamiento del Frente de Pareto F0 por el primer objetivo para visualización fluida.
       const frenteF0 = this.poblacion.filter((ind) => ind.rango === 0);
       frenteF0.sort((a, b) => a.fitness[0] - b.fitness[0]);
       this.frentePareto = frenteF0;
 
-      if (this.onProgreso) {
+      if (emitirEvento && this.onProgreso) {
         this.onProgreso({
           esMultiobjetivo: true,
           generacion: this.generacionActual,
@@ -312,7 +338,7 @@ export class Motor {
       this.historiaMejor.push(mejorFitness);
       this.historiaPromedio.push(promedioFitness);
 
-      if (this.onProgreso) {
+      if (emitirEvento && this.onProgreso) {
         this.onProgreso({
           esMultiobjetivo: false,
           generacion: this.generacionActual,
@@ -339,7 +365,8 @@ export class Motor {
     while (this.generacionActual < finTanda) {
       this.avanzarUnaGeneracion();
       this.generacionActual++;
-      this.registrarEstadisticas();
+      const esUltima = this.generacionActual >= this.generaciones || this.generacionActual === finTanda;
+      this.registrarEstadisticas(esUltima);
     }
 
     if (this.generacionActual >= this.generaciones) {
