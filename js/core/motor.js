@@ -297,34 +297,36 @@ export class Motor {
   // Registra las estadísticas de la generación actual en los historiales y notifica al observador.
   registrarEstadisticas(emitirEvento = true) {
     if (this.esMultiobjetivo) {
-      // Extracción y ordenamiento del Frente de Pareto F0 por el primer objetivo para visualización fluida.
-      const frenteF0 = this.poblacion.filter((ind) => ind.rango === 0);
-      frenteF0.sort((a, b) => a.fitness[0] - b.fitness[0]);
-      this.frentePareto = frenteF0;
+      if (emitirEvento) {
+        // Extracción y ordenamiento del Frente de Pareto F0 por el primer objetivo para visualización fluida.
+        const frenteF0 = this.poblacion.filter((ind) => ind.rango === 0);
+        frenteF0.sort((a, b) => a.fitness[0] - b.fitness[0]);
+        this.frentePareto = frenteF0;
 
-      if (emitirEvento && this.onProgreso) {
-        this.onProgreso({
-          esMultiobjetivo: true,
-          generacion: this.generacionActual,
-          totalGeneraciones: this.generaciones,
-          frentePareto: this.frentePareto.map((ind) => ({
-            genoma: [...ind.genoma],
-            fitness: [...ind.fitness],
-            rango: ind.rango,
-            crowdingDistance: ind.crowdingDistance
-          })),
-          poblacion: this.poblacion.map((ind) => ({
-            genoma: [...ind.genoma],
-            fitness: [...ind.fitness],
-            rango: ind.rango
-          })),
-          mejorGenoma: this.frentePareto[0] ? this.frentePareto[0].genoma : this.poblacion[0].genoma,
-          mejorFitness: this.frentePareto[0] ? this.frentePareto[0].fitness : this.poblacion[0].fitness,
-          genomaInicialAzar: this.genomaInicialAzar,
-          fitnessInicialAzar: this.fitnessInicialAzar,
-          nombresObjetivos: this.modelo.nombresObjetivos || ["Objetivo 1", "Objetivo 2"],
-          completado: this.generacionActual >= this.generaciones
-        });
+        if (this.onProgreso) {
+          this.onProgreso({
+            esMultiobjetivo: true,
+            generacion: this.generacionActual,
+            totalGeneraciones: this.generaciones,
+            frentePareto: this.frentePareto.map((ind) => ({
+              genoma: [...ind.genoma],
+              fitness: [...ind.fitness],
+              rango: ind.rango,
+              crowdingDistance: ind.crowdingDistance
+            })),
+            poblacion: this.poblacion.map((ind) => ({
+              genoma: [...ind.genoma],
+              fitness: [...ind.fitness],
+              rango: ind.rango
+            })),
+            mejorGenoma: this.frentePareto[0] ? this.frentePareto[0].genoma : this.poblacion[0].genoma,
+            mejorFitness: this.frentePareto[0] ? this.frentePareto[0].fitness : this.poblacion[0].fitness,
+            genomaInicialAzar: this.genomaInicialAzar,
+            fitnessInicialAzar: this.fitnessInicialAzar,
+            nombresObjetivos: this.modelo.nombresObjetivos || ["Objetivo 1", "Objetivo 2"],
+            completado: this.generacionActual >= this.generaciones
+          });
+        }
       }
     } else {
       // Métricas de convergencia monobjetivo tradicional.
@@ -356,17 +358,29 @@ export class Motor {
     }
   }
 
-  // Ejecuta una tanda de generaciones en lotes para mantener la fluidez de la interfaz o el worker.
+  // Ejecuta una tanda de generaciones en lotes con presupuesto de tiempo dinámico
+  // para balancear máximo rendimiento de CPU con una tasa de refresco visual fluida de 60 FPS.
   ejecutarTanda() {
     if (this.estado !== "CORRIENDO") return;
 
-    const finTanda = Math.min(this.generacionActual + this.tandaGeneraciones, this.generaciones);
+    const tInicioLote = performance.now();
+    const loteMinimo = Math.max(5, this.tandaGeneraciones || 10);
+    let genEnLote = 0;
 
-    while (this.generacionActual < finTanda) {
+    while (this.generacionActual < this.generaciones) {
       this.avanzarUnaGeneracion();
       this.generacionActual++;
-      const esUltima = this.generacionActual >= this.generaciones || this.generacionActual === finTanda;
-      this.registrarEstadisticas(esUltima);
+      genEnLote++;
+
+      const esUltima = this.generacionActual >= this.generaciones;
+      const tiempoConsumido = performance.now() - tInicioLote;
+
+      if (esUltima || (genEnLote >= loteMinimo && tiempoConsumido >= 30)) {
+        this.registrarEstadisticas(true);
+        break;
+      } else {
+        this.registrarEstadisticas(false);
+      }
     }
 
     if (this.generacionActual >= this.generaciones) {

@@ -535,10 +535,14 @@ export function obtenerMetricasCaminante(genoma, entrada = {}) {
 export function interseccion(p1, r1, p2, r2, s) {
   const dx = p2.x - p1.x;
   const dy = p2.y - p1.y;
-  const dd = Math.hypot(dx, dy);
-  if (dd === 0 || dd > r1 + r2 || dd < Math.abs(r1 - r2)) return null;
-  const aa = (r1 * r1 - r2 * r2 + dd * dd) / (2 * dd);
-  const hh = Math.sqrt(Math.max(0, r1 * r1 - aa * aa));
+  const d2 = dx * dx + dy * dy;
+  const dd = Math.sqrt(d2);
+  const rSum = r1 + r2;
+  const rDiff = Math.abs(r1 - r2);
+  if (dd <= 1e-9 || dd > rSum || dd < rDiff) return null;
+  const aa = (r1 * r1 - r2 * r2 + d2) / (2 * dd);
+  const hh2 = r1 * r1 - aa * aa;
+  const hh = Math.sqrt(hh2 > 0 ? hh2 : 0);
   const mx = p1.x + (aa * dx) / dd;
   const my = p1.y + (aa * dy) / dd;
   return { x: mx + (s * hh * dy) / dd, y: my - (s * hh * dx) / dd };
@@ -567,7 +571,7 @@ export function calcularAceleracionPieJansen(pasos, longitudManivela) {
 
     const ax = (pSig.x - 2 * pAct.x + pAnt.x) / dTheta2;
     const ay = (pSig.y - 2 * pAct.y + pAnt.y) / dTheta2;
-    const magA = Math.hypot(ax, ay);
+    const magA = Math.sqrt(ax * ax + ay * ay);
     aNorm[t] = magA / longitudManivela;
   }
 
@@ -787,7 +791,7 @@ export function obtenerMetricasJansen(genoma, entrada = {}) {
   const limitePico = Number(entrada?.limitePico !== undefined ? entrada.limitePico : 30);
   const m = LONGITUD_MANIVELA_JANSEN;
 
-  const N = 180;
+  const N = Number(entrada?.pasosSimulacion || 60);
   const pasos = [];
   let pasosInvalidos = 0;
 
@@ -822,13 +826,15 @@ export function obtenerMetricasJansen(genoma, entrada = {}) {
 
   const anchoTotal = maxX - minX;
   const alturaTotal = maxY - minY;
-  const diagCaja = Math.hypot(anchoTotal, alturaTotal);
+  const diagCaja2 = anchoTotal * anchoTotal + alturaTotal * alturaTotal;
+  const limSalto2 = 0.0625 * diagCaja2;
 
   let saltoGrande = false;
   for (let s = 0; s < N; s++) {
     const hAct = pasos[s].H;
     const hSig = pasos[(s + 1) % N].H;
-    if (Math.hypot(hSig.x - hAct.x, hSig.y - hAct.y) > 0.25 * diagCaja) {
+    const dx = hSig.x - hAct.x, dy = hSig.y - hAct.y;
+    if (dx * dx + dy * dy > limSalto2) {
       saltoGrande = true;
       break;
     }

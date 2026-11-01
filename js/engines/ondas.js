@@ -450,6 +450,7 @@ export function calcularImpedanciaPoro(frecuencia, resistividadFlujoSigma) {
 
 // Simula el comportamiento acústico y la atenuación espectral dBA del cuerpo fonoabsorbente.
 export function simularAbsorbenteAcustico(genoma, entrada) {
+  const { BANDAS_OCTAVA_HZ, PONDERACION_A_DB } = CONSTANTES_ACUSTICAS;
   const tipoEstructura = (entrada?.tipoEstructura || "cuña_prismatica").toString().toLowerCase().trim();
   const tipoRuido = (entrada?.tipoRuido || "conversacion").toString().toLowerCase().trim();
   const atenuacionObjetivoDba = Number(entrada?.atenuacionObjetivoDba !== undefined ? entrada.atenuacionObjetivoDba : 18.0);

@@ -530,8 +530,11 @@ export class AppView {
           modelo: this.vm.modeloActual,
           fitness: datos.mejorSolucion?.fitness
         });
-        this.dom.textoDescribirModelo.textContent = this.vm.modeloActual.describir(genomaADibujar, this.vm.entradasModelo);
-        this._renderizarChipsGenoma(genomaADibujar);
+        // Solo actualiza descripción y chips al completar la corrida para evitar congelar el DOM en cada tanda
+        if (datos.completado) {
+          this.dom.textoDescribirModelo.textContent = this.vm.modeloActual.describir(genomaADibujar, this.vm.entradasModelo);
+          this._renderizarChipsGenoma(genomaADibujar);
+        }
       }
     });
 
@@ -559,6 +562,10 @@ export class AppView {
     // 4. Cambios de estado operativo de la simulación
     this.vm.on("estadoCambiado", (estado) => {
       actualizarBotonesControl(estado, this.dom, this.dom.textoEstado);
+      if (estado === "PAUSADO" && this.vm.mejorSolucion?.genoma) {
+        this.dom.textoDescribirModelo.textContent = this.vm.modeloActual.describir(this.vm.mejorSolucion.genoma, this.vm.entradasModelo);
+        this._renderizarChipsGenoma(this.vm.mejorSolucion.genoma);
+      }
     });
 
     // 5. Finalización con éxito de la corrida

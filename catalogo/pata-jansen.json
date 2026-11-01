@@ -112,7 +112,7 @@
       "valorNominal": 61.9
     }
   ],
-  "codigoEvaluacion": "// Fitness multiobjetivo de la Pata de Theo Jansen (180 pasos)\n// Barreras duras: 1000+ lazo no cierra, 500 saltos bruscos, 800 viola gálibo/despeje\nconst modoOptimizacion = \"multiobjetivo\";\nconst maxAncho = 80;\nconst maxAlto = 40;\nconst obstaculoAlto = 15;\nconst zancadaObjetivo = 4.0;\nconst criterioSuavidad = \"pico\";\nconst limitePico = 30;\nconst w1 = 3.0, w2 = 1.0, w3 = 1.0, w4 = 1.0, w5 = 0.5, w7 = 1.0, w9 = 1.0;\n\nreturn estructuras.evaluarJansenFitness(vars, {\n  modoOptimizacion, maxAncho, maxAlto, obstaculoAlto,\n  zancadaObjetivo, criterioSuavidad, limitePico,\n  w1, w2, w3, w4, w5, w7, w9\n});",
+  "codigoEvaluacion": "// Fitness multiobjetivo de la Pata de Theo Jansen (60 pasos)\n// Barreras duras: 1000+ lazo no cierra, 500 saltos bruscos, 800 viola gálibo/despeje\nconst modoOptimizacion = \"multiobjetivo\";\nconst maxAncho = 80;\nconst maxAlto = 40;\nconst obstaculoAlto = 15;\nconst zancadaObjetivo = 4.0;\nconst criterioSuavidad = \"pico\";\nconst limitePico = 30;\nconst w1 = 3.0, w2 = 1.0, w3 = 1.0, w4 = 1.0, w5 = 0.5, w7 = 1.0, w9 = 1.0;\n\nreturn estructuras.evaluarJansenFitness(vars, {\n  modoOptimizacion, maxAncho, maxAlto, obstaculoAlto,\n  zancadaObjetivo, criterioSuavidad, limitePico,\n  w1, w2, w3, w4, w5, w7, w9\n});",
   "grafo": {
     "nodos": [
       {
