@@ -377,6 +377,12 @@ export function compilarModeloDinamico(definicionCruda) {
     efector: { x: 55, y: 40, velocidad: 0, aceleracionPico: 5.0, emB: 0, emE: 0 }
   };
 
+  // Objeto reutilizable para minimizar asignaciones en heap y presión de Garbage Collector
+  const varsReciclado = {};
+  for (let i = 0; i < varsDef.length; i++) {
+    varsReciclado[varsDef[i].nombre] = 0;
+  }
+
   return {
     id: modeloId,
     nombre: definicionCruda.nombre.trim(),
@@ -409,10 +415,10 @@ export function compilarModeloDinamico(definicionCruda) {
 
     // Evalúa el genoma mapeándolo al diccionario vars y ejecutando la función compilada de forma pura y segura.
     evaluar(genoma, entrada, rng) {
-      const vars = {};
       for (let i = 0; i < varsDef.length; i++) {
-        vars[varsDef[i].nombre] = genoma[i];
+        varsReciclado[varsDef[i].nombre] = genoma[i];
       }
+      const vars = varsReciclado;
 
       // Telemetría de sensores si el código de evaluación realmente los consume
       let telemetriaSensores = telemetriaPorDefecto;

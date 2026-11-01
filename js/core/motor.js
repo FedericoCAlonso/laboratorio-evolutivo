@@ -5,12 +5,12 @@
 import { crearPrngMulberry32 } from "./rng.js";
 
 // Función auxiliar para programar la siguiente tanda de generaciones compatible con el hilo principal y Web Workers.
-const programarFrame = typeof requestAnimationFrame === "function"
+const programarFrame = (typeof requestAnimationFrame === "function" && typeof window !== "undefined")
   ? requestAnimationFrame
   : (cb) => setTimeout(cb, 0);
 
 // Función auxiliar para cancelar la tanda programada compatible con el hilo principal y Web Workers.
-const cancelarFrame = typeof cancelAnimationFrame === "function"
+const cancelarFrame = (typeof cancelAnimationFrame === "function" && typeof window !== "undefined")
   ? cancelAnimationFrame
   : (id) => clearTimeout(id);
 

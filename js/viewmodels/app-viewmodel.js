@@ -122,7 +122,8 @@ export class AppViewModel {
       });
 
       this.worker.addEventListener("error", (error) => {
-        console.warn("[ViewModel] Error capturado en Web Worker:", error.message);
+        console.warn("[ViewModel] Error capturado en Web Worker, activando fallback local:", error.message);
+        this.worker = null;
         this.emit("error", { mensaje: error.message });
       });
 
