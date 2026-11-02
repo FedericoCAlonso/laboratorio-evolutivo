@@ -723,6 +723,31 @@ export class AppView {
       }
     });
 
+    // Sincronización reactiva inmediata de parámetros de entrada y pesos del modelo
+    if (this.dom.contenedorFormularioModelo) {
+      this.dom.contenedorFormularioModelo.addEventListener("input", () => {
+        try {
+          const entradas = obtenerDatosEntradaModelo(this.vm.modeloActual);
+          this.vm.actualizarEntradasModelo(entradas);
+        } catch (_) {}
+      });
+      this.dom.contenedorFormularioModelo.addEventListener("change", () => {
+        try {
+          const entradas = obtenerDatosEntradaModelo(this.vm.modeloActual);
+          this.vm.actualizarEntradasModelo(entradas);
+          const genoma = this.vm.mejorSolucion?.genoma || this.vm.obtenerGenomaInicial(this.vm.modeloActual, entradas);
+          if (genoma && this.dom.contenedorDibujoModelo) {
+            const visualizador = obtenerVisualizador(this.vm.modeloActual.id);
+            visualizador.render(this.dom.contenedorDibujoModelo, genoma, entradas, {
+              modelo: this.vm.modeloActual,
+              fitness: this.vm.mejorSolucion?.fitness
+            });
+            this.dom.textoDescribirModelo.textContent = this.vm.modeloActual.describir(genoma, entradas);
+          }
+        } catch (_) {}
+      });
+    }
+
     this.dom.btnPausar.addEventListener("click", () => {
       this.vm.alternarPausa();
     });

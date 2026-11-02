@@ -36,7 +36,24 @@
       "max": 180
     }
   ],
-  "codigoEvaluacion": "// Parámetros del escenario (editables): objetivo, obstáculo circular y longitudes de eslabones\nconst objetivo = { x: 55, y: 40 };\nconst obstaculo = { x: 30, y: 20, radio: 16 };\nconst [L1, L2, L3] = [45, 35, 25];\n\n// Cinemática directa: ángulos acumulados a lo largo de la cadena\nconst a1 = (vars.theta1 * Math.PI) / 180;\nconst a2 = a1 + (vars.theta2 * Math.PI) / 180;\nconst a3 = a2 + (vars.theta3 * Math.PI) / 180;\nconst p0 = { x: 0, y: 0 };\nconst p1 = { x: L1 * Math.cos(a1), y: L1 * Math.sin(a1) };\nconst p2 = { x: p1.x + L2 * Math.cos(a2), y: p1.y + L2 * Math.sin(a2) };\nconst p3 = { x: p2.x + L3 * Math.cos(a3), y: p2.y + L3 * Math.sin(a3) };\n\n// Distancia mínima del obstáculo a un segmento AB\nconst distSegmento = (p, a, b) => {\n  const abx = b.x - a.x, aby = b.y - a.y;\n  const l2 = abx * abx + aby * aby;\n  if (l2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);\n  const t = Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / l2));\n  return Math.hypot(p.x - (a.x + t * abx), p.y - (a.y + t * aby));\n};\nconst minDist = Math.min(\n  distSegmento(obstaculo, p0, p1),\n  distSegmento(obstaculo, p1, p2),\n  distSegmento(obstaculo, p2, p3)\n);\n\n// Objetivos: precisión (con penalización de colisión) y esfuerzo angular normalizado\nconst distObjetivo = Math.hypot(p3.x - objetivo.x, p3.y - objetivo.y);\nconst penColision = minDist < obstaculo.radio ? 300 + (obstaculo.radio - minDist) * 15 : 0;\nconst esfuerzo = (Math.abs(vars.theta1) + Math.abs(vars.theta2) + Math.abs(vars.theta3)) / 540;\n\nreturn [distObjetivo + penColision, esfuerzo + (penColision > 0 ? 2.0 : 0)];",
+  "parametrosEntrada": [
+    {
+      "clave": "modoOptimizacion",
+      "etiqueta": "Modo de Optimización",
+      "tipo": "selector",
+      "opciones": [
+        { "valor": "multiobjetivo", "etiqueta": "Multiobjetivo Pareto (Precisión vs. Esfuerzo)" },
+        { "valor": "monobjetivo", "etiqueta": "Monobjetivo (Precisión ponderada)" }
+      ],
+      "valorDefecto": "multiobjetivo"
+    },
+    { "clave": "objetivoX", "etiqueta": "Coordenada Objetivo X", "tipo": "numero", "min": -90, "max": 90, "paso": 5, "valorDefecto": 55 },
+    { "clave": "objetivoY", "etiqueta": "Coordenada Objetivo Y", "tipo": "numero", "min": -90, "max": 90, "paso": 5, "valorDefecto": 40 },
+    { "clave": "obstaculoX", "etiqueta": "Centro Obstáculo X", "tipo": "numero", "min": -90, "max": 90, "paso": 5, "valorDefecto": 30 },
+    { "clave": "obstaculoY", "etiqueta": "Centro Obstáculo Y", "tipo": "numero", "min": -90, "max": 90, "paso": 5, "valorDefecto": 20 },
+    { "clave": "obstaculoRadio", "etiqueta": "Radio Obstáculo", "tipo": "numero", "min": 5, "max": 40, "paso": 2, "valorDefecto": 16 }
+  ],
+  "codigoEvaluacion": "// Parámetros del escenario (editables): objetivo, obstáculo circular y longitudes de eslabones\nconst modoOptimizacion = (entrada && entrada.modoOptimizacion) ? entrada.modoOptimizacion : \"multiobjetivo\";\nconst objX = Number(entrada?.objetivoX !== undefined ? entrada.objetivoX : 55);\nconst objY = Number(entrada?.objetivoY !== undefined ? entrada.objetivoY : 40);\nconst obsX = Number(entrada?.obstaculoX !== undefined ? entrada.obstaculoX : 30);\nconst obsY = Number(entrada?.obstaculoY !== undefined ? entrada.obstaculoY : 20);\nconst obsR = Number(entrada?.obstaculoRadio !== undefined ? entrada.obstaculoRadio : 16);\nconst objetivo = { x: objX, y: objY };\nconst obstaculo = { x: obsX, y: obsY, radio: obsR };\nconst [L1, L2, L3] = [45, 35, 25];\n\n// Cinemática directa: ángulos acumulados a lo largo de la cadena\nconst a1 = (vars.theta1 * Math.PI) / 180;\nconst a2 = a1 + (vars.theta2 * Math.PI) / 180;\nconst a3 = a2 + (vars.theta3 * Math.PI) / 180;\nconst p0 = { x: 0, y: 0 };\nconst p1 = { x: L1 * Math.cos(a1), y: L1 * Math.sin(a1) };\nconst p2 = { x: p1.x + L2 * Math.cos(a2), y: p1.y + L2 * Math.sin(a2) };\nconst p3 = { x: p2.x + L3 * Math.cos(a3), y: p2.y + L3 * Math.sin(a3) };\n\n// Distancia mínima del obstáculo a un segmento AB\nconst distSegmento = (p, a, b) => {\n  const abx = b.x - a.x, aby = b.y - a.y;\n  const l2 = abx * abx + aby * aby;\n  if (l2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);\n  const t = Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / l2));\n  return Math.hypot(p.x - (a.x + t * abx), p.y - (a.y + t * aby));\n};\nconst minDist = Math.min(\n  distSegmento(obstaculo, p0, p1),\n  distSegmento(obstaculo, p1, p2),\n  distSegmento(obstaculo, p2, p3)\n);\n\n// Objetivos: precisión (con penalización de colisión) y esfuerzo angular normalizado\nconst distObjetivo = Math.hypot(p3.x - objetivo.x, p3.y - objetivo.y);\nconst penColision = minDist < obstaculo.radio ? 300 + (obstaculo.radio - minDist) * 15 : 0;\nconst esfuerzo = (Math.abs(vars.theta1) + Math.abs(vars.theta2) + Math.abs(vars.theta3)) / 540;\n\nif (modoOptimizacion === \"monobjetivo\") {\n  return (distObjetivo + penColision) + esfuerzo * 20.0;\n}\nreturn [distObjetivo + penColision, esfuerzo + (penColision > 0 ? 2.0 : 0)];",
   "grafo": {
     "nodos": [
       {

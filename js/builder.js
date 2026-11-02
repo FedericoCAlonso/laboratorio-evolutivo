@@ -228,6 +228,7 @@ export function compilarFuncionEvaluacion(codigoFuente) {
   try {
     const fn = new Function(
       "vars",
+      "entrada",
       "rng",
       "estructuras",
       "cinematica",
@@ -333,6 +334,7 @@ export function validarDefinicionModelo(definicion) {
   try {
     const resPrueba = compilacion.fn(
       varsPrueba,
+      {},
       Math.random,
       MotorEstructurasCinematica,
       MotorEstructurasCinematica,
@@ -392,12 +394,13 @@ export function compilarModeloDinamico(definicionCruda) {
     esDinamico: true,
     usaWasm: false,
     usaRuido: false,
-    parametrosEntrada: [],
+    parametrosEntrada: Array.isArray(definicionCruda.parametrosEntrada) ? definicionCruda.parametrosEntrada : [],
     definicionCruda: {
       ...definicionCruda,
       id: modeloId,
       tipoVisualizacion,
       variables: varsDef,
+      parametrosEntrada: Array.isArray(definicionCruda.parametrosEntrada) ? definicionCruda.parametrosEntrada : [],
       grafo: definicionCruda.grafo || null
     },
 
@@ -432,6 +435,7 @@ export function compilarModeloDinamico(definicionCruda) {
       try {
         const puntaje = funcionEvaluacion(
           vars,
+          entrada || {},
           rng || Math.random,
           MotorEstructurasCinematica,
           MotorEstructurasCinematica,
@@ -478,6 +482,7 @@ export function compilarModeloDinamico(definicionCruda) {
       try {
         fitness = funcionEvaluacion(
           vars,
+          entrada || {},
           Math.random,
           MotorEstructurasCinematica,
           MotorEstructurasCinematica,
