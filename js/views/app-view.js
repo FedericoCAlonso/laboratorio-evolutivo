@@ -80,6 +80,13 @@ export class AppView {
       tooltipGrafico: document.getElementById("tooltip-grafico-m3"),
       leyendaGrafico: document.querySelector(".leyenda-grafico"),
       contenedorDibujoModelo: document.getElementById("contenedor-dibujo-modelo"),
+      obsMejoraGen0: document.getElementById("obs-mejora-gen0"),
+      obsDiversidad: document.getElementById("obs-diversidad"),
+      obsViabilidad: document.getElementById("obs-viabilidad"),
+      btnToggleFantasmas: document.getElementById("btn-toggle-fantasmas"),
+      btnToggleGen0: document.getElementById("btn-toggle-gen0"),
+      sliderLineaTiempo: document.getElementById("slider-linea-tiempo"),
+      obsGenTimeline: document.getElementById("obs-gen-timeline"),
       chipsGenomaOptimo: document.getElementById("chips-genoma-optimo"),
       btnCopiarReporte: document.getElementById("btn-copiar-reporte"),
       textoDescribirModelo: document.getElementById("texto-describir-modelo"),
@@ -176,8 +183,9 @@ export class AppView {
       window.estudioView = this.estudioView;
     }
 
-    // Estado local para recordar datos de dibujo de Pareto.
+    // Estado local para recordar datos de dibujo de Pareto y evitar reinicios bruscos de animación.
     this.ultimoDatosMulti = null;
+    this._ultimoRenderVisualMs = 0;
   }
 
   // Puebla las opciones del menú selector desplegable de modelos
@@ -455,12 +463,19 @@ export class AppView {
       if (genomaInicial && this.dom.contenedorDibujoModelo) {
         const visualizador = obtenerVisualizador(modelo.id);
         visualizador.render(this.dom.contenedorDibujoModelo, genomaInicial, this.vm.entradasModelo, {
+          ...this.vm.obtenerContextoVisualizacion(),
           modelo,
           fitness: null
         });
         this.dom.textoDescribirModelo.textContent = modelo.describir(genomaInicial, this.vm.entradasModelo);
         this._renderizarChipsGenoma(genomaInicial);
       }
+      this._actualizarObservatorioUI(false);
+    });
+
+    // 1b. Cambios en el observatorio darwiniano (timeline, fantasmas, comparar Gen 0)
+    this.vm.on("observatorioActualizado", () => {
+      this._actualizarObservatorioUI(true);
     });
 
     // 2. Notificaciones de progreso del motor evolutivo
@@ -522,18 +537,22 @@ export class AppView {
         });
       }
 
-      // Renderiza la animación cinemática en Canvas/DOM utilizando el visualizador especializado.
-      const genomaADibujar = datos.mejorSolucion?.genoma;
+      this._actualizarObservatorioUI(false);
+
+      // Renderiza la animación cinemática con throttle durante la corrida para no reiniciar animaciones cada 30ms.
+      const ctxVisual = this.vm.obtenerContextoVisualizacion();
+      const genomaADibujar = ctxVisual.genoma;
       if (genomaADibujar && this.dom.contenedorDibujoModelo) {
-        const visualizador = obtenerVisualizador(this.vm.modeloActual.id);
-        visualizador.render(this.dom.contenedorDibujoModelo, genomaADibujar, this.vm.entradasModelo, {
-          modelo: this.vm.modeloActual,
-          fitness: datos.mejorSolucion?.fitness
-        });
-        // Solo actualiza descripción y chips al completar la corrida para evitar congelar el DOM en cada tanda
+        const ahora = Date.now();
+        if (datos.completado || (ahora - this._ultimoRenderVisualMs) >= 280) {
+          this._ultimoRenderVisualMs = ahora;
+          const visualizador = obtenerVisualizador(this.vm.modeloActual.id);
+          visualizador.render(this.dom.contenedorDibujoModelo, genomaADibujar, this.vm.entradasModelo, ctxVisual);
+          this._renderizarChipsGenoma(genomaADibujar);
+        }
+        // Solo actualiza el informe técnico textual al completar la corrida para evitar congelar el DOM.
         if (datos.completado) {
           this.dom.textoDescribirModelo.textContent = this.vm.modeloActual.describir(genomaADibujar, this.vm.entradasModelo);
-          this._renderizarChipsGenoma(genomaADibujar);
         }
       }
     });
@@ -552,7 +571,9 @@ export class AppView {
       }
       const visualizador = obtenerVisualizador(modelo.id);
       visualizador.render(this.dom.contenedorDibujoModelo, individuo.genoma, entrada, {
+        ...this.vm.obtenerContextoVisualizacion(),
         modelo,
+        genoma: individuo.genoma,
         fitness: individuo.fitness
       });
       this.dom.textoDescribirModelo.textContent = modelo.describir(individuo.genoma, entrada);
@@ -735,13 +756,11 @@ export class AppView {
         try {
           const entradas = obtenerDatosEntradaModelo(this.vm.modeloActual);
           this.vm.actualizarEntradasModelo(entradas);
-          const genoma = this.vm.mejorSolucion?.genoma || this.vm.obtenerGenomaInicial(this.vm.modeloActual, entradas);
+          const ctxVisual = this.vm.obtenerContextoVisualizacion();
+          const genoma = ctxVisual.genoma;
           if (genoma && this.dom.contenedorDibujoModelo) {
             const visualizador = obtenerVisualizador(this.vm.modeloActual.id);
-            visualizador.render(this.dom.contenedorDibujoModelo, genoma, entradas, {
-              modelo: this.vm.modeloActual,
-              fitness: this.vm.mejorSolucion?.fitness
-            });
+            visualizador.render(this.dom.contenedorDibujoModelo, genoma, entradas, ctxVisual);
             this.dom.textoDescribirModelo.textContent = this.vm.modeloActual.describir(genoma, entradas);
           }
         } catch (_) {}
@@ -759,6 +778,29 @@ export class AppView {
     this.dom.btnNuevaSemilla.addEventListener("click", () => {
       this.vm.generarNuevaSemilla();
     });
+
+    // Controles del Observatorio Darwiniano (fantasmas, comparación Gen 0 y scrubbing histórico)
+    if (this.dom.btnToggleFantasmas) {
+      this.dom.btnToggleFantasmas.addEventListener("click", () => {
+        const activo = this.vm.alternarFantasmas();
+        this.dom.btnToggleFantasmas.classList.toggle("activo", activo);
+        this.dom.btnToggleFantasmas.setAttribute("aria-pressed", String(activo));
+      });
+    }
+
+    if (this.dom.btnToggleGen0) {
+      this.dom.btnToggleGen0.addEventListener("click", () => {
+        const activo = this.vm.alternarCompararGen0();
+        this.dom.btnToggleGen0.classList.toggle("activo", activo);
+        this.dom.btnToggleGen0.setAttribute("aria-pressed", String(activo));
+      });
+    }
+
+    if (this.dom.sliderLineaTiempo) {
+      this.dom.sliderLineaTiempo.addEventListener("input", (e) => {
+        this.vm.seleccionarInstantanea(Number(e.target.value));
+      });
+    }
 
     // Clic en el Canvas de fitness para interactuar con el frente de Pareto
     this.dom.canvasFitness.addEventListener("click", (e) => {
@@ -1084,6 +1126,7 @@ export class AppView {
       descripcion: plantilla.descripcion || modelo.descripcion,
       tipoVisualizacion: plantilla.tipoVisualizacion || modelo.tipoVisualizacion || "calibracion",
       grafo: plantilla.grafo || modelo.grafo || (modelo.definicionCruda?.grafo) || null,
+      parametrosEntrada: JSON.parse(JSON.stringify(plantilla.parametrosEntrada || modelo.parametrosEntrada || [])),
       variables: varsLista.length > 0 ? varsLista : [
         { nombre: "var1", tipo: "continuo", min: 0, max: 100 }
       ],
@@ -1091,6 +1134,67 @@ export class AppView {
     };
 
     return { def, esEdicion: false };
+  }
+
+  // Sincroniza las métricas poblacionales, el control deslizante de historia y la superposición visual.
+  _actualizarObservatorioUI(forzarRenderVisual = true) {
+    const ctx = this.vm.obtenerContextoVisualizacion();
+
+    if (this.dom.obsDiversidad) {
+      this.dom.obsDiversidad.textContent = ctx.totalInstantaneas > 0
+        ? `${Number(ctx.diversidadPct || 0).toFixed(1)}%`
+        : "--";
+    }
+    if (this.dom.obsViabilidad) {
+      this.dom.obsViabilidad.textContent = ctx.totalInstantaneas > 0
+        ? `${Number(ctx.viabilidadPct || 0).toFixed(0)}%`
+        : "--";
+    }
+    if (this.dom.obsMejoraGen0) {
+      const f0 = ctx.fitnessAzar;
+      const fAct = ctx.fitness;
+      if (f0 !== null && f0 !== undefined && fAct !== null && fAct !== undefined) {
+        const mag0 = Array.isArray(f0) ? Math.hypot(...f0) : Number(f0);
+        const magAct = Array.isArray(fAct) ? Math.hypot(...fAct) : Number(fAct);
+        if (Number.isFinite(mag0) && Number.isFinite(magAct) && Math.abs(mag0) > 1e-9) {
+          const pct = ((mag0 - magAct) / Math.abs(mag0)) * 100;
+          const signo = pct >= 0 ? "↓" : "↑";
+          this.dom.obsMejoraGen0.textContent = `${signo} ${Math.abs(pct).toFixed(1)}%`;
+        } else {
+          this.dom.obsMejoraGen0.textContent = "0.0%";
+        }
+      } else {
+        this.dom.obsMejoraGen0.textContent = "--";
+      }
+    }
+
+    if (this.dom.sliderLineaTiempo) {
+      const total = ctx.totalInstantaneas || 0;
+      this.dom.sliderLineaTiempo.disabled = total < 2;
+      this.dom.sliderLineaTiempo.min = "0";
+      this.dom.sliderLineaTiempo.max = String(Math.max(0, total - 1));
+      const valorActual = ctx.indiceInstantanea !== null ? ctx.indiceInstantanea : Math.max(0, total - 1);
+      this.dom.sliderLineaTiempo.value = String(valorActual);
+    }
+
+    if (this.dom.obsGenTimeline) {
+      if (ctx.esHistorico) {
+        this.dom.obsGenTimeline.textContent = `Gen ${ctx.generacion}`;
+      } else if (ctx.totalInstantaneas > 0) {
+        this.dom.obsGenTimeline.textContent = `En vivo (Gen ${ctx.generacion})`;
+      } else {
+        this.dom.obsGenTimeline.textContent = "En vivo";
+      }
+    }
+
+    if (forzarRenderVisual && ctx.genoma && this.dom.contenedorDibujoModelo) {
+      const visualizador = obtenerVisualizador(this.vm.modeloActual.id);
+      visualizador.render(this.dom.contenedorDibujoModelo, ctx.genoma, this.vm.entradasModelo, ctx);
+      this._renderizarChipsGenoma(ctx.genoma);
+      if (typeof this.vm.modeloActual?.describir === "function") {
+        this.dom.textoDescribirModelo.textContent = this.vm.modeloActual.describir(ctx.genoma, this.vm.entradasModelo);
+      }
+    }
   }
 }
 

@@ -1,0 +1,57 @@
+{
+  "$schema": "./schema-modelo.json",
+  "id": "navegacion-obstaculos",
+  "version": "1.0",
+  "nombre": "Navegación Autónoma por Waypoints (Evasión)",
+  "descripcion": "Planifica una trayectoria 2D libre de colisiones mediante puntos de paso (waypoints), equilibrando la distancia mínima recorrida frente a la suavidad de giro en torno a zonas de peligro.",
+  "categoria": "Robótica y Planificación",
+  "dificultad": "Intermedio",
+  "tags": [
+    "planificación de rutas",
+    "waypoints",
+    "evasión de obstáculos",
+    "robótica móvil",
+    "pareto"
+  ],
+  "tipoVisualizacion": "generico_escena",
+  "parametrosEntrada": [
+    {
+      "clave": "obsCentralX",
+      "etiqueta": "Posición X obstáculo central",
+      "tipo": "numero",
+      "min": -25,
+      "max": 25,
+      "paso": 2,
+      "valorDefecto": 0
+    },
+    {
+      "clave": "obsCentralY",
+      "etiqueta": "Posición Y obstáculo central",
+      "tipo": "numero",
+      "min": -22,
+      "max": 22,
+      "paso": 2,
+      "valorDefecto": 0
+    },
+    {
+      "clave": "obsRadio",
+      "etiqueta": "Radio obstáculo central",
+      "tipo": "numero",
+      "min": 6,
+      "max": 22,
+      "paso": 1,
+      "valorDefecto": 14
+    }
+  ],
+  "variables": [
+    { "nombre": "x1", "etiqueta": "Waypoint 1 X", "tipo": "continuo", "min": -46, "max": 46 },
+    { "nombre": "y1", "etiqueta": "Waypoint 1 Y", "tipo": "continuo", "min": -32, "max": 32 },
+    { "nombre": "x2", "etiqueta": "Waypoint 2 X", "tipo": "continuo", "min": -46, "max": 46 },
+    { "nombre": "y2", "etiqueta": "Waypoint 2 Y", "tipo": "continuo", "min": -32, "max": 32 },
+    { "nombre": "x3", "etiqueta": "Waypoint 3 X", "tipo": "continuo", "min": -46, "max": 46 },
+    { "nombre": "y3", "etiqueta": "Waypoint 3 Y", "tipo": "continuo", "min": -32, "max": 32 },
+    { "nombre": "x4", "etiqueta": "Waypoint 4 X", "tipo": "continuo", "min": -46, "max": 46 },
+    { "nombre": "y4", "etiqueta": "Waypoint 4 Y", "tipo": "continuo", "min": -32, "max": 32 }
+  ],
+  "codigoEvaluacion": "const cx0 = Number(entrada?.obsCentralX ?? 0);\nconst cy0 = Number(entrada?.obsCentralY ?? 0);\nconst r0 = Number(entrada?.obsRadio ?? 14);\n\nconst obstaculos = [\n  { x: cx0, y: cy0, r: r0 },\n  { x: -20, y: -10, r: 9 },\n  { x: 22, y: 11, r: 10 }\n];\nconst margen = 1.2;\n\nconst ruta = [\n  { x: -45, y: -25 },\n  { x: vars.x1, y: vars.y1 },\n  { x: vars.x2, y: vars.y2 },\n  { x: vars.x3, y: vars.y3 },\n  { x: vars.x4, y: vars.y4 },\n  { x: 45, y: 25 }\n];\n\nlet distancia = 0.0;\nlet violacion = 0.0;\n\nfor (let i = 0; i < ruta.length - 1; i++) {\n  const A = ruta[i];\n  const B = ruta[i + 1];\n  const dx = B.x - A.x;\n  const dy = B.y - A.y;\n  const lenSq = dx * dx + dy * dy;\n  distancia += Math.sqrt(lenSq);\n\n  for (const obs of obstaculos) {\n    const t = lenSq > 1e-9\n      ? Math.max(0.0, Math.min(1.0, ((obs.x - A.x) * dx + (obs.y - A.y) * dy) / lenSq))\n      : 0.0;\n    const px = A.x + t * dx;\n    const py = A.y + t * dy;\n    const dist = Math.hypot(px - obs.x, py - obs.y);\n    if (dist < obs.r + margen) {\n      violacion += (obs.r + margen - dist);\n    }\n  }\n}\n\n// Costo de giro: penaliza quiebres bruscos entre segmentos consecutivos\nlet costoGiro = 0.0;\nfor (let i = 1; i < ruta.length - 1; i++) {\n  const v1x = ruta[i].x - ruta[i - 1].x;\n  const v1y = ruta[i].y - ruta[i - 1].y;\n  const v2x = ruta[i + 1].x - ruta[i].x;\n  const v2y = ruta[i + 1].y - ruta[i].y;\n  const n1 = Math.hypot(v1x, v1y);\n  const n2 = Math.hypot(v2x, v2y);\n  if (n1 > 1e-6 && n2 > 1e-6) {\n    const cosAng = Math.max(-1.0, Math.min(1.0, (v1x * v2x + v1y * v2y) / (n1 * n2)));\n    costoGiro += (1.0 - cosAng) * 50.0;\n  }\n}\n\nreturn {\n  fitness: [distancia, Math.max(0.1, costoGiro)],\n  violacion,\n  escena: {\n    xlim: [-55, 55],\n    ylim: [-38, 38],\n    grid: true,\n    titulo: violacion > 0\n      ? `Colisión (${violacion.toFixed(1)} u) | Dist: ${distancia.toFixed(1)}`\n      : `Ruta segura: ${distancia.toFixed(1)} u | Giro: ${costoGiro.toFixed(1)}`,\n    circulos: obstaculos.map((o, idx) => ({\n      x: o.x,\n      y: o.y,\n      r: o.r,\n      relleno: idx === 0 ? \"rgba(239, 68, 68, 0.28)\" : \"rgba(249, 115, 22, 0.22)\",\n      borde: idx === 0 ? \"#ef4444\" : \"#f97316\",\n      grosor: 2\n    })),\n    curvas: [\n      { puntos: ruta, color: violacion > 0 ? \"#f43f5e\" : \"#22c55e\", grosor: 3 }\n    ],\n    puntos: [\n      { x: -45, y: -25, r: 5.5, color: \"#38bdf8\", etiqueta: \"Origen\" },\n      ...ruta.slice(1, -1).map((p, idx) => ({ x: p.x, y: p.y, r: 4, color: \"#facc15\", etiqueta: `W${idx + 1}` })),\n      { x: 45, y: 25, r: 5.5, color: \"#a78bfa\", etiqueta: \"Destino\" }\n    ]\n  }\n};"
+}

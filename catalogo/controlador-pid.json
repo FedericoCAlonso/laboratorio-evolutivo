@@ -14,6 +14,26 @@
     "sobreimpulso"
   ],
   "tipoVisualizacion": "controlador_pid",
+  "parametrosEntrada": [
+    {
+      "clave": "frecuenciaNatural",
+      "etiqueta": "Frecuencia natural planta ωn (rad/s)",
+      "tipo": "numero",
+      "min": 1.0,
+      "max": 6.0,
+      "paso": 0.25,
+      "valorDefecto": 2.5
+    },
+    {
+      "clave": "amortiguamiento",
+      "etiqueta": "Factor de amortiguamiento ζ",
+      "tipo": "numero",
+      "min": 0.1,
+      "max": 1.2,
+      "paso": 0.05,
+      "valorDefecto": 0.4
+    }
+  ],
   "variables": [
     {
       "nombre": "Kp",
@@ -37,7 +57,7 @@
       "max": 10
     }
   ],
-  "codigoEvaluacion": "const { Kp, Ki, Kd } = vars;\n// Parámetros de la planta por defecto\nconst wn = 2.5, zeta = 0.4;\nconst dt = 0.01, tiempoTotal = 8.0;\nconst N = Math.round(tiempoTotal / dt);\n\nlet y = 0.0, yd = 0.0;\nlet integralError = 0.0, errorPrevio = 1.0;\nlet yMax = 0.0, itae = 0.0;\nconst ts = []; // historial (t, y) para el tiempo de establecimiento\n\nfor (let k = 1; k <= N; k++) {\n  const t = k * dt;\n  const e = 1.0 - y; // escalón unitario de referencia\n\n  // Integral con anti-windup y derivada discreta\n  integralError = Math.max(-50, Math.min(50, integralError + e * dt));\n  const de = (e - errorPrevio) / dt;\n  errorPrevio = e;\n\n  // Ley PID con saturación del actuador en [-80, 80]\n  let u = Kp * e + Ki * integralError + Kd * de;\n  u = Math.max(-80, Math.min(80, u));\n\n  // Planta de 2do orden integrada con Euler semi-implícito\n  const ydd = (wn * wn * u) - (2.0 * zeta * wn * yd) - (wn * wn * y);\n  yd += ydd * dt;\n  y += yd * dt;\n\n  // Divergencia: se corta la simulación\n  if (isNaN(y) || Math.abs(y) > 100) { y = 100; break; }\n\n  if (y > yMax) yMax = y;\n  itae += t * Math.abs(e) * dt;\n  ts.push({ t, y });\n}\n\n// Sobrepico porcentual\nconst sobrepicoPct = Math.max(0, (yMax - 1.0) * 100);\n\n// Tiempo de establecimiento al 2% (el punto inicial t=0 tiene y=0)\nlet tEstablecimiento = tiempoTotal;\nfor (let i = ts.length; i >= 0; i--) {\n  const p = i === 0 ? { t: 0, y: 0 } : ts[i - 1];\n  if (Math.abs(p.y - 1.0) > 0.02) {\n    tEstablecimiento = Math.min(tiempoTotal, p.t + dt);\n    break;\n  }\n}\n\n// Sistema inestable: penalización fija\nconst esEstable = !isNaN(y) && Math.abs(y - 1.0) < 0.15 && yMax < 3.0;\nif (!esEstable) return [500, 500];\nreturn [sobrepicoPct, tEstablecimiento];",
+  "codigoEvaluacion": "const { Kp, Ki, Kd } = vars;\n// Parámetros configurables de la planta de segundo orden\nconst wn = Number(entrada?.frecuenciaNatural !== undefined ? entrada.frecuenciaNatural : 2.5);\nconst zeta = Number(entrada?.amortiguamiento !== undefined ? entrada.amortiguamiento : 0.4);\nconst dt = 0.01, tiempoTotal = 8.0;\nconst N = Math.round(tiempoTotal / dt);\n\nlet y = 0.0, yd = 0.0;\nlet integralError = 0.0, errorPrevio = 1.0;\nlet yMax = 0.0, itae = 0.0;\nconst ts = []; // historial (t, y) para el tiempo de establecimiento\n\nfor (let k = 1; k <= N; k++) {\n  const t = k * dt;\n  const e = 1.0 - y; // escalón unitario de referencia\n\n  // Integral con anti-windup y derivada discreta\n  integralError = Math.max(-50, Math.min(50, integralError + e * dt));\n  const de = (e - errorPrevio) / dt;\n  errorPrevio = e;\n\n  // Ley PID con saturación del actuador en [-80, 80]\n  let u = Kp * e + Ki * integralError + Kd * de;\n  u = Math.max(-80, Math.min(80, u));\n\n  // Planta de 2do orden integrada con Euler semi-implícito\n  const ydd = (wn * wn * u) - (2.0 * zeta * wn * yd) - (wn * wn * y);\n  yd += ydd * dt;\n  y += yd * dt;\n\n  // Divergencia: se corta la simulación\n  if (isNaN(y) || Math.abs(y) > 100) { y = 100; break; }\n\n  if (y > yMax) yMax = y;\n  itae += t * Math.abs(e) * dt;\n  ts.push({ t, y });\n}\n\n// Sobrepico porcentual\nconst sobrepicoPct = Math.max(0, (yMax - 1.0) * 100);\n\n// Tiempo de establecimiento al 2% (el punto inicial t=0 tiene y=0)\nlet tEstablecimiento = tiempoTotal;\nfor (let i = ts.length; i >= 0; i--) {\n  const p = i === 0 ? { t: 0, y: 0 } : ts[i - 1];\n  if (Math.abs(p.y - 1.0) > 0.02) {\n    tEstablecimiento = Math.min(tiempoTotal, p.t + dt);\n    break;\n  }\n}\n\n// Sistema inestable: penalización fija\nconst esEstable = !isNaN(y) && Math.abs(y - 1.0) < 0.15 && yMax < 3.0;\nif (!esEstable) return [500, 500];\nreturn [sobrepicoPct, tEstablecimiento];",
   "grafo": {
     "nodos": [
       {

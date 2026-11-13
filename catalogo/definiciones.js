@@ -16,11 +16,12 @@ import em from "./confinamiento-em.json" with { type: "json" };
 import fono from "./superficie-fonoabsorbente.json" with { type: "json" };
 import rf from "./linea-transmision-rf.json" with { type: "json" };
 import nesting from "./corte-chapa-nesting.json" with { type: "json" };
-import fases from "./balanceo-fases-trifasico.json" with { type: "json" };
 import caminante from "./pata-caminante.json" with { type: "json" };
 import jansen from "./pata-jansen.json" with { type: "json" };
+import braquistocrona from "./braquistocrona-evolucion.json" with { type: "json" };
+import navegacion from "./navegacion-obstaculos.json" with { type: "json" };
 
-// Lista declarativa de los 16 modelos del catálogo
+// Lista declarativa de los 17 modelos del catálogo
 export const CATALOGO_PREDEFINIDO = [
   brazo,
   cohete,
@@ -35,9 +36,10 @@ export const CATALOGO_PREDEFINIDO = [
   fono,
   rf,
   nesting,
-  fases,
   caminante,
-  jansen
+  jansen,
+  braquistocrona,
+  navegacion
 ];
 
 // Identifica cada modelo como perteneciente al catálogo base de fábrica

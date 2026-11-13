@@ -14,6 +14,26 @@
     "desperdicio"
   ],
   "tipoVisualizacion": "corte_chapa_nesting",
+  "parametrosEntrada": [
+    {
+      "clave": "anchoChapaMm",
+      "etiqueta": "Ancho de chapa matriz (mm)",
+      "tipo": "numero",
+      "min": 360,
+      "max": 600,
+      "paso": 10,
+      "valorDefecto": 420
+    },
+    {
+      "clave": "altoChapaMm",
+      "etiqueta": "Alto de chapa matriz (mm)",
+      "tipo": "numero",
+      "min": 270,
+      "max": 480,
+      "paso": 10,
+      "valorDefecto": 310
+    }
+  ],
   "variables": [
     {
       "nombre": "prioridad1",
@@ -100,7 +120,7 @@
       "max": 1
     }
   ],
-  "codigoEvaluacion": "// Chapa matriz y piezas rectangulares estándar (valores por defecto del modelo nativo)\nconst anchoChapa = 500.0, altoChapa = 350.0;\nconst piezas = [\n  { id: 1, w: 220, h: 140, color: \"#38bdf8\" },\n  { id: 2, w: 180, h: 120, color: \"#34d399\" },\n  { id: 3, w: 140, h: 90, color: \"#f59e0b\" },\n  { id: 4, w: 160, h: 110, color: \"#ec4899\" },\n  { id: 5, w: 110, h: 80, color: \"#818cf8\" },\n  { id: 6, w: 90, h: 60, color: \"#a78bfa\" }\n];\nconst prioridades = [vars.prioridad1, vars.prioridad2, vars.prioridad3, vars.prioridad4, vars.prioridad5, vars.prioridad6];\nconst rotaciones = [vars.rotacion1, vars.rotacion2, vars.rotacion3, vars.rotacion4, vars.rotacion5, vars.rotacion6];\n\n// Aplica rotación (> 0.5 gira 90°) y ordena por prioridad decreciente\nconst preparadas = piezas.map((p, i) => {\n  const rotar = rotaciones[i] > 0.5;\n  return { id: p.id, w: rotar ? p.h : p.w, h: rotar ? p.w : p.h, prioridad: prioridades[i], color: p.color };\n}).sort((a, b) => b.prioridad - a.prioridad);\n\n// Anidado 2D con el motor topológico y ancho máximo alcanzado\nconst nido = topologia.resolverNesting2D(anchoChapa, altoChapa, preparadas);\nlet anchoUtilizado = 0.0;\nnido.piezasColocadas.forEach(pz => { if (pz.x + pz.w > anchoUtilizado) anchoUtilizado = pz.x + pz.w; });\n\n// Objetivo 1: desperdicio + penalización por piezas faltantes; objetivo 2: ancho usado\nconst objDesperdicio = nido.porcentajeDesperdicio + nido.piezasNoColocadas * 65.0;\nreturn [Math.max(1.0, objDesperdicio), Math.max(50.0, anchoUtilizado)];",
+  "codigoEvaluacion": "// Chapa matriz configurable (retadora por defecto) y piezas rectangulares estándar\nconst anchoChapa = Number(entrada?.anchoChapaMm !== undefined ? entrada.anchoChapaMm : 420.0);\nconst altoChapa = Number(entrada?.altoChapaMm !== undefined ? entrada.altoChapaMm : 310.0);\nconst piezas = [\n  { id: 1, w: 220, h: 140, color: \"#38bdf8\" },\n  { id: 2, w: 180, h: 120, color: \"#34d399\" },\n  { id: 3, w: 140, h: 90, color: \"#f59e0b\" },\n  { id: 4, w: 160, h: 110, color: \"#ec4899\" },\n  { id: 5, w: 110, h: 80, color: \"#818cf8\" },\n  { id: 6, w: 90, h: 60, color: \"#a78bfa\" }\n];\nconst prioridades = [vars.prioridad1, vars.prioridad2, vars.prioridad3, vars.prioridad4, vars.prioridad5, vars.prioridad6];\nconst rotaciones = [vars.rotacion1, vars.rotacion2, vars.rotacion3, vars.rotacion4, vars.rotacion5, vars.rotacion6];\n\n// Aplica rotación (> 0.5 gira 90°) y ordena por prioridad decreciente\nconst preparadas = piezas.map((p, i) => {\n  const rotar = rotaciones[i] > 0.5;\n  return { id: p.id, w: rotar ? p.h : p.w, h: rotar ? p.w : p.h, rotada: rotar, prioridad: prioridades[i], color: p.color };\n}).sort((a, b) => b.prioridad - a.prioridad);\n\n// Anidado 2D respetando el orden y rotación del genoma\nconst nido = topologia.resolverNesting2D(anchoChapa, altoChapa, preparadas, { respetarOrden: true });\nlet anchoUtilizado = 0.0, altoUtilizado = 0.0;\nnido.piezasColocadas.forEach(pz => {\n  if (pz.x + pz.w > anchoUtilizado) anchoUtilizado = pz.x + pz.w;\n  if (pz.y + pz.h > altoUtilizado) altoUtilizado = pz.y + pz.h;\n});\nconst areaEnvolvente = Math.max(1.0, anchoUtilizado * altoUtilizado);\nconst desperdicioEnvolvente = Math.max(0.0, (1.0 - nido.areaUtilizada / areaEnvolvente) * 100.0);\n\n// Objetivo 1: desperdicio en la envolvente compacta; Objetivo 2: compacidad de guillotina (ancho + 0.4*alto); Restricción: piezas fuera\nreturn {\n  fitness: [Math.max(0.5, desperdicioEnvolvente), Math.max(50.0, anchoUtilizado + altoUtilizado * 0.4)],\n  violacion: nido.piezasNoColocadas * 50.0\n};",
   "grafo": {
     "nodos": [
       {

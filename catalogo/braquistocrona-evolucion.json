@@ -1,0 +1,56 @@
+{
+  "$schema": "./schema-modelo.json",
+  "id": "braquistocrona-evolucion",
+  "version": "1.0",
+  "nombre": "Curva Braquistócrona (Descenso Mínimo)",
+  "descripcion": "Evoluciona el perfil discreto de una rampa sin fricción bajo gravedad para minimizar el tiempo de descenso entre dos puntos. Descubre de forma emergente la cicloide de Bernoulli.",
+  "categoria": "Física y Cálculo Variacional",
+  "dificultad": "Principiante",
+  "tags": [
+    "braquistócrona",
+    "cálculo variacional",
+    "cicloide",
+    "cinemática",
+    "descenso rápido"
+  ],
+  "tipoVisualizacion": "generico_escena",
+  "parametrosEntrada": [
+    {
+      "clave": "alturaInicialM",
+      "etiqueta": "Altura inicial H (m)",
+      "tipo": "numero",
+      "min": 2,
+      "max": 8,
+      "paso": 0.5,
+      "valorDefecto": 5
+    },
+    {
+      "clave": "distanciaHorizontalM",
+      "etiqueta": "Distancia horizontal L (m)",
+      "tipo": "numero",
+      "min": 6,
+      "max": 14,
+      "paso": 1,
+      "valorDefecto": 10
+    },
+    {
+      "clave": "gravedadMps2",
+      "etiqueta": "Gravedad g (m/s²)",
+      "tipo": "numero",
+      "min": 3.7,
+      "max": 15,
+      "paso": 0.5,
+      "valorDefecto": 9.81
+    }
+  ],
+  "variables": [
+    { "nombre": "y1", "etiqueta": "Altura nodo 1 (m)", "tipo": "continuo", "min": -2.5, "max": 8.2 },
+    { "nombre": "y2", "etiqueta": "Altura nodo 2 (m)", "tipo": "continuo", "min": -2.5, "max": 8.2 },
+    { "nombre": "y3", "etiqueta": "Altura nodo 3 (m)", "tipo": "continuo", "min": -2.5, "max": 8.2 },
+    { "nombre": "y4", "etiqueta": "Altura nodo 4 (m)", "tipo": "continuo", "min": -2.5, "max": 8.2 },
+    { "nombre": "y5", "etiqueta": "Altura nodo 5 (m)", "tipo": "continuo", "min": -2.5, "max": 8.2 },
+    { "nombre": "y6", "etiqueta": "Altura nodo 6 (m)", "tipo": "continuo", "min": -2.5, "max": 8.2 },
+    { "nombre": "y7", "etiqueta": "Altura nodo 7 (m)", "tipo": "continuo", "min": -2.5, "max": 8.2 }
+  ],
+  "codigoEvaluacion": "const H = Number(entrada?.alturaInicialM ?? 5.0);\nconst L = Number(entrada?.distanciaHorizontalM ?? 10.0);\nconst g = Number(entrada?.gravedadMps2 ?? 9.81);\n\nconst ys = [H, vars.y1, vars.y2, vars.y3, vars.y4, vars.y5, vars.y6, vars.y7, 0.0];\nconst N = ys.length - 1;\nconst dx = L / N;\nconst pts = ys.map((y, i) => ({ x: i * dx, y }));\n\n// Conservación de la energía mecánica: v(y) = sqrt(2 * g * (H - y))\nlet tiempoTotal = 0.0;\nlet violacion = 0.0;\nlet rugosidad = 0.0;\n\nfor (let i = 0; i < N; i++) {\n  const yA = ys[i];\n  const yB = ys[i + 1];\n  if (i > 0 && yA >= H - 0.02) violacion += (yA - H + 0.05) * 12.0;\n  if (i < N - 1 && yB >= H - 0.02) violacion += (yB - H + 0.05) * 12.0;\n\n  const hA = Math.max(0.0, H - yA);\n  const hB = Math.max(0.0, H - yB);\n  const vA = Math.sqrt(2.0 * g * hA);\n  const vB = Math.sqrt(2.0 * g * hB);\n  const ds = Math.hypot(dx, yB - yA);\n  const vProm = 0.5 * (vA + vB);\n  if (vProm < 0.05) {\n    tiempoTotal += 15.0;\n    violacion += 1.0;\n  } else {\n    tiempoTotal += ds / vProm;\n  }\n}\n\n// Curvatura discreta acumulada (suavidad geométrica de la rampa)\nfor (let i = 1; i < N; i++) {\n  rugosidad += Math.abs(ys[i + 1] - 2.0 * ys[i] + ys[i - 1]);\n}\n\nconst tRecta = 2.0 * Math.hypot(L, H) / Math.max(0.1, Math.sqrt(2.0 * g * H));\n\nreturn {\n  fitness: [tiempoTotal, Math.max(0.05, rugosidad)],\n  violacion,\n  escena: {\n    xlim: [-0.6, L + 0.8],\n    ylim: [-3.2, H + 1.0],\n    grid: true,\n    titulo: `Braquistócrona: t = ${tiempoTotal.toFixed(3)} s (recta: ${tRecta.toFixed(2)} s)`,\n    lineas: [\n      { x1: 0, y1: H, x2: L, y2: 0, color: \"rgba(148, 163, 184, 0.55)\", grosor: 1.5, guiones: [6, 4] },\n      { x1: 0, y1: 0, x2: L, y2: 0, color: \"rgba(100, 116, 139, 0.3)\", grosor: 1 }\n    ],\n    curvas: [\n      { puntos: pts, color: violacion > 0 ? \"#ef4444\" : \"#38bdf8\", grosor: 3.2 }\n    ],\n    puntos: [\n      { x: 0, y: H, r: 6, color: \"#22c55e\", etiqueta: `Inicio (${H} m)` },\n      ...pts.slice(1, -1).map(p => ({ x: p.x, y: p.y, r: 3.5, color: \"#7dd3fc\" })),\n      { x: L, y: 0, r: 6, color: \"#f59e0b\", etiqueta: \"Meta\" }\n    ]\n  }\n};"
+}

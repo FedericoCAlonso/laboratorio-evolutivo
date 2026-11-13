@@ -67,6 +67,44 @@ let jansenPausado = false;
 let mostrarCotasJansen = false;
 let mostrarReferenciaJansen = false;
 
+// Dibuja una trayectoria o curva genérica usando un mapeador de coordenadas de dominio a píxeles.
+function dibujarPolilinea(ctx, puntos, mapeadorPx, color, grosor = 1.5, guiones = null) {
+  if (!Array.isArray(puntos) || puntos.length < 2) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = grosor;
+  if (Array.isArray(guiones)) ctx.setLineDash(guiones);
+  for (let i = 0; i < puntos.length; i++) {
+    const pt = mapeadorPx(puntos[i]);
+    if (i === 0) ctx.moveTo(pt.x, pt.y);
+    else ctx.lineTo(pt.x, pt.y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Precalcula resultados físicos de individuos fantasmas y del mejor individuo Gen 0 una sola vez por render.
+function prepararComparacionPoblacion(contexto, simularFn) {
+  const fantasmas = [];
+  if (contexto?.mostrarFantasmas && Array.isArray(contexto?.fantasmas)) {
+    const limite = Math.min(8, contexto.fantasmas.length);
+    for (let i = 1; i < limite; i++) {
+      try {
+        const res = simularFn(contexto.fantasmas[i]);
+        if (res) fantasmas.push(res);
+      } catch (_) {}
+    }
+  }
+  let azar = null;
+  if (contexto?.compararGen0 && Array.isArray(contexto?.genomaAzar)) {
+    try {
+      azar = simularFn(contexto.genomaAzar);
+    } catch (_) {}
+  }
+  return { fantasmas, azar };
+}
+
 // -------------------------------------------------------------------------
 // 1. VISUALIZADOR DE PATA THEO JANSEN (13 BARRAS)
 // -------------------------------------------------------------------------
@@ -675,7 +713,7 @@ export class VisualizadorBrazo {
     }
   }
 
-  render(contenedor, genoma, entrada) {
+  render(contenedor, genoma, entrada, contexto = {}) {
     if (!contenedor) return;
     this.detener();
 
@@ -701,6 +739,9 @@ export class VisualizadorBrazo {
     const obsRadio = Number(entrada?.obstaculoRadio !== undefined ? entrada.obstaculoRadio : 16);
 
     const [targetTh1, targetTh2, targetTh3] = genoma;
+    const { fantasmas: posesFantasmas, azar: poseAzar } = prepararComparacionPoblacion(contexto, (g) =>
+      resolverCinematicaBrazo([g[0], g[1], g[2]])
+    );
     let tiempoAnimacion = 0;
     const historialEfector = [];
 
@@ -806,6 +847,14 @@ export class VisualizadorBrazo {
       ctx.fillStyle = "#059669";
       ctx.textAlign = "center";
       ctx.fillText("Blanco", pTar.x, pTar.y + 26);
+
+      // 2b. Fantasmas de la población y referencia Gen 0 (pose final comparativa)
+      posesFantasmas.forEach((pose) => {
+        dibujarPolilinea(ctx, [pose.p0, pose.p1, pose.p2, pose.p3], toPx, "rgba(148, 163, 184, 0.25)", 4);
+      });
+      if (poseAzar) {
+        dibujarPolilinea(ctx, [poseAzar.p0, poseAzar.p1, poseAzar.p2, poseAzar.p3], toPx, "rgba(244, 63, 94, 0.7)", 3, [5, 4]);
+      }
 
       // 3. Mecanismo articulado
       const { p0, p1, p2, p3 } = resolverCinematicaBrazo([th1Actual, th2Actual, th3Actual]);
@@ -945,7 +994,7 @@ export class VisualizadorCohete {
     }
   }
 
-  render(contenedor, genoma, entrada) {
+  render(contenedor, genoma, entrada, contexto = {}) {
     if (!contenedor) return;
     this.detener();
 
@@ -965,6 +1014,9 @@ export class VisualizadorCohete {
     const ctx = canvas.getContext("2d");
     const sim = simularDescensoCohete(genoma, entrada);
     const tray = sim.trayectoria;
+    const { fantasmas: simsFantasmas, azar: simAzar } = prepararComparacionPoblacion(contexto, (g) =>
+      simularDescensoCohete(g, entrada).trayectoria
+    );
 
     let indicePaso = 0;
     let contadorPausaFinal = 0;
@@ -1041,6 +1093,14 @@ export class VisualizadorCohete {
       ctx.beginPath();
       ctx.arc(pMar.x, pMar.y - 1, 8, 0, 2 * Math.PI);
       ctx.stroke();
+
+      // Trayectorias fantasmas de la población y referencia Gen 0
+      simsFantasmas.forEach((tr) => {
+        dibujarPolilinea(ctx, tr, (pt) => toPx(pt.x, pt.y), "rgba(148, 163, 184, 0.24)", 1.5);
+      });
+      if (simAzar) {
+        dibujarPolilinea(ctx, simAzar, (pt) => toPx(pt.x, pt.y), "rgba(244, 63, 94, 0.72)", 2, [6, 4]);
+      }
 
       // Trayectoria de plasma
       const pasoActual = tray[Math.min(indicePaso, tray.length - 1)];
@@ -1164,7 +1224,7 @@ export class VisualizadorPID {
     }
   }
 
-  render(contenedor, genoma, entrada) {
+  render(contenedor, genoma, entrada, contexto = {}) {
     if (!contenedor) return;
     this.detener();
 
@@ -1184,6 +1244,9 @@ export class VisualizadorPID {
     const ctx = canvas.getContext("2d");
     const sim = simularRespuestaPID(genoma, entrada);
     const pts = sim.respuesta;
+    const { fantasmas: respFantasmas, azar: respAzar } = prepararComparacionPoblacion(contexto, (g) =>
+      simularRespuestaPID(g, entrada).respuesta
+    );
 
     let indicePaso = 0;
     let contadorPausaFinal = 0;
@@ -1271,6 +1334,14 @@ export class VisualizadorPID {
       ctx.fillStyle = "#b45309";
       ctx.textAlign = "left";
       ctx.fillText("Referencia r(t) = 1.0", margenIzq + 10, pRef.y - 6);
+
+      // Curvas fantasmas de la población y referencia Gen 0
+      respFantasmas.forEach((resp) => {
+        dibujarPolilinea(ctx, resp, (p) => toPx(p.t, p.y), "rgba(148, 163, 184, 0.25)", 1.3);
+      });
+      if (respAzar) {
+        dibujarPolilinea(ctx, respAzar, (p) => toPx(p.t, p.y), "rgba(244, 63, 94, 0.72)", 2, [5, 4]);
+      }
 
       // Trazo
       const maxIdx = Math.min(indicePaso, pts.length - 1);
@@ -1629,7 +1700,9 @@ export class VisualizadorFases {
 
   render(contenedor, genoma, entrada, contexto = {}) {
     if (!contenedor) return;
-    const circuitos = entrada?.circuitos || [500, 450, 400, 350, 300, 250, 200, 150];
+    const c5 = Number(entrada?.corrienteMotorC5 !== undefined ? entrada.corrienteMotorC5 : 22.0);
+    const c6 = Number(entrada?.corrienteClimaC6 !== undefined ? entrada.corrienteClimaC6 : 18.0);
+    const circuitos = entrada?.circuitos || [6.0, 5.5, 12.0, 16.0, c5, c6, 9.5, 9.5];
     const fases = [
       { nombre: "R", corrienteTotal: 0, circuitos: [], claseColor: "color-r", claseColumna: "fase-r" },
       { nombre: "S", corrienteTotal: 0, circuitos: [], claseColor: "color-s", claseColumna: "fase-s" },
@@ -1639,7 +1712,7 @@ export class VisualizadorFases {
     let violacionesFaseFija = 0;
 
     for (let i = 0; i < circuitos.length; i++) {
-      const faseIdx = genoma[i] !== undefined ? genoma[i] : 0;
+      const faseIdx = genoma[i] !== undefined ? Math.min(2, Math.max(0, Math.round(genoma[i]))) : 0;
       const c = circuitos[i];
       const valorA = typeof c === "object" ? Number(c.corriente) || 0 : Number(c) || 0;
       const obligatoria = typeof c === "object" ? c.faseFija : "";
@@ -2070,6 +2143,9 @@ export class VisualizadorOrbita {
     const ctx = canvas.getContext("2d");
     const sim = simularManiobraOrbital(genoma, entrada);
     const tray = sim.trayectoria;
+    const { fantasmas: orbFantasmas, azar: orbAzar } = prepararComparacionPoblacion(contexto, (g) =>
+      simularManiobraOrbital(g, entrada).trayectoria
+    );
 
     let tiempoAnimacion = 0;
     let indicePaso = 0;
@@ -2127,6 +2203,14 @@ export class VisualizadorOrbita {
       ctx.fillText(`Órbita Inicial (r = ${sim.rInicial} km)`, centroX, centroY - sim.rInicial * escala - 4);
       ctx.fillStyle = "#10b981";
       ctx.fillText(`Órbita Objetivo (rf = ${sim.rObjetivo} km)`, centroX, centroY - sim.rObjetivo * escala - 4);
+
+      // 1b. Órbitas fantasmas y referencia Gen 0
+      orbFantasmas.forEach((tr) => {
+        dibujarPolilinea(ctx, tr, (pt) => aCanvas(pt.x, pt.y), "rgba(148, 163, 184, 0.22)", 1.2);
+      });
+      if (orbAzar) {
+        dibujarPolilinea(ctx, orbAzar, (pt) => aCanvas(pt.x, pt.y), "rgba(244, 63, 94, 0.7)", 1.8, [5, 4]);
+      }
 
       // 2. Trayectoria calculada de transferencia
       if (tray.length > 1) {
@@ -2464,6 +2548,9 @@ export class VisualizadorArmadura {
 
     const ctx = canvas.getContext("2d");
     const sim = resolverEstaticaArmadura(genoma, entrada);
+    const { fantasmas: armFantasmas, azar: armAzar } = prepararComparacionPoblacion(contexto, (g) =>
+      resolverEstaticaArmadura(g, entrada)
+    );
 
     let tiempoAnimacion = 0;
     let posVehiculoX = 0;
@@ -2504,6 +2591,16 @@ export class VisualizadorArmadura {
       ctx.fillStyle = "#475569";
       ctx.fillRect(margenX - 25, baseCalzadaY - 4, 30, 45);
       ctx.fillRect(margenX + sim.luz * escala - 5, baseCalzadaY - 4, 30, 45);
+
+      // 1b. Geometrías fantasmas de la población y referencia Gen 0
+      armFantasmas.forEach((fSim) => {
+        fSim.barras?.forEach((b) => {
+          dibujarPolilinea(ctx, [b.nodos[0], b.nodos[1]], aCanvas, "rgba(148, 163, 184, 0.22)", 1.5);
+        });
+      });
+      armAzar?.barras?.forEach((b) => {
+        dibujarPolilinea(ctx, [b.nodos[0], b.nodos[1]], aCanvas, "rgba(244, 63, 94, 0.65)", 2, [5, 4]);
+      });
 
       // 2. Dibujo de las 11 barras de acero con código de esfuerzo de tensión/compresión
       sim.barras.forEach(b => {
@@ -3796,6 +3893,14 @@ export class VisualizadorDinamico {
     const tipo = modelo?.tipoVisualizacion || modelo?.definicionCruda?.tipoVisualizacion || "calibracion";
     const varsDef = modelo?.variables || (modelo?.crearGenoma ? modelo.crearGenoma() : []);
 
+    // Escena declarativa personalizada retornada por el código del usuario: { fitness, escena }
+    const escenaUsuario = contexto?.escena ||
+      (typeof modelo?.obtenerEscena === "function" ? modelo.obtenerEscena(genoma, entrada) : null);
+    if (escenaUsuario && typeof escenaUsuario === "object") {
+      this._renderizarEscenaDeclarativa(contenedor, escenaUsuario, genoma, entrada, contexto);
+      return;
+    }
+
     // Delegación directa a los visualizadores especializados según tipoVisualizacion o identificador
     if (tipo === "brazo_robotico" || modelo?.id === "brazo-robotico") {
       this.subVisualizadorActivo = new VisualizadorBrazo();
@@ -4394,6 +4499,192 @@ export class VisualizadorDinamico {
         ${htmlBarras}
       </div>
     `;
+  }
+
+  // Renderiza una escena 2D declarativa devuelta por modelos dinámicos ({ fitness, violacion?, escena }).
+  _renderizarEscenaDeclarativa(contenedor, escena, genoma, entrada, contexto = {}) {
+    let canvas = contenedor.querySelector("canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 360;
+      canvas.style.width = "100%";
+      canvas.style.height = "360px";
+      canvas.style.display = "block";
+      canvas.style.borderRadius = "var(--radio-sm, 12px)";
+      contenedor.innerHTML = "";
+      contenedor.appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    const dpr = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+    const anchoCSS = canvas.clientWidth || 800;
+    const altoCSS = canvas.clientHeight || 360;
+
+    if (canvas.width !== anchoCSS * dpr || canvas.height !== altoCSS * dpr) {
+      canvas.width = anchoCSS * dpr;
+      canvas.height = altoCSS * dpr;
+    }
+
+    ctx.resetTransform();
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = escena.fondo || "#0f172a";
+    ctx.fillRect(0, 0, anchoCSS, altoCSS);
+
+    // Determinación automática o explícita de la ventana de coordenadas [xlim, ylim].
+    const xLim = Array.isArray(escena.xlim) && escena.xlim.length === 2 ? escena.xlim : null;
+    const yLim = Array.isArray(escena.ylim) && escena.ylim.length === 2 ? escena.ylim : null;
+    let xMin = xLim ? xLim[0] : Infinity;
+    let xMax = xLim ? xLim[1] : -Infinity;
+    let yMin = yLim ? yLim[0] : Infinity;
+    let yMax = yLim ? yLim[1] : -Infinity;
+
+    if (!xLim || !yLim) {
+      const registrarPt = (x, y) => {
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        if (!xLim) { if (x < xMin) xMin = x; if (x > xMax) xMax = x; }
+        if (!yLim) { if (y < yMin) yMin = y; if (y > yMax) yMax = y; }
+      };
+      (escena.lineas || []).forEach((l) => {
+        if (Array.isArray(l.puntos)) l.puntos.forEach((p) => registrarPt(p.x, p.y));
+        else { registrarPt(l.x1, l.y1); registrarPt(l.x2, l.y2); }
+      });
+      (escena.curvas || escena.trayectorias || []).forEach((c) => {
+        (c.puntos || []).forEach((p) => registrarPt(p.x, p.y));
+      });
+      (escena.circulos || []).forEach((c) => {
+        registrarPt((c.x || 0) - (c.r || 0), (c.y || 0) - (c.r || 0));
+        registrarPt((c.x || 0) + (c.r || 0), (c.y || 0) + (c.r || 0));
+      });
+      (escena.puntos || []).forEach((p) => registrarPt(p.x, p.y));
+      if (!Number.isFinite(xMin) || xMin === xMax) { xMin = -10; xMax = 10; }
+      if (!Number.isFinite(yMin) || yMin === yMax) { yMin = -10; yMax = 10; }
+      const padX = (xMax - xMin) * 0.12 || 1;
+      const padY = (yMax - yMin) * 0.12 || 1;
+      if (!xLim) { xMin -= padX; xMax += padX; }
+      if (!yLim) { yMin -= padY; yMax += padY; }
+    }
+
+    const margen = 32;
+    const utilW = Math.max(10, anchoCSS - margen * 2);
+    const utilH = Math.max(10, altoCSS - margen * 2);
+    const toPx = (pt) => ({
+      x: margen + ((pt.x - xMin) / Math.max(1e-9, xMax - xMin)) * utilW,
+      y: altoCSS - margen - ((pt.y - yMin) / Math.max(1e-9, yMax - yMin)) * utilH
+    });
+
+    // Cuadrícula de referencia suave
+    if (escena.grid !== false) {
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.12)";
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const xg = margen + (utilW * i) / 4;
+        const yg = margen + (utilH * i) / 4;
+        ctx.beginPath(); ctx.moveTo(xg, margen); ctx.lineTo(xg, altoCSS - margen); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(margen, yg); ctx.lineTo(anchoCSS - margen, yg); ctx.stroke();
+      }
+    }
+
+    const dibujarCapaEscena = (sc, colorOverride = null, guionesOverride = null) => {
+      if (!sc || typeof sc !== "object") return;
+      (sc.poligonos || []).forEach((poly) => {
+        if (!Array.isArray(poly.puntos) || poly.puntos.length < 3) return;
+        ctx.save();
+        ctx.beginPath();
+        poly.puntos.forEach((p, idx) => {
+          const px = toPx(p);
+          if (idx === 0) ctx.moveTo(px.x, px.y);
+          else ctx.lineTo(px.x, px.y);
+        });
+        ctx.closePath();
+        if (poly.relleno && !colorOverride) {
+          ctx.fillStyle = poly.relleno;
+          ctx.fill();
+        }
+        ctx.strokeStyle = colorOverride || poly.color || "#38bdf8";
+        ctx.lineWidth = poly.grosor || 1.8;
+        if (guionesOverride || poly.guiones) ctx.setLineDash(guionesOverride || poly.guiones);
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      (sc.lineas || []).forEach((l) => {
+        const pts = Array.isArray(l.puntos) ? l.puntos : [{ x: l.x1, y: l.y1 }, { x: l.x2, y: l.y2 }];
+        dibujarPolilinea(ctx, pts, toPx, colorOverride || l.color || "#38bdf8", l.grosor || 2, guionesOverride || l.guiones || null);
+      });
+
+      (sc.curvas || sc.trayectorias || []).forEach((c) => {
+        dibujarPolilinea(ctx, c.puntos, toPx, colorOverride || c.color || "#f59e0b", c.grosor || 2.2, guionesOverride || c.guiones || null);
+      });
+
+      (sc.circulos || []).forEach((c) => {
+        const centro = toPx({ x: c.x || 0, y: c.y || 0 });
+        const radPx = ((c.r || 1) / Math.max(1e-9, xMax - xMin)) * utilW;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(centro.x, centro.y, Math.max(1, radPx), 0, Math.PI * 2);
+        if (c.relleno && !colorOverride) {
+          ctx.fillStyle = c.relleno;
+          ctx.fill();
+        }
+        ctx.strokeStyle = colorOverride || c.borde || c.color || "#22c55e";
+        ctx.lineWidth = c.grosor || 1.8;
+        if (guionesOverride) ctx.setLineDash(guionesOverride);
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      if (!colorOverride) {
+        (sc.puntos || []).forEach((p) => {
+          const px = toPx(p);
+          ctx.beginPath();
+          ctx.arc(px.x, px.y, p.r || 4.5, 0, Math.PI * 2);
+          ctx.fillStyle = p.color || "#f59e0b";
+          ctx.fill();
+          if (p.etiqueta) {
+            ctx.font = "11px system-ui";
+            ctx.fillStyle = "#e2e8f0";
+            ctx.textAlign = "left";
+            ctx.fillText(String(p.etiqueta), px.x + 7, px.y + 4);
+          }
+        });
+        (sc.textos || []).forEach((t) => {
+          const px = toPx(t);
+          ctx.font = "11px system-ui";
+          ctx.fillStyle = t.color || "#e2e8f0";
+          ctx.textAlign = "left";
+          ctx.fillText(String(t.texto || ""), px.x, px.y);
+        });
+      }
+    };
+
+    // Superposición automática de fantasmas de población y Gen 0 para escenas declarativas
+    if (typeof contexto?.modelo?.obtenerEscena === "function") {
+      if (contexto.mostrarFantasmas && Array.isArray(contexto.fantasmas)) {
+        const limite = Math.min(8, contexto.fantasmas.length);
+        for (let i = 1; i < limite; i++) {
+          const scF = contexto.modelo.obtenerEscena(contexto.fantasmas[i], entrada);
+          dibujarCapaEscena(scF, "rgba(148, 163, 184, 0.22)");
+        }
+      }
+      if (contexto.compararGen0 && Array.isArray(contexto.genomaAzar)) {
+        const scAz = contexto.modelo.obtenerEscena(contexto.genomaAzar, entrada);
+        dibujarCapaEscena(scAz, "rgba(244, 63, 94, 0.72)", [5, 4]);
+      }
+    }
+
+    dibujarCapaEscena(escena, null, null);
+
+    if (escena.titulo) {
+      ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+      ctx.beginPath();
+      ctx.roundRect(12, 12, 260, 32, 6);
+      ctx.fill();
+      ctx.font = "bold 12px system-ui";
+      ctx.fillStyle = "#f8fafc";
+      ctx.textAlign = "left";
+      ctx.fillText(String(escena.titulo), 22, 32);
+    }
   }
 }
 

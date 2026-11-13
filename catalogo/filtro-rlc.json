@@ -15,6 +15,26 @@
     "bode"
   ],
   "tipoVisualizacion": "filtro_rlc",
+  "parametrosEntrada": [
+    {
+      "clave": "frecuenciaCentral",
+      "etiqueta": "Frecuencia central objetivo f0 (Hz)",
+      "tipo": "numero",
+      "min": 100,
+      "max": 10000,
+      "paso": 50,
+      "valorDefecto": 1000
+    },
+    {
+      "clave": "anchoBanda",
+      "etiqueta": "Ancho de banda deseado BW (Hz)",
+      "tipo": "numero",
+      "min": 40,
+      "max": 2000,
+      "paso": 20,
+      "valorDefecto": 200
+    }
+  ],
   "variables": [
     {
       "nombre": "logR",
@@ -38,7 +58,7 @@
       "max": -4
     }
   ],
-  "codigoEvaluacion": "// Especificación por defecto del modelo nativo\nconst fDeseada = 1000.0, bwDeseado = 200.0;\n\n// Componentes a partir de sus logaritmos\nconst R = Math.pow(10, vars.logR);\nconst L = Math.pow(10, vars.logL);\nconst C = Math.pow(10, vars.logC);\n\n// Resonancia, factor de calidad y ancho de banda real\nconst w0 = 1.0 / Math.sqrt(L * C);\nconst f0 = w0 / (2 * Math.PI);\nconst Q = (1.0 / R) * Math.sqrt(L / C);\nconst bwReal = Q > 0 ? f0 / Q : 99999;\n\n// Barrido logarítmico de 70 puntos entre 20 Hz y 50 kHz\nconst fMin = 20.0, fMax = 50000.0, numPuntos = 70;\nconst respuesta = [];\nfor (let i = 0; i < numPuntos; i++) {\n  const f = Math.pow(10, Math.log10(fMin) + (i / (numPuntos - 1)) * (Math.log10(fMax) - Math.log10(fMin)));\n  const w = 2 * Math.PI * f;\n\n  // H(jw) = j*w*(w0/Q) / ((w0^2 - w^2) + j*w*(w0/Q))\n  const numImag = w * (w0 / Math.max(0.01, Q));\n  const denReal = (w0 * w0) - (w * w);\n  const denImag = numImag;\n  const modNum = Math.hypot(0, numImag);\n  const modDen = Math.hypot(denReal, denImag);\n  const gananciaLineal = modDen > 0 ? modNum / modDen : 0;\n  respuesta.push({ f, gananciaDB: 20 * Math.log10(Math.max(1e-6, gananciaLineal)) });\n}\n\n// Atenuación en banda de parada a 0.25*f y 4*f de la frecuencia deseada\nconst pBaja = respuesta.find(p => p.f >= fDeseada * 0.25);\nconst pAlta = respuesta.find(p => p.f >= fDeseada * 4.0);\nconst atenuacionBaja = pBaja ? -pBaja.gananciaDB : 0;\nconst atenuacionAlta = pAlta ? -pAlta.gananciaDB : 0;\n\nconst errorFrecuencia = Math.abs(f0 - fDeseada);\nconst errorAnchoBanda = Math.abs(bwReal - bwDeseado);\nconst objSintonia = errorFrecuencia;\nconst objSelectividad = errorAnchoBanda + Math.max(0, 15 - atenuacionBaja) * 5 + Math.max(0, 15 - atenuacionAlta) * 5;\nreturn [objSintonia, objSelectividad];",
+  "codigoEvaluacion": "// Especificación configurable de frecuencia central y ancho de banda\nconst fDeseada = Number(entrada?.frecuenciaCentral !== undefined ? entrada.frecuenciaCentral : 1000.0);\nconst bwDeseado = Number(entrada?.anchoBanda !== undefined ? entrada.anchoBanda : 200.0);\n\n// Componentes a partir de sus logaritmos\nconst R = Math.pow(10, vars.logR);\nconst L = Math.pow(10, vars.logL);\nconst C = Math.pow(10, vars.logC);\n\n// Resonancia, factor de calidad y ancho de banda real\nconst w0 = 1.0 / Math.sqrt(L * C);\nconst f0 = w0 / (2 * Math.PI);\nconst Q = (1.0 / R) * Math.sqrt(L / C);\nconst bwReal = Q > 0 ? f0 / Q : 99999;\n\n// Barrido logarítmico de 70 puntos entre 20 Hz y 50 kHz\nconst fMin = 20.0, fMax = 50000.0, numPuntos = 70;\nconst respuesta = [];\nfor (let i = 0; i < numPuntos; i++) {\n  const f = Math.pow(10, Math.log10(fMin) + (i / (numPuntos - 1)) * (Math.log10(fMax) - Math.log10(fMin)));\n  const w = 2 * Math.PI * f;\n\n  // H(jw) = j*w*(w0/Q) / ((w0^2 - w^2) + j*w*(w0/Q))\n  const numImag = w * (w0 / Math.max(0.01, Q));\n  const denReal = (w0 * w0) - (w * w);\n  const denImag = numImag;\n  const modNum = Math.hypot(0, numImag);\n  const modDen = Math.hypot(denReal, denImag);\n  const gananciaLineal = modDen > 0 ? modNum / modDen : 0;\n  respuesta.push({ f, gananciaDB: 20 * Math.log10(Math.max(1e-6, gananciaLineal)) });\n}\n\n// Atenuación en banda de parada a 0.25*f y 4*f de la frecuencia deseada\nconst pBaja = respuesta.find(p => p.f >= fDeseada * 0.25);\nconst pAlta = respuesta.find(p => p.f >= fDeseada * 4.0);\nconst atenuacionBaja = pBaja ? -pBaja.gananciaDB : 0;\nconst atenuacionAlta = pAlta ? -pAlta.gananciaDB : 0;\n\nconst errorFrecuencia = Math.abs(f0 - fDeseada);\nconst errorAnchoBanda = Math.abs(bwReal - bwDeseado);\nconst objSintonia = errorFrecuencia;\nconst objSelectividad = errorAnchoBanda + Math.max(0, 15 - atenuacionBaja) * 5 + Math.max(0, 15 - atenuacionAlta) * 5;\nreturn [objSintonia, objSelectividad];",
   "grafo": {
     "nodos": [
       {

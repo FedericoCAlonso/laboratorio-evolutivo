@@ -29,11 +29,29 @@ export class EditorGraficoView {
 
     // Estado del grafo activo
     this.grafo = new GrafoMecanismoMultifisica();
-    this.herramientaActiva = "select"; // 'select' | 'nodo_fijo' | 'nodo_libre' | 'nodo_deslizante' | 'barra' | 'cuerpo' | 'motor_rotativo' | 'motor_lineal' | 'engranaje' | 'polea' | 'sensor' | 'multiefecto'
+    this.herramientaActiva = "select"; // 'select' | 'nodo_fijo' | 'nodo_libre' | 'nodo_deslizante' | 'barra' | 'cuerpo' | 'motor_rotativo' | 'motor_lineal' | 'engranaje' | 'polea' | 'sensor' | 'multiefecto' | 'medir'
     this.elementoSeleccionado = null; // { tipo: 'nodo'|'barra'|'motor'|'transmision'|'sensor', id: string }
     this.nodoInicioConexion = null;
     this.nodosCuerpoTemporal = [];
     this._nodoArrastradoActivo = null;
+
+    // Historial Deshacer / Rehacer (Undo / Redo Stack)
+    this.historialDeshacer = [];
+    this.historialRehacer = [];
+    this.maxHistorial = 50;
+    this._estadoPrevioArrastre = null;
+
+    // Imán a la Rejilla (Snap to Grid en mm)
+    this.snapGrid = 5; // 0 = Desactivado, 1, 5, 10, 25 mm
+
+    // Cursor y elementos bajo el puntero (Hover)
+    this.cursorMundo = { x: 0.0, y: 0.0 };
+    this.nodoHover = null;
+    this.barraHover = null;
+
+    // Herramienta de medición y calibre CAD
+    this.medicionActiva = null; // { pA: {x,y}, pB: {x,y}, bloqueado: boolean }
+    this._tecladoHandler = null;
 
     // Estado de simulación en vivo del mecanismo (inicia en modo edición/pausa a theta=0 para arrastrar cotas con precisión)
     this.animando = false;
@@ -67,22 +85,36 @@ export class EditorGraficoView {
     this.redibujar();
   }
 
-  // Detiene animaciones activas
+  // Detiene animaciones activas y desvincula eventos globales
   detener() {
     if (this.animId !== null) {
       cancelAnimationFrame(this.animId);
       this.animId = null;
     }
+    if (this._tecladoHandler && typeof window !== "undefined" && window.removeEventListener) {
+      window.removeEventListener("keydown", this._tecladoHandler);
+      this._tecladoHandler = null;
+    }
   }
 
   // Carga un grafo completo de mecanismo multicuerpo en el lienzo
-  cargarGrafo(grafo) {
+  cargarGrafo(grafo, resetearHistorial = true) {
     if (grafo instanceof GrafoMecanismoMultifisica) {
       this.grafo = grafo.clonar();
     } else if (grafo && typeof grafo === "object") {
       this.grafo = new GrafoMecanismoMultifisica(grafo);
     }
     this.elementoSeleccionado = null;
+    this.nodoInicioConexion = null;
+    this.nodosCuerpoTemporal = [];
+    this.medicionActiva = null;
+
+    if (resetearHistorial) {
+      this.historialDeshacer = [];
+      this.historialRehacer = [];
+      this._actualizarBotonesHistorial();
+    }
+
     // Asegura posiciones de nodos consistentes con las longitudes actuales en theta=0
     if (this.grafo.nodos.length > 0) {
       sincronizarPosicionesNodosGrafo(this.grafo, this.valoresVariables, this.thetaActual);
@@ -93,6 +125,389 @@ export class EditorGraficoView {
     this._actualizarInspector();
     this._actualizarPanelVariablesVinculadas();
     this.redibujar();
+  }
+
+  // Guarda una instantánea del estado actual en la pila de Deshacer
+  _guardarEstadoHistorial() {
+    if (!this.grafo || typeof this.grafo.exportarAObjeto !== "function") return;
+    try {
+      const estado = {
+        grafo: this.grafo.exportarAObjeto(),
+        valoresVariables: { ...this.valoresVariables }
+      };
+      this.historialDeshacer.push(estado);
+      if (this.historialDeshacer.length > this.maxHistorial) {
+        this.historialDeshacer.shift();
+      }
+      this.historialRehacer = [];
+      this._actualizarBotonesHistorial();
+    } catch (_) {}
+  }
+
+  // Actualiza el estado visual (habilitado/deshabilitado) de los botones de Deshacer y Rehacer
+  _actualizarBotonesHistorial() {
+    if (this.dom?.btnUndo) {
+      const puede = this.historialDeshacer.length > 0;
+      this.dom.btnUndo.disabled = !puede;
+      this.dom.btnUndo.style.opacity = puede ? "1" : "0.45";
+      this.dom.btnUndo.style.cursor = puede ? "pointer" : "not-allowed";
+      this.dom.btnUndo.title = `Deshacer (${this.historialDeshacer.length}) [Ctrl+Z]`;
+    }
+    if (this.dom?.btnRedo) {
+      const puede = this.historialRehacer.length > 0;
+      this.dom.btnRedo.disabled = !puede;
+      this.dom.btnRedo.style.opacity = puede ? "1" : "0.45";
+      this.dom.btnRedo.style.cursor = puede ? "pointer" : "not-allowed";
+      this.dom.btnRedo.title = `Rehacer (${this.historialRehacer.length}) [Ctrl+Y]`;
+    }
+  }
+
+  // Revierte la última acción realizada
+  deshacer() {
+    if (this.historialDeshacer.length === 0) return false;
+    try {
+      const estadoActual = {
+        grafo: this.grafo.exportarAObjeto(),
+        valoresVariables: { ...this.valoresVariables }
+      };
+      this.historialRehacer.push(estadoActual);
+
+      const previo = this.historialDeshacer.pop();
+      this.grafo = new GrafoMecanismoMultifisica(previo.grafo);
+      this.valoresVariables = { ...previo.valoresVariables };
+      this.elementoSeleccionado = null;
+      this.nodoInicioConexion = null;
+      this.nodosCuerpoTemporal = [];
+      this.medicionActiva = null;
+
+      sincronizarPosicionesNodosGrafo(this.grafo, this.valoresVariables, this.thetaActual);
+      this._actualizarBotonesHistorial();
+      this._notificarCambioGrafo(false);
+      return true;
+    } catch (e) {
+      console.warn("[Editor CAD] Error al deshacer:", e);
+      return false;
+    }
+  }
+
+  // Rehace la acción previamente revertida
+  rehacer() {
+    if (this.historialRehacer.length === 0) return false;
+    try {
+      const estadoActual = {
+        grafo: this.grafo.exportarAObjeto(),
+        valoresVariables: { ...this.valoresVariables }
+      };
+      this.historialDeshacer.push(estadoActual);
+
+      const siguiente = this.historialRehacer.pop();
+      this.grafo = new GrafoMecanismoMultifisica(siguiente.grafo);
+      this.valoresVariables = { ...siguiente.valoresVariables };
+      this.elementoSeleccionado = null;
+      this.nodoInicioConexion = null;
+      this.nodosCuerpoTemporal = [];
+      this.medicionActiva = null;
+
+      sincronizarPosicionesNodosGrafo(this.grafo, this.valoresVariables, this.thetaActual);
+      this._actualizarBotonesHistorial();
+      this._notificarCambioGrafo(false);
+      return true;
+    } catch (e) {
+      console.warn("[Editor CAD] Error al rehacer:", e);
+      return false;
+    }
+  }
+
+  // Ajusta un valor de coordenada al múltiplo más próximo del paso de rejilla (Snap)
+  _ajustarSnap(val) {
+    if (!this.snapGrid || this.snapGrid <= 0) return parseFloat(Number(val).toFixed(2));
+    const step = this.snapGrid;
+    const snapped = Math.round(val / step) * step;
+    return parseFloat(snapped.toFixed(2));
+  }
+
+  // Elimina el elemento actualmente seleccionado en el lienzo o inspector
+  eliminarElementoSeleccionado() {
+    if (!this.elementoSeleccionado) return false;
+    const { tipo, id } = this.elementoSeleccionado;
+    this._guardarEstadoHistorial();
+
+    if (tipo === "nodo") {
+      this.grafo.nodos = this.grafo.nodos.filter(n => n.id !== id);
+      this.grafo.barras = this.grafo.barras.filter(b => b.nodoA !== id && b.nodoB !== id);
+      this.grafo.motores = (this.grafo.motores || []).filter(m => m.nodoPivote !== id && m.nodoExtremo !== id);
+      this.grafo.transmisiones = (this.grafo.transmisiones || []).filter(t => t.nodo1 !== id && t.nodo2 !== id);
+      this.grafo.cuerposRigidos = (this.grafo.cuerposRigidos || []).map(cr => ({
+        ...cr,
+        nodos: cr.nodos.filter(nid => nid !== id)
+      })).filter(cr => cr.nodos.length >= 3);
+      this.grafo.sensores = (this.grafo.sensores || []).filter(s => s.nodoId !== id);
+    } else if (tipo === "barra") {
+      this.grafo.barras = this.grafo.barras.filter(b => b.id !== id);
+    } else if (tipo === "motor") {
+      this.grafo.motores = (this.grafo.motores || []).filter(m => m.id !== id);
+    } else if (tipo === "transmision") {
+      this.grafo.transmisiones = (this.grafo.transmisiones || []).filter(t => t.id !== id);
+    } else if (tipo === "sensor") {
+      this.grafo.sensores = (this.grafo.sensores || []).filter(s => s.id !== id);
+    }
+
+    this.seleccionarElemento(null, null);
+    this._notificarCambioGrafo();
+    return true;
+  }
+
+  // Clona o duplica el elemento seleccionado desplazándolo ligeramente
+  duplicarElementoSeleccionado() {
+    if (!this.elementoSeleccionado) return false;
+    const { tipo, id } = this.elementoSeleccionado;
+    this._guardarEstadoHistorial();
+
+    const offset = this.snapGrid > 0 ? Math.max(this.snapGrid, 10) : 15;
+
+    if (tipo === "nodo") {
+      const orig = this.grafo.nodos.find(n => n.id === id);
+      if (!orig) return false;
+      const nuevo = this.grafo.agregarNodo({
+        nombre: `${orig.nombre}_copia`,
+        x: this._ajustarSnap(orig.x + offset),
+        y: this._ajustarSnap(orig.y + offset),
+        tipo: orig.tipo,
+        anguloGuia: orig.anguloGuia,
+        imanDipolo: orig.imanDipolo,
+        cargaElectrica: orig.cargaElectrica,
+        temperaturaFuente: orig.temperaturaFuente
+      });
+      this.seleccionarElemento("nodo", nuevo.id);
+      this._notificarCambioGrafo();
+      return true;
+    } else if (tipo === "barra") {
+      const orig = this.grafo.barras.find(b => b.id === id);
+      if (!orig) return false;
+      const nA = this.grafo.nodos.find(n => n.id === orig.nodoA);
+      const nB = this.grafo.nodos.find(n => n.id === orig.nodoB);
+      if (!nA || !nB) return false;
+
+      const nuevoNA = this.grafo.agregarNodo({
+        nombre: `${nA.nombre}_cp`,
+        x: this._ajustarSnap(nA.x + offset),
+        y: this._ajustarSnap(nA.y + offset),
+        tipo: nA.tipo
+      });
+      const nuevoNB = this.grafo.agregarNodo({
+        nombre: `${nB.nombre}_cp`,
+        x: this._ajustarSnap(nB.x + offset),
+        y: this._ajustarSnap(nB.y + offset),
+        tipo: nB.tipo
+      });
+      const nuevaBarra = this.grafo.agregarBarra({
+        nombre: `${orig.nombre}_copia`,
+        nodoA: nuevoNA.id,
+        nodoB: nuevoNB.id,
+        longitud: orig.longitud,
+        color: orig.color,
+        grosor: orig.grosor
+      });
+      this.seleccionarElemento("barra", nuevaBarra.id);
+      this._notificarCambioGrafo();
+      return true;
+    }
+    return false;
+  }
+
+  // Espeja el mecanismo horizontalmente invirtiendo el signo de las coordenadas X (X -> -X)
+  espejarHorizontal() {
+    if (!this.grafo?.nodos?.length) return;
+    this._guardarEstadoHistorial();
+    this.grafo.nodos.forEach(n => {
+      n.x = parseFloat((-n.x).toFixed(2));
+      if (n.variableX) {
+        this.valoresVariables[n.variableX] = n.x;
+        if (typeof this.onVariableModificada === "function") {
+          this.onVariableModificada({ nombre: n.variableX, valor: n.x });
+        }
+      }
+    });
+    sincronizarPosicionesNodosGrafo(this.grafo, this.valoresVariables, this.thetaActual);
+    this._notificarCambioGrafo();
+  }
+
+  // Espeja el mecanismo verticalmente invirtiendo el signo de las coordenadas Y (Y -> -Y)
+  espejarVertical() {
+    if (!this.grafo?.nodos?.length) return;
+    this._guardarEstadoHistorial();
+    this.grafo.nodos.forEach(n => {
+      n.y = parseFloat((-n.y).toFixed(2));
+      if (n.variableY) {
+        this.valoresVariables[n.variableY] = n.y;
+        if (typeof this.onVariableModificada === "function") {
+          this.onVariableModificada({ nombre: n.variableY, valor: n.y });
+        }
+      }
+    });
+    sincronizarPosicionesNodosGrafo(this.grafo, this.valoresVariables, this.thetaActual);
+    this._notificarCambioGrafo();
+  }
+
+  // Exporta el mecanismo a formato JSON plano serializable (y opcionalmente descarga el archivo)
+  exportarJSON(descargar = true) {
+    if (!this.grafo) return null;
+    const datos = {
+      tipo: "laboratorio_evolutivo_cad_mecanismo",
+      version: "3.2",
+      fecha: new Date().toISOString(),
+      grafo: this.grafo.exportarAObjeto(),
+      valoresVariables: this.valoresVariables
+    };
+    const jsonStr = JSON.stringify(datos, null, 2);
+    if (descargar && typeof document !== "undefined") {
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mecanismo_cad_${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+    return jsonStr;
+  }
+
+  // Genera y descarga un plano vectorial SVG autónomo de la geometría CAD
+  exportarSVG() {
+    if (!this.grafo) return "";
+    const nodos = this.grafo.nodos || [];
+    let minX = -100, maxX = 100, minY = -100, maxY = 100;
+    if (nodos.length > 0) {
+      minX = Math.min(...nodos.map(n => n.x)) - 30;
+      maxX = Math.max(...nodos.map(n => n.x)) + 30;
+      minY = Math.min(...nodos.map(n => n.y)) - 30;
+      maxY = Math.max(...nodos.map(n => n.y)) + 30;
+    }
+    const width = Math.max(120, maxX - minX);
+    const height = Math.max(120, maxY - minY);
+    const svgY = (y) => (maxY - (y - minY)).toFixed(1);
+
+    let svg = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+    svg += `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX.toFixed(1)} 0 ${width.toFixed(1)} ${height.toFixed(1)}" width="${Math.round(width * 3.5)}" height="${Math.round(height * 3.5)}">\n`;
+    svg += `  <rect x="${minX.toFixed(1)}" y="0" width="${width.toFixed(1)}" height="${height.toFixed(1)}" fill="#0b0f19" />\n`;
+
+    // Cuerpos rígidos
+    (this.grafo.cuerposRigidos || []).forEach(cr => {
+      const pts = cr.nodos.map(nid => nodos.find(n => n.id === nid)).filter(Boolean);
+      if (pts.length >= 3) {
+        const poly = pts.map(p => `${p.x.toFixed(1)},${svgY(p.y)}`).join(" ");
+        svg += `  <polygon points="${poly}" fill="rgba(59,130,246,0.18)" stroke="rgba(59,130,246,0.6)" stroke-width="1.5" />\n`;
+      }
+    });
+
+    // Barras
+    (this.grafo.barras || []).forEach(b => {
+      const nA = nodos.find(n => n.id === b.nodoA);
+      const nB = nodos.find(n => n.id === b.nodoB);
+      if (nA && nB) {
+        svg += `  <line x1="${nA.x.toFixed(1)}" y1="${svgY(nA.y)}" x2="${nB.x.toFixed(1)}" y2="${svgY(nB.y)}" stroke="${b.color || '#3b82f6'}" stroke-width="${b.grosor || 2.5}" stroke-linecap="round" />\n`;
+      }
+    });
+
+    // Motores rotativos
+    (this.grafo.motores || []).forEach(m => {
+      const piv = nodos.find(n => n.id === m.nodoPivote);
+      if (piv && m.tipo === "rotativo") {
+        svg += `  <circle cx="${piv.x.toFixed(1)}" cy="${svgY(piv.y)}" r="${(m.longitudManivela || 15).toFixed(1)}" fill="none" stroke="#ef4444" stroke-dasharray="3,3" stroke-width="1.2" />\n`;
+      }
+    });
+
+    // Nodos
+    nodos.forEach(n => {
+      const esFijo = n.tipo === "fijo";
+      svg += `  <circle cx="${n.x.toFixed(1)}" cy="${svgY(n.y)}" r="${esFijo ? 5.5 : 4.5}" fill="${esFijo ? '#1e293b' : '#ffffff'}" stroke="${esFijo ? '#f8fafc' : '#0f172a'}" stroke-width="1.8" />\n`;
+      svg += `  <text x="${(n.x + 7).toFixed(1)}" y="${(parseFloat(svgY(n.y)) - 4).toFixed(1)}" fill="#e2e8f0" font-size="9" font-family="system-ui, sans-serif" font-weight="bold">${n.nombre}</text>\n`;
+    });
+
+    svg += `</svg>`;
+
+    if (typeof document !== "undefined") {
+      const blob = new Blob([svg], { type: "image/svg+xml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `plano_cad_${Date.now()}.svg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+    return svg;
+  }
+
+  // Registra atajos globales de teclado para agilizar el modelado CAD
+  _registrarAtajosTeclado() {
+    if (typeof window === "undefined" || !window.addEventListener || this._tecladoHandler) return;
+    this._tecladoHandler = (e) => {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      const esInput = tag === "input" || tag === "textarea" || tag === "select";
+
+      if (e.key === "Escape") {
+        if (this.nodoInicioConexion || this.nodosCuerpoTemporal.length > 0 || this.medicionActiva) {
+          this.nodoInicioConexion = null;
+          this.nodosCuerpoTemporal = [];
+          this.medicionActiva = null;
+        } else {
+          this.seleccionarHerramienta("select");
+          this.seleccionarElemento(null, null);
+        }
+        this.redibujar();
+        return;
+      }
+
+      if (esInput) return;
+
+      // Deshacer / Rehacer
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) this.rehacer();
+        else this.deshacer();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        this.rehacer();
+        return;
+      }
+
+      // Duplicar Ctrl+D
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        this.duplicarElementoSeleccionado();
+        return;
+      }
+
+      // Suprimir / Borrar
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (this.elementoSeleccionado) {
+          e.preventDefault();
+          this.eliminarElementoSeleccionado();
+        }
+        return;
+      }
+
+      // Atajos de herramientas numéricos 1..6
+      if (e.key === "1") this.seleccionarHerramienta("select");
+      else if (e.key === "2") this.seleccionarHerramienta("nodo_fijo");
+      else if (e.key === "3") this.seleccionarHerramienta("nodo_libre");
+      else if (e.key === "4") this.seleccionarHerramienta("barra");
+      else if (e.key === "5") this.seleccionarHerramienta("motor_rotativo");
+      else if (e.key === "6") this.seleccionarHerramienta("medir");
+
+      // Autoencuadrar con 'F'
+      if (e.key.toLowerCase() === "f") {
+        this.autoEncuadrar();
+        this.redibujar();
+      }
+    };
+    window.addEventListener("keydown", this._tecladoHandler);
   }
 
   // Ajusta automáticamente el centro y el zoom del lienzo para que el mecanismo ocupe de forma óptima la pantalla (especialmente en móviles).
@@ -243,31 +658,31 @@ export class EditorGraficoView {
           
           <!-- Paleta de herramientas de modelado -->
           <div style="display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap;">
-            <button type="button" class="btn-tool-cad" data-tool="select" title="Seleccionar y arrastrar nodos (recalcula longitudes y variables en vivo)" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
-              👆 Seleccionar / Mover
+            <button type="button" class="btn-tool-cad" data-tool="select" title="Seleccionar y arrastrar nodos [1]" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
+              👆 Mover
             </button>
             <div style="width: 1px; height: 20px; background: rgba(148,163,184,0.25); margin: 0 0.1rem;"></div>
-            <button type="button" class="btn-tool-cad" data-tool="nodo_fijo" title="Agregar pivote fijo a bancada/tierra" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
-              ⚓ Pivote Fijo
+            <button type="button" class="btn-tool-cad" data-tool="nodo_fijo" title="Agregar pivote fijo a bancada/tierra [2]" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
+              ⚓ Fijo
             </button>
-            <button type="button" class="btn-tool-cad" data-tool="nodo_libre" title="Agregar articulación o bisagra libre" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
-              ⚪ Bisagra Libre
+            <button type="button" class="btn-tool-cad" data-tool="nodo_libre" title="Agregar articulación o bisagra libre [3]" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
+              ⚪ Bisagra
             </button>
             <button type="button" class="btn-tool-cad" data-tool="nodo_deslizante" title="Agregar corredera / unión prismática deslizante" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
-              🛤️ Corredera
+              🛤️ Guía
             </button>
-            <button type="button" class="btn-tool-cad" data-tool="barra" title="Conectar 2 nodos con una barra/palito" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
-              📏 Barra / Palito
+            <button type="button" class="btn-tool-cad" data-tool="barra" title="Conectar 2 nodos con una barra/palito [4]" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
+              📏 Barra
             </button>
             <button type="button" class="btn-tool-cad" data-tool="cuerpo" title="Crear cuerpo rígido poligonal con puntos bisagra (clic en 3 nodos)" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
-              🔺 Cuerpo Rígido
+              🔺 Cuerpo
             </button>
             <div style="width: 1px; height: 20px; background: rgba(148,163,184,0.25); margin: 0 0.1rem;"></div>
-            <button type="button" class="btn-tool-cad" data-tool="motor_rotativo" title="Asignar motor rotativo (manivela motriz entre pivote y extremo)" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
-              🔄 Motor Rotativo
+            <button type="button" class="btn-tool-cad" data-tool="motor_rotativo" title="Asignar motor rotativo (manivela motriz entre pivote y extremo) [5]" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
+              🔄 Motor
             </button>
             <button type="button" class="btn-tool-cad" data-tool="motor_lineal" title="Asignar actuador / motor lineal (pistón entre 2 nodos)" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
-              ↔️ Motor Lineal
+              ↔️ Lineal
             </button>
             <button type="button" class="btn-tool-cad" data-tool="engranaje" title="Acoplar par de engranajes entre 2 ejes" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
               ⚙️ Engranaje
@@ -276,16 +691,56 @@ export class EditorGraficoView {
               🪢 Polea
             </button>
             <div style="width: 1px; height: 20px; background: rgba(148,163,184,0.25); margin: 0 0.1rem;"></div>
-            <button type="button" class="btn-tool-cad" data-tool="sensor" title="Marcar punto de medida multimagnitud (posición, velocidad, aceleración, temperatura, campo EM)" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
-              🎯 Punto Medida
+            <button type="button" class="btn-tool-cad" data-tool="sensor" title="Marcar punto de medida multimagnitud (posición, velocidad, aceleración, EM, temp)" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
+              🎯 Sensor
             </button>
             <button type="button" class="btn-tool-cad" data-tool="multiefecto" title="Asociar imán, carga eléctrica o fuente térmica a un nodo" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
-              🧲 Fuente EM / Térmica
+              🧲 Multiefecto
+            </button>
+            <button type="button" class="btn-tool-cad" data-tool="medir" title="Calibre y medición de cotas, distancias y ángulos entre 2 puntos [6]" style="padding: 0.32rem 0.55rem; font-size: 0.76rem; border-radius: 6px; cursor: pointer;">
+              📐 Medir
             </button>
           </div>
 
-          <!-- Acciones de control y Grados de Libertad -->
-          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <!-- Acciones de control, Historial, Rejilla y Grados de Libertad -->
+          <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+            <!-- Deshacer / Rehacer -->
+            <div style="display: flex; align-items: center; gap: 0.2rem;">
+              <button type="button" id="cad-btn-undo" class="btn-m3-tonal" title="Deshacer última acción [Ctrl+Z]" disabled style="padding: 0.28rem 0.5rem; font-size: 0.74rem; border-radius: 6px; cursor: not-allowed; opacity: 0.45;">
+                ↶ Deshacer
+              </button>
+              <button type="button" id="cad-btn-redo" class="btn-m3-tonal" title="Rehacer acción [Ctrl+Y]" disabled style="padding: 0.28rem 0.5rem; font-size: 0.74rem; border-radius: 6px; cursor: not-allowed; opacity: 0.45;">
+                ↷ Rehacer
+              </button>
+            </div>
+
+            <!-- Imán a Rejilla (Snap-to-Grid) -->
+            <select id="cad-select-snap" style="padding: 0.28rem 0.45rem; font-size: 0.74rem; border-radius: 6px; background: var(--bg-input, #0f172a); color: var(--texto-principal, #f8fafc); border: 1px solid var(--borde, #334155); cursor: pointer;" title="Ajuste magnético a la cuadrícula CAD">
+              <option value="0">🧲 Snap: Off</option>
+              <option value="1">🧲 Snap: 1mm</option>
+              <option value="5" selected>🧲 Snap: 5mm</option>
+              <option value="10">🧲 Snap: 10mm</option>
+              <option value="25">🧲 Snap: 25mm</option>
+            </select>
+
+            <!-- Herramientas de Espejado Simétrico -->
+            <div style="display: flex; align-items: center; gap: 0.2rem;">
+              <button type="button" id="cad-btn-mirror-x" class="btn-m3-tonal" title="Espejar horizontalmente respecto al eje Y (X -> -X)" style="padding: 0.28rem 0.48rem; font-size: 0.74rem; border-radius: 6px; cursor: pointer;">
+                🪞 Horiz
+              </button>
+              <button type="button" id="cad-btn-mirror-y" class="btn-m3-tonal" title="Espejar verticalmente respecto al eje X (Y -> -Y)" style="padding: 0.28rem 0.48rem; font-size: 0.74rem; border-radius: 6px; cursor: pointer;">
+                🪞 Vert
+              </button>
+            </div>
+
+            <!-- Menú de Exportación CAD -->
+            <select id="cad-select-exportar" style="padding: 0.28rem 0.45rem; font-size: 0.74rem; border-radius: 6px; background: var(--bg-input, #0f172a); color: var(--texto-principal, #f8fafc); border: 1px solid var(--borde, #334155); cursor: pointer;" title="Exportar plano o archivo CAD">
+              <option value="">💾 Exportar...</option>
+              <option value="json">📄 Descargar JSON del Grafo</option>
+              <option value="svg">📐 Descargar Plano Vectorial SVG</option>
+              <option value="clipboard">📋 Copiar JSON al Portapapeles</option>
+            </select>
+
             <!-- Badge de Grados de Libertad DOF (Grübler-Kutzbach) -->
             <div id="cad-badge-dof" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.65rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.4);" title="Grados de Libertad cinemáticos">
               ⚙️ DOF: M = 1 (Determinado)
@@ -417,16 +872,62 @@ export class EditorGraficoView {
     this.dom.btnZoomOut = this.contenedor.querySelector("#cad-btn-zoom-out");
     this.dom.btnZoomReset = this.contenedor.querySelector("#cad-btn-zoom-reset");
     this.dom.botonesTool = Array.from(this.contenedor.querySelectorAll(".btn-tool-cad"));
+    this.dom.btnUndo = this.contenedor.querySelector("#cad-btn-undo");
+    this.dom.btnRedo = this.contenedor.querySelector("#cad-btn-redo");
+    this.dom.selectSnap = this.contenedor.querySelector("#cad-select-snap");
+    this.dom.btnMirrorX = this.contenedor.querySelector("#cad-btn-mirror-x");
+    this.dom.btnMirrorY = this.contenedor.querySelector("#cad-btn-mirror-y");
+    this.dom.selectExportar = this.contenedor.querySelector("#cad-select-exportar");
   }
 
   // Registra los eventos de interacción y herramientas
   _registrarEventos() {
+    // 0. Atajos globales de teclado
+    this._registrarAtajosTeclado();
+
     // 1. Selección de herramientas
     this.dom.botonesTool.forEach(btn => {
       btn.addEventListener("click", () => {
         const tool = btn.dataset.tool;
         this.seleccionarHerramienta(tool);
       });
+    });
+
+    // 1b. Deshacer y Rehacer
+    this.dom.btnUndo?.addEventListener("click", () => this.deshacer());
+    this.dom.btnRedo?.addEventListener("click", () => this.rehacer());
+
+    // 1c. Selector de Snap to Grid
+    this.dom.selectSnap?.addEventListener("change", (e) => {
+      this.snapGrid = parseFloat(e.target.value) || 0;
+      this.redibujar();
+    });
+
+    // 1d. Botones de Simetría / Espejado
+    this.dom.btnMirrorX?.addEventListener("click", () => this.espejarHorizontal());
+    this.dom.btnMirrorY?.addEventListener("click", () => this.espejarVertical());
+
+    // 1e. Menú de Exportación
+    this.dom.selectExportar?.addEventListener("change", (e) => {
+      const op = e.target.value;
+      if (!op) return;
+      if (op === "json") {
+        this.exportarJSON(true);
+      } else if (op === "svg") {
+        this.exportarSVG();
+      } else if (op === "clipboard") {
+        const json = this.exportarJSON(false);
+        if (json && typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+          navigator.clipboard.writeText(json).then(() => {
+            if (this.dom.overlayCoords) {
+              const prev = this.dom.overlayCoords.textContent;
+              this.dom.overlayCoords.textContent = "✓ ¡Grafo CAD copiado al portapapeles!";
+              setTimeout(() => { if (this.dom.overlayCoords) this.dom.overlayCoords.textContent = prev; }, 2000);
+            }
+          }).catch(() => {});
+        }
+      }
+      e.target.value = "";
     });
 
     // 2. Control de simulación en vivo (Giro de motores vs Modo Edición Estática)

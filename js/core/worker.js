@@ -34,14 +34,18 @@ async function iniciarOptimizacion(datos) {
 // Ejecuta el proceso evolutivo utilizando la clase Motor.
 function ejecutarConJs(modelo, config, entrada) {
   motorJsActivo = new Motor({
-    tamanoPoblacion: config.tamanoPoblacion,
+    tamanoPoblacion: config.tamanoPoblacion ?? config.tamPoblacion,
     generaciones: config.generaciones,
-    tasaMutacion: config.tasaMutacion,
+    tasaMutacion: config.tasaMutacion ?? config.probMutacion,
+    probCruzamiento: config.probCruzamiento,
+    esquemaSeleccion: config.esquemaSeleccion,
+    crossover: config.crossover,
+    sigmaMutacion: config.sigmaMutacion,
     elitismo: config.elitismo,
-    tamanoTorneo: config.tamanoTorneo,
+    tamanoTorneo: config.tamanoTorneo ?? config.torneoK,
     semilla: config.semilla,
     tandaGeneraciones: config.tandaGeneraciones || 5,
-    nReplicasRuido: config.nReplicasRuido || 5
+    nReplicasRuido: config.nReplicasRuido ?? config.replicasRuido ?? 5
   });
 
   motorJsActivo.correr(modelo, entrada, (progreso) => {
@@ -96,6 +100,12 @@ self.addEventListener("message", (evento) => {
       estadoSimulacion = "DETENIDO";
       if (motorJsActivo) motorJsActivo.detener();
       postMessage({ tipo: "estado", estado: "DETENIDO" });
+      break;
+
+    case "actualizarEntrada":
+      if (motorJsActivo && datos.entrada) {
+        motorJsActivo.actualizarDatosEntrada(datos.entrada);
+      }
       break;
 
     default:

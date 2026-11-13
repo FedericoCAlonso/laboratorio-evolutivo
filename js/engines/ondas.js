@@ -453,7 +453,7 @@ export function simularAbsorbenteAcustico(genoma, entrada) {
   const { BANDAS_OCTAVA_HZ, PONDERACION_A_DB } = CONSTANTES_ACUSTICAS;
   const tipoEstructura = (entrada?.tipoEstructura || "cuña_prismatica").toString().toLowerCase().trim();
   const tipoRuido = (entrada?.tipoRuido || "conversacion").toString().toLowerCase().trim();
-  const atenuacionObjetivoDba = Number(entrada?.atenuacionObjetivoDba !== undefined ? entrada.atenuacionObjetivoDba : 18.0);
+  const atenuacionObjetivoDba = Number(entrada?.atenuacionObjetivoDba !== undefined ? entrada.atenuacionObjetivoDba : 11.0);
   const modo3D = (entrada?.modoExtrapolacion3D || "extrusion_lineal").toString().toLowerCase().trim();
   const limiteEspesorMaxMm = Number(entrada?.limiteEspesorMaxMm !== undefined ? entrada.limiteEspesorMaxMm : 180.0);
 

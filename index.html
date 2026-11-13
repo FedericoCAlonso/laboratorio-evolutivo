@@ -121,9 +121,10 @@
                 <option value="superficie-fonoabsorbente">Superficie Fonoabsorbente (Cuñas y Multimaterial dBA)</option>
                 <option value="linea-transmision-rf">Línea de Transmisión RF (Carta de Smith)</option>
                 <option value="corte-chapa-nesting">Corte de Chapa y Anidado 2D (Nesting)</option>
-                <option value="balanceo-fases-trifasico">Balanceo de Fases Trifásico (R, S, T)</option>
                 <option value="pata-caminante">Pata caminante (cuatro barras)</option>
                 <option value="pata-jansen">Pata Jansen (13 barras)</option>
+                <option value="braquistocrona-evolucion">Curva Braquistócrona (Descenso Mínimo)</option>
+                <option value="navegacion-obstaculos">Navegación Autónoma por Waypoints (Evasión)</option>
               </select>
               <span id="descripcion-modelo" class="descripcion-campo"></span>
             </div>
@@ -249,6 +250,34 @@
 
             <!-- Contenedor donde el modelo actual dibuja su resultado visual interactivo -->
             <div id="contenedor-dibujo-modelo"></div>
+
+            <!-- Observatorio Darwiniano: diversidad, línea de tiempo y comparación de población -->
+            <div id="observatorio-darwiniano" class="observatorio-darwiniano">
+              <div class="observatorio-metricas">
+                <span class="obs-pill" title="Mejora del campeón actual frente al mejor individuo aleatorio de la generación 0">
+                  📈 vs Gen 0: <strong id="obs-mejora-gen0">--</strong>
+                </span>
+                <span class="obs-pill" title="Dispersión genética normalizada de la población activa">
+                  🧬 Diversidad: <strong id="obs-diversidad">--</strong>
+                </span>
+                <span class="obs-pill" title="Porcentaje de individuos que satisfacen todas las restricciones físicas">
+                  ✅ Viabilidad: <strong id="obs-viabilidad">--</strong>
+                </span>
+              </div>
+              <div class="observatorio-controles">
+                <button type="button" id="btn-toggle-fantasmas" class="btn-m3-tonal btn-obs activo" aria-pressed="true" title="Superponer otros individuos de la población sobre el escenario">
+                  👻 Fantasmas
+                </button>
+                <button type="button" id="btn-toggle-gen0" class="btn-m3-tonal btn-obs" aria-pressed="false" title="Superponer el mejor individuo aleatorio inicial (Gen 0) para comparar antes vs después">
+                  🎲 Ver Gen 0
+                </button>
+              </div>
+              <div class="observatorio-timeline">
+                <label for="slider-linea-tiempo" class="obs-timeline-label">⏳ Historia</label>
+                <input type="range" id="slider-linea-tiempo" min="0" max="0" value="0" step="1" disabled />
+                <span id="obs-gen-timeline" class="obs-timeline-badge">En vivo</span>
+              </div>
+            </div>
 
             <!-- Chips de Variables / Genes del Mejor Individuo -->
             <div id="chips-genoma-optimo" class="genome-chips-grid" style="margin-top: 0.75rem;">
@@ -411,6 +440,7 @@
               <button type="button" class="btn-snippet chip-snippet" data-snippet="estructuras">+ Cinemática</button>
               <button type="button" class="btn-snippet chip-snippet" data-snippet="ondas">+ Ondas</button>
               <button type="button" class="btn-snippet chip-snippet" data-snippet="topologia">+ Topología</button>
+              <button type="button" class="btn-snippet chip-snippet" data-snippet="escena">+ Escena 2D</button>
             </div>
 
             <!-- Contenedor del Editor de Código amplio -->

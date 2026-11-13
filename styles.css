@@ -2168,5 +2168,103 @@ canvas {
   }
 }
 
+/* =========================================================================
+   OBSERVATORIO DARWINIANO (Métricas de población, fantasmas y línea de tiempo)
+   ========================================================================= */
+.observatorio-darwiniano {
+  margin-top: 0.7rem;
+  padding: 0.65rem 0.85rem;
+  background: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-shape-corner-md);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.observatorio-metricas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.obs-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.22rem 0.55rem;
+  border-radius: var(--md-shape-corner-full);
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  font-size: 0.76rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.obs-pill strong {
+  color: var(--md-sys-color-on-surface);
+  font-variant-numeric: tabular-nums;
+}
+
+.observatorio-controles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.btn-obs {
+  padding: 0.28rem 0.7rem !important;
+  font-size: 0.76rem !important;
+  min-height: 30px !important;
+  opacity: 0.72;
+  transition: all 0.15s ease;
+}
+
+.btn-obs.activo {
+  opacity: 1;
+  background: var(--md-sys-color-primary-container) !important;
+  color: var(--md-sys-color-on-primary-container) !important;
+  border-color: var(--md-sys-color-primary) !important;
+  font-weight: 600;
+}
+
+.observatorio-timeline {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.obs-timeline-label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface-variant);
+  white-space: nowrap;
+}
+
+#slider-linea-tiempo {
+  flex: 1;
+  min-width: 110px;
+  accent-color: var(--md-sys-color-primary);
+  cursor: pointer;
+}
+
+#slider-linea-tiempo:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.obs-timeline-badge {
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 0.16rem 0.5rem;
+  border-radius: var(--md-shape-corner-full);
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+
 
 

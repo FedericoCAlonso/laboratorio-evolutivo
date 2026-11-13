@@ -210,6 +210,42 @@ for (const plantilla of CATALOGO_PREDEFINIDO) {
   PLANTILLAS_SIMULACION[alias] = plantilla;
 }
 
+// Normaliza la salida cruda de codigoEvaluacion admitiendo escalar, vector multiobjetivo u objeto { fitness, violacion, escena }.
+export function normalizarSalidaEvaluacion(puntaje) {
+  if (puntaje && typeof puntaje === "object" && !Array.isArray(puntaje) && puntaje.fitness !== undefined) {
+    const base = normalizarSalidaEvaluacion(puntaje.fitness);
+    if (!base.ok) return base;
+    const violacion = typeof puntaje.violacion === "number" && Number.isFinite(puntaje.violacion)
+      ? Math.max(0, puntaje.violacion)
+      : 0;
+    return {
+      ok: true,
+      fitness: base.fitness,
+      violacion,
+      escena: puntaje.escena && typeof puntaje.escena === "object" ? puntaje.escena : null,
+      tieneRestriccion: typeof puntaje.violacion === "number"
+    };
+  }
+  if (Array.isArray(puntaje)) {
+    const valido = puntaje.length >= 2 && puntaje.every((v) => typeof v === "number" && !Number.isNaN(v));
+    return {
+      ok: valido,
+      fitness: valido ? puntaje : [999999, 999999],
+      violacion: 0,
+      escena: null,
+      tieneRestriccion: false
+    };
+  }
+  const valido = typeof puntaje === "number" && !Number.isNaN(puntaje);
+  return {
+    ok: valido,
+    fitness: valido ? puntaje : 999999,
+    violacion: 0,
+    escena: null,
+    tieneRestriccion: false
+  };
+}
+
 // Obtiene una copia profunda de una plantilla predefinida a partir de su clave o identificador de modelo.
 export function obtenerPlantillaSimulacion(clave) {
   if (!clave) return null;
@@ -344,10 +380,9 @@ export function validarDefinicionModelo(definicion) {
       telemetriaPrueba,
       grafoInstancia
     );
-    const esNumeroValido = typeof resPrueba === "number" && !isNaN(resPrueba);
-    const esArregloValido = Array.isArray(resPrueba) && resPrueba.length >= 2 && resPrueba.every(v => typeof v === "number" && !isNaN(v));
-    if (!esNumeroValido && !esArregloValido) {
-      throw new Error("La función de evaluación debe retornar un número válido o un arreglo de números (para multiobjetivo).");
+    const salidaPrueba = normalizarSalidaEvaluacion(resPrueba);
+    if (!salidaPrueba.ok) {
+      throw new Error("La función de evaluación debe retornar un número válido, un arreglo de números, o { fitness, violacion?, escena? }.");
     }
   } catch (error) {
     throw new Error(`Error al ejecutar el código de prueba con valores iniciales: ${error.message}`);
@@ -445,42 +480,31 @@ export function compilarModeloDinamico(definicionCruda) {
           telemetriaSensores,
           grafoInstancia
         );
-        if (Array.isArray(puntaje)) {
-          if (puntaje.length >= 2 && puntaje.every(v => typeof v === "number" && !isNaN(v))) {
-            return puntaje;
-          }
-          return [999999, 999999];
+        const norm = normalizarSalidaEvaluacion(puntaje);
+        if (norm.tieneRestriccion) {
+          return { fitness: norm.fitness, violacion: norm.violacion };
         }
-        if (typeof puntaje !== "number" || isNaN(puntaje)) {
-          return 999999;
-        }
-        return puntaje;
+        return norm.fitness;
       } catch (error) {
         return 999999;
       }
     },
 
-    // Genera un informe textual detallado con las variables encontradas, sus rangos y el fitness resultante.
-    describir(genoma) {
+    // Ejecuta la función de evaluación para obtener su escena gráfica declarativa (si el usuario la retorna).
+    obtenerEscena(genoma, entrada = {}) {
       const vars = {};
       for (let i = 0; i < varsDef.length; i++) {
         vars[varsDef[i].nombre] = genoma[i];
       }
-
-      let telemetriaSensores = {
-        pie: { x: 0, y: -40, velocidad: 0, aceleracionPico: 12.5, zancada: 60, despejeSuelo: 15, emB: 0, emE: 0 },
-        efector: { x: 55, y: 40, velocidad: 0, aceleracionPico: 5.0, emB: 0, emE: 0 }
-      };
-      if (grafoInstancia) {
+      let telemetriaSensores = telemetriaPorDefecto;
+      if (usaSensores) {
         try {
           const res = simularCicloMecanismo(grafoInstancia, vars, { pasos: 60 });
-          if (res && res.sensores) telemetriaSensores = { ...telemetriaSensores, ...res.sensores };
+          if (res && res.sensores) telemetriaSensores = { ...telemetriaPorDefecto, ...res.sensores };
         } catch (_) {}
       }
-
-      let fitness = 0;
       try {
-        fitness = funcionEvaluacion(
+        const res = funcionEvaluacion(
           vars,
           entrada || {},
           Math.random,
@@ -492,9 +516,46 @@ export function compilarModeloDinamico(definicionCruda) {
           telemetriaSensores,
           grafoInstancia
         );
-      } catch (e) {
-        fitness = 999999;
+        return normalizarSalidaEvaluacion(res).escena;
+      } catch (_) {
+        return null;
       }
+    },
+
+    // Genera un informe textual detallado con las variables encontradas, sus rangos y el fitness resultante.
+    describir(genoma, entrada = {}) {
+      const vars = {};
+      for (let i = 0; i < varsDef.length; i++) {
+        vars[varsDef[i].nombre] = genoma[i];
+      }
+
+      let telemetriaSensores = telemetriaPorDefecto;
+      if (usaSensores) {
+        try {
+          const res = simularCicloMecanismo(grafoInstancia, vars, { pasos: 60 });
+          if (res && res.sensores) telemetriaSensores = { ...telemetriaPorDefecto, ...res.sensores };
+        } catch (_) {}
+      }
+
+      let salidaNorm = { fitness: 999999, violacion: 0 };
+      try {
+        const raw = funcionEvaluacion(
+          vars,
+          entrada || {},
+          Math.random,
+          MotorEstructurasCinematica,
+          MotorEstructurasCinematica,
+          MotorCamposUnificados,
+          MotorOndasAcustica,
+          MotorFuncionalTopologico,
+          telemetriaSensores,
+          grafoInstancia
+        );
+        salidaNorm = normalizarSalidaEvaluacion(raw);
+      } catch (e) {
+        salidaNorm = { fitness: 999999, violacion: 0 };
+      }
+      const fitness = salidaNorm.fitness;
 
       let texto = `MODELO DINÁMICO: ${definicionCruda.nombre.toUpperCase()}\n`;
       texto += `========================================================================\n`;
@@ -514,6 +575,9 @@ export function compilarModeloDinamico(definicionCruda) {
 
       const fitStr = Array.isArray(fitness) ? `[${fitness.map(f => f.toFixed(4)).join(", ")}]` : fitness.toFixed(6);
       texto += `\nFITNESS FINAL: ${fitStr} (Menor = Mejor)\n`;
+      if (salidaNorm.violacion > 0) {
+        texto += `VIOLACIÓN DE RESTRICCIONES: ${salidaNorm.violacion.toFixed(4)} (No viable)\n`;
+      }
       texto += `========================================================================\n`;
 
       return texto;
@@ -546,6 +610,7 @@ export function clonarModeloExistente(modeloOriginal, nuevoNombre = null) {
       tipoVisualizacion: plantilla.tipoVisualizacion || modeloOriginal.tipoVisualizacion || "calibracion",
       grafo: plantilla.grafo || modeloOriginal.grafo || (modeloOriginal.definicionCruda?.grafo) || null,
       variables: plantilla.variables,
+      parametrosEntrada: JSON.parse(JSON.stringify(plantilla.parametrosEntrada || modeloOriginal.parametrosEntrada || [])),
       codigoEvaluacion: plantilla.codigoEvaluacion
     };
   }

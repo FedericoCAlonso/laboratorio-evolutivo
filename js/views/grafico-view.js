@@ -258,8 +258,14 @@ export class GraficoView {
     const anchoGrafico = anchoCSS - margenIzq - margenDer;
     const altoGrafico = altoCSS - margenSup - margenInf;
 
-    const validosFrente = frentePareto.filter((p) => Array.isArray(p.fitness) && p.fitness[0] < 500 && p.fitness[1] < 500);
-    const validosPoblacion = poblacion.filter((p) => Array.isArray(p.fitness) && p.fitness[0] < 500 && p.fitness[1] < 500);
+    const validosFrenteRaw = frentePareto.filter((p) => Array.isArray(p.fitness) && p.fitness[0] < 500 && p.fitness[1] < 500);
+    const soloPenalizados = validosFrenteRaw.length === 0 && frentePareto.length > 0;
+    const validosFrente = soloPenalizados
+      ? frentePareto.filter((p) => Array.isArray(p.fitness) && p.fitness.length >= 2 && Number.isFinite(p.fitness[0]) && Number.isFinite(p.fitness[1]))
+      : validosFrenteRaw;
+    const validosPoblacion = soloPenalizados
+      ? poblacion.filter((p) => Array.isArray(p.fitness) && p.fitness.length >= 2 && Number.isFinite(p.fitness[0]) && Number.isFinite(p.fitness[1]))
+      : poblacion.filter((p) => Array.isArray(p.fitness) && p.fitness[0] < 500 && p.fitness[1] < 500);
     const todosValidos = [...validosFrente, ...validosPoblacion];
 
     ctx.fillStyle = paleta.fondoArea;

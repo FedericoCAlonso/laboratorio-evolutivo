@@ -591,7 +591,7 @@ export function simularCampoTermico(genoma, entrada) {
   const altoPlaca = 80.0;   // mm [-40, 40]
 
   // Potencias térmicas disipadas por los 4 circuitos integrados en Watts:
-  const potencias = [25.0, 18.0, 12.0, 10.0];
+  const potencias = [42.0, 32.0, 22.0, 16.0];
   const radiosChip = [9.0, 7.5, 6.5, 6.0]; // mm (radio físico de seguridad de cada encapsulado)
 
   // 8 genes continuos: [x1, y1, x2, y2, x3, y3, x4, y4]
@@ -635,13 +635,13 @@ export function simularCampoTermico(genoma, entrada) {
       (anchoPlaca / 2) - Math.abs(x),
       (altoPlaca / 2) - Math.abs(y)
     ) / 15.0;
-    const factorConveccion = Math.max(0.2, Math.min(1.0, factorEnfriamientoBorde));
+    const factorConveccion = Math.max(0.45, Math.min(1.0, factorEnfriamientoBorde));
 
     for (let i = 0; i < chips.length; i++) {
       const c = chips[i];
       const d = Math.hypot(x - c.x, y - c.y);
       // Disipación térmica gaussiana / Green en placa delgada con disipador perimetral
-      const deltaT = (c.q / (kConductividad * 0.45)) * Math.exp(-(d * d) / 380.0);
+      const deltaT = (c.q / (kConductividad * 0.45)) * Math.exp(-(d * d) / 560.0);
       t += deltaT * factorConveccion;
     }
     return t;

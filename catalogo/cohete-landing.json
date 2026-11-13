@@ -14,6 +14,26 @@
     "retropropulsión"
   ],
   "tipoVisualizacion": "cohete_landing",
+  "parametrosEntrada": [
+    {
+      "clave": "viento",
+      "etiqueta": "Viento lateral (m/s)",
+      "tipo": "numero",
+      "min": -12,
+      "max": 12,
+      "paso": 0.5,
+      "valorDefecto": 4.0
+    },
+    {
+      "clave": "alturaInicial",
+      "etiqueta": "Altura inicial de encendido (m)",
+      "tipo": "numero",
+      "min": 80,
+      "max": 200,
+      "paso": 5,
+      "valorDefecto": 120.0
+    }
+  ],
   "variables": [
     {
       "nombre": "F1",
@@ -72,7 +92,7 @@
       "max": 15
     }
   ],
-  "codigoEvaluacion": "// Entorno por defecto del modelo nativo\nconst viento = 4.0;\nconst alturaInicial = 120.0;\nconst fuerzas = [vars.F1, vars.F2, vars.F3, vars.F4];\nconst angulos = [vars.A1, vars.A2, vars.A3, vars.A4];\n\n// Constantes físicas y estado inicial\nconst g = 9.81, dt = 0.05, masaSeca = 500, combInicial = 500;\nconst tasaConsumo = 0.00045;\nlet masa = masaSeca + combInicial;\nlet x = 15.0, y = alturaInicial, vx = -2.0, vy = -22.0;\nlet t = 0;\nconst tiempoFase = 2.0;\nlet ultimo = { x, vx, vy };\n\n// Integración temporal: 4 fases de 2 s, hasta tocar el suelo o 10 s\nwhile (y > 0 && t < 10.0) {\n  const faseIdx = Math.min(3, Math.floor(t / tiempoFase));\n  let empuje = fuerzas[faseIdx];\n  const angRad = (angulos[faseIdx] * Math.PI) / 180;\n\n  // Sin propelente el empuje cesa; si no, se descuenta el consumo\n  const combRestante = masa - masaSeca;\n  if (combRestante <= 0) {\n    empuje = 0;\n  } else {\n    masa -= Math.min(combRestante, empuje * tasaConsumo * dt);\n  }\n\n  // Empuje vectorial y arrastre aerodinámico\n  const fEmpujeX = empuje * Math.sin(angRad);\n  const fEmpujeY = empuje * Math.cos(angRad);\n  const fArrastreX = -0.08 * (vx - viento) * Math.abs(vx - viento);\n  const fArrastreY = -0.06 * vy * Math.abs(vy);\n  const ax = (fEmpujeX + fArrastreX) / masa;\n  const ay = -g + (fEmpujeY + fArrastreY) / masa;\n\n  vx += ax * dt;\n  vy += ay * dt;\n  x += vx * dt;\n  y += vy * dt;\n  t += dt;\n  ultimo = { x, vx, vy };\n}\n\n// Métricas de impacto y consumo\nconst velocidadImpacto = Math.hypot(ultimo.vx, ultimo.vy);\nconst desvioPlataforma = Math.abs(ultimo.x);\nconst combustibleRestante = Math.max(0, masa - masaSeca);\nconst combustibleGastadoPct = ((combInicial - combustibleRestante) / combInicial) * 100;\n\n// Penalizaciones por impacto severo o caída fuera de la barcaza\nlet penalizacionCrash = 0;\nif (velocidadImpacto > 4.0) penalizacionCrash += (velocidadImpacto - 4.0) * 8.0;\nif (desvioPlataforma > 12.0) penalizacionCrash += (desvioPlataforma - 12.0) * 5.0;\n\nconst objVelocidad = velocidadImpacto + desvioPlataforma * 0.4 + penalizacionCrash;\nconst objCombustible = combustibleGastadoPct / 100 + (penalizacionCrash > 0 ? 1.0 : 0);\nreturn [objVelocidad, objCombustible];",
+  "codigoEvaluacion": "// Entorno configurable del descenso atmosférico\nconst viento = Number(entrada?.viento !== undefined ? entrada.viento : 4.0);\nconst alturaInicial = Number(entrada?.alturaInicial !== undefined ? entrada.alturaInicial : 120.0);\nconst fuerzas = [vars.F1, vars.F2, vars.F3, vars.F4];\nconst angulos = [vars.A1, vars.A2, vars.A3, vars.A4];\n\n// Constantes físicas y estado inicial\nconst g = 9.81, dt = 0.05, masaSeca = 500, combInicial = 500;\nconst tasaConsumo = 0.00045;\nlet masa = masaSeca + combInicial;\nlet x = 15.0, y = alturaInicial, vx = -2.0, vy = -22.0;\nlet t = 0;\nconst tiempoFase = 2.0;\nlet ultimo = { x, vx, vy };\n\n// Integración temporal: 4 fases de 2 s, hasta tocar el suelo o 10 s\nwhile (y > 0 && t < 10.0) {\n  const faseIdx = Math.min(3, Math.floor(t / tiempoFase));\n  let empuje = fuerzas[faseIdx];\n  const angRad = (angulos[faseIdx] * Math.PI) / 180;\n\n  // Sin propelente el empuje cesa; si no, se descuenta el consumo\n  const combRestante = masa - masaSeca;\n  if (combRestante <= 0) {\n    empuje = 0;\n  } else {\n    masa -= Math.min(combRestante, empuje * tasaConsumo * dt);\n  }\n\n  // Empuje vectorial y arrastre aerodinámico\n  const fEmpujeX = empuje * Math.sin(angRad);\n  const fEmpujeY = empuje * Math.cos(angRad);\n  const fArrastreX = -0.08 * (vx - viento) * Math.abs(vx - viento);\n  const fArrastreY = -0.06 * vy * Math.abs(vy);\n  const ax = (fEmpujeX + fArrastreX) / masa;\n  const ay = -g + (fEmpujeY + fArrastreY) / masa;\n\n  vx += ax * dt;\n  vy += ay * dt;\n  x += vx * dt;\n  y += vy * dt;\n  t += dt;\n  ultimo = { x, vx, vy };\n}\n\n// Métricas de impacto y consumo\nconst velocidadImpacto = Math.hypot(ultimo.vx, ultimo.vy);\nconst desvioPlataforma = Math.abs(ultimo.x);\nconst combustibleRestante = Math.max(0, masa - masaSeca);\nconst combustibleGastadoPct = ((combInicial - combustibleRestante) / combInicial) * 100;\n\n// Penalizaciones por impacto severo o caída fuera de la barcaza\nlet penalizacionCrash = 0;\nif (velocidadImpacto > 4.0) penalizacionCrash += (velocidadImpacto - 4.0) * 8.0;\nif (desvioPlataforma > 12.0) penalizacionCrash += (desvioPlataforma - 12.0) * 5.0;\n\nconst objVelocidad = velocidadImpacto + desvioPlataforma * 0.4 + penalizacionCrash;\nconst objCombustible = combustibleGastadoPct / 100 + (penalizacionCrash > 0 ? 1.0 : 0);\nreturn [objVelocidad, objCombustible];",
   "grafo": {
     "nodos": [
       {

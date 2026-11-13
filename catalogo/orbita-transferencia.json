@@ -14,6 +14,26 @@
     "delta-v"
   ],
   "tipoVisualizacion": "orbita_transferencia",
+  "parametrosEntrada": [
+    {
+      "clave": "radioInicial",
+      "etiqueta": "Radio órbita inicial (km)",
+      "tipo": "numero",
+      "min": 24,
+      "max": 50,
+      "paso": 1,
+      "valorDefecto": 35
+    },
+    {
+      "clave": "radioObjetivo",
+      "etiqueta": "Radio órbita objetivo (km)",
+      "tipo": "numero",
+      "min": 55,
+      "max": 110,
+      "paso": 1,
+      "valorDefecto": 75
+    }
+  ],
   "variables": [
     {
       "nombre": "dv1T",
@@ -44,7 +64,7 @@
       "max": 10
     }
   ],
-  "codigoEvaluacion": "const { dv1T, dv1R, tEspera, dv2T } = vars;\n// Entorno por defecto del modelo nativo\nconst mu = 10000.0, rInicial = 35.0, rObjetivo = 75.0, rPlaneta = 18.0;\n\n// Estado inicial: órbita circular en el eje X más el primer impulso\nconst v0 = Math.sqrt(mu / rInicial);\nlet x = rInicial, y = 0.0, vx = dv1R, vy = v0 + dv1T;\n\nconst dt = 0.04;\nconst tiempoTotal = Math.max(tEspera + 6.0, 15.0);\nconst pasos = Math.round(tiempoTotal / dt);\nlet colisionPlaneta = false;\nlet segundoEncendidoAplicado = false;\n\nfor (let k = 1; k <= pasos; k++) {\n  const tActual = k * dt;\n\n  // Segundo impulso prograde en la dirección instantánea de la velocidad\n  if (!segundoEncendidoAplicado && tActual >= tEspera) {\n    const velMag = Math.hypot(vx, vy);\n    if (velMag > 0.001) {\n      vx += (vx / velMag) * dv2T;\n      vy += (vy / velMag) * dv2T;\n    }\n    segundoEncendidoAplicado = true;\n  }\n\n  if (Math.hypot(x, y) < rPlaneta) colisionPlaneta = true;\n\n  // Gravedad central a = -mu/r^3 * r_vec, integración de Euler semi-implícita\n  const r = Math.hypot(x, y);\n  const r3 = r * r * r || 1;\n  vx += -(mu / r3) * x * dt;\n  vy += -(mu / r3) * y * dt;\n  x += vx * dt;\n  y += vy * dt;\n}\n\n// Elementos orbitales finales: momento angular y excentricidad de Laplace-Runge-Lenz\nconst rFinal = Math.hypot(x, y);\nconst h = x * vy - y * vx;\nconst ex = (vy * h) / mu - x / rFinal;\nconst ey = -(vx * h) / mu - y / rFinal;\nconst excentricidadFinal = Math.hypot(ex, ey);\nconst errorRadio = Math.abs(rFinal - rObjetivo);\nconst deltaVTotal = Math.hypot(dv1T, dv1R) + Math.abs(dv2T);\n\n// Penalización por colisión con el planeta\nconst penalizacion = colisionPlaneta ? 400 : 0;\nconst objCombustible = deltaVTotal + (penalizacion > 0 ? 15.0 : 0);\nconst objPrecision = errorRadio * 2.0 + excentricidadFinal * 40.0 + penalizacion;\nreturn [objCombustible, objPrecision];",
+  "codigoEvaluacion": "const { dv1T, dv1R, tEspera, dv2T } = vars;\n// Entorno configurable de radios orbitales\nconst mu = Number(entrada?.constanteGravitacional !== undefined ? entrada.constanteGravitacional : 10000.0);\nconst rInicial = Number(entrada?.radioInicial !== undefined ? entrada.radioInicial : 35.0);\nconst rObjetivo = Number(entrada?.radioObjetivo !== undefined ? entrada.radioObjetivo : 75.0);\nconst rPlaneta = 18.0;\n\n// Estado inicial: órbita circular en el eje X más el primer impulso\nconst v0 = Math.sqrt(mu / rInicial);\nlet x = rInicial, y = 0.0, vx = dv1R, vy = v0 + dv1T;\n\nconst dt = 0.04;\nconst tiempoTotal = Math.max(tEspera + 6.0, 15.0);\nconst pasos = Math.round(tiempoTotal / dt);\nlet colisionPlaneta = false;\nlet segundoEncendidoAplicado = false;\n\nfor (let k = 1; k <= pasos; k++) {\n  const tActual = k * dt;\n\n  // Segundo impulso prograde en la dirección instantánea de la velocidad\n  if (!segundoEncendidoAplicado && tActual >= tEspera) {\n    const velMag = Math.hypot(vx, vy);\n    if (velMag > 0.001) {\n      vx += (vx / velMag) * dv2T;\n      vy += (vy / velMag) * dv2T;\n    }\n    segundoEncendidoAplicado = true;\n  }\n\n  if (Math.hypot(x, y) < rPlaneta) colisionPlaneta = true;\n\n  // Gravedad central a = -mu/r^3 * r_vec, integración de Euler semi-implícita\n  const r = Math.hypot(x, y);\n  const r3 = r * r * r || 1;\n  vx += -(mu / r3) * x * dt;\n  vy += -(mu / r3) * y * dt;\n  x += vx * dt;\n  y += vy * dt;\n}\n\n// Elementos orbitales finales: momento angular y excentricidad de Laplace-Runge-Lenz\nconst rFinal = Math.hypot(x, y);\nconst h = x * vy - y * vx;\nconst ex = (vy * h) / mu - x / rFinal;\nconst ey = -(vx * h) / mu - y / rFinal;\nconst excentricidadFinal = Math.hypot(ex, ey);\nconst errorRadio = Math.abs(rFinal - rObjetivo);\nconst deltaVTotal = Math.hypot(dv1T, dv1R) + Math.abs(dv2T);\n\n// Penalización por colisión con el planeta\nconst penalizacion = colisionPlaneta ? 400 : 0;\nconst objCombustible = deltaVTotal + (penalizacion > 0 ? 15.0 : 0);\nconst objPrecision = errorRadio * 2.0 + excentricidadFinal * 40.0 + penalizacion;\nreturn [objCombustible, objPrecision];",
   "grafo": {
     "nodos": [
       {

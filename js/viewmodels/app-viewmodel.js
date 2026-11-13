@@ -42,14 +42,26 @@ export class AppViewModel {
     this.frentePareto = [];
     this.poblacionActual = [];
     this.solucionParetoSeleccionada = null;
+    // Indica si el usuario fijó manualmente un punto en el Frente de Pareto.
+    this.paretoFijadoManualmente = false;
+    this.genomaInicialAzar = null;
+    this.fitnessInicialAzar = null;
     this.historiaMejor = [];
     this.historiaPromedio = [];
+    this.diversidadPct = 0;
+    this.viabilidadPct = 0;
+    this.muestraPoblacion = [];
+    this.instantaneas = [];
+    this.indiceInstantanea = null;
+    this.mostrarFantasmas = true;
+    this.compararGen0 = false;
     this.esMultiobjetivo = false;
     this.nombresObjetivos = [];
     this.motorTipo = "Auto";
 
-    // 4. Parámetros de entrada actuales del modelo.
+    // 4. Parámetros de entrada actuales del modelo e historial aislado por modelo.
     this.entradasModelo = {};
+    this.entradasPorModelo = {};
 
     // 5. Configuración del motor genético (claves unificadas para Motor, Worker y Vistas).
     this.configMotor = {
@@ -141,6 +153,41 @@ export class AppViewModel {
     }
   }
 
+  // Selecciona el individuo de compromiso (punto rodilla normalizado) en un frente de Pareto.
+  _seleccionarPuntoCompromisoPareto(frente = []) {
+    if (!Array.isArray(frente) || frente.length === 0) return null;
+    if (frente.length === 1) return frente[0];
+
+    let min0 = Infinity, max0 = -Infinity;
+    let min1 = Infinity, max1 = -Infinity;
+    for (let i = 0; i < frente.length; i++) {
+      const f = frente[i].fitness;
+      if (!Array.isArray(f) || f.length < 2) continue;
+      if (f[0] < min0) min0 = f[0];
+      if (f[0] > max0) max0 = f[0];
+      if (f[1] < min1) min1 = f[1];
+      if (f[1] > max1) max1 = f[1];
+    }
+
+    const r0 = Math.max(1e-9, max0 - min0);
+    const r1 = Math.max(1e-9, max1 - min1);
+    let mejor = frente[0];
+    let menorDist = Infinity;
+
+    for (let i = 0; i < frente.length; i++) {
+      const f = frente[i].fitness;
+      if (!Array.isArray(f) || f.length < 2) continue;
+      const d0 = (f[0] - min0) / r0;
+      const d1 = (f[1] - min1) / r1;
+      const dist = d0 * d0 + d1 * d1;
+      if (dist < menorDist) {
+        menorDist = dist;
+        mejor = frente[i];
+      }
+    }
+    return mejor;
+  }
+
   // Procesa las notificaciones emitidas por el Web Worker o motor local y actualiza las propiedades del ViewModel.
   _procesarMensajeWorker(datos) {
     if (!datos) return;
@@ -150,15 +197,23 @@ export class AppViewModel {
       this.totalGeneraciones = datos.totalGeneraciones;
       this.esMultiobjetivo = Boolean(datos.esMultiobjetivo);
       this.motorTipo = datos.motorTipo || (this.esMultiobjetivo ? "NSGA-II" : "Auto");
+      if (datos.genomaInicialAzar) this.genomaInicialAzar = datos.genomaInicialAzar;
+      if (datos.fitnessInicialAzar !== undefined && datos.fitnessInicialAzar !== null) {
+        this.fitnessInicialAzar = datos.fitnessInicialAzar;
+      }
+      if (typeof datos.diversidadPct === "number") this.diversidadPct = datos.diversidadPct;
+      if (typeof datos.viabilidadPct === "number") this.viabilidadPct = datos.viabilidadPct;
+      if (Array.isArray(datos.muestraPoblacion)) this.muestraPoblacion = datos.muestraPoblacion;
+      if (Array.isArray(datos.instantaneas)) this.instantaneas = datos.instantaneas;
 
       if (this.esMultiobjetivo) {
         this.frentePareto = datos.frentePareto || [];
         this.poblacionActual = datos.poblacion || [];
         this.nombresObjetivos = datos.nombresObjetivos || this.modeloActual.nombresObjetivos || ["Objetivo 1", "Objetivo 2"];
 
-        // Si no hay solución seleccionada fijada manualmente, se selecciona por defecto la primera del frente.
-        if (!this.solucionParetoSeleccionada && this.frentePareto.length > 0) {
-          this.solucionParetoSeleccionada = this.frentePareto[0];
+        // Mientras el usuario no haya fijado manualmente un individuo, se actualiza en vivo al mejor compromiso del frente.
+        if (!this.paretoFijadoManualmente && this.frentePareto.length > 0) {
+          this.solucionParetoSeleccionada = this._seleccionarPuntoCompromisoPareto(this.frentePareto);
         }
 
         const genomaActivo = this.solucionParetoSeleccionada ? this.solucionParetoSeleccionada.genoma : datos.mejorGenoma;
@@ -171,6 +226,7 @@ export class AppViewModel {
         this.historiaMejor = datos.historiaMejor || [];
         this.historiaPromedio = datos.historiaPromedio || [];
         this.solucionParetoSeleccionada = null;
+        this.paretoFijadoManualmente = false;
         this.frentePareto = [];
         this.poblacionActual = [];
 
@@ -187,12 +243,21 @@ export class AppViewModel {
         esMultiobjetivo: this.esMultiobjetivo,
         motorTipo: this.motorTipo,
         mejorSolucion: this.mejorSolucion,
+        genomaInicialAzar: this.genomaInicialAzar,
+        fitnessInicialAzar: this.fitnessInicialAzar,
         frentePareto: this.frentePareto,
         poblacion: this.poblacionActual,
         nombresObjetivos: this.nombresObjetivos,
         solucionParetoSeleccionada: this.solucionParetoSeleccionada,
         historiaMejor: this.historiaMejor,
         historiaPromedio: this.historiaPromedio,
+        diversidadPct: this.diversidadPct,
+        viabilidadPct: this.viabilidadPct,
+        muestraPoblacion: this.muestraPoblacion,
+        instantaneas: this.instantaneas,
+        mostrarFantasmas: this.mostrarFantasmas,
+        compararGen0: this.compararGen0,
+        indiceInstantanea: this.indiceInstantanea,
         completado: Boolean(datos.completado)
       });
 
@@ -227,12 +292,29 @@ export class AppViewModel {
     const encontrado = obtenerModeloPorId(modeloId);
     if (!encontrado) return;
 
+    // Resguarda las entradas del modelo saliente y restaura las del modelo entrante.
+    if (this.modeloActual?.id) {
+      this.entradasPorModelo[this.modeloActual.id] = { ...this.entradasModelo };
+    }
+
     this.modeloActual = encontrado;
+    this.entradasModelo = this.entradasPorModelo[encontrado.id]
+      ? { ...this.entradasPorModelo[encontrado.id] }
+      : {};
+    this.mejorSolucion = null;
     this.solucionParetoSeleccionada = null;
+    this.paretoFijadoManualmente = false;
+    this.genomaInicialAzar = null;
+    this.fitnessInicialAzar = null;
     this.frentePareto = [];
     this.poblacionActual = [];
     this.historiaMejor = [];
     this.historiaPromedio = [];
+    this.diversidadPct = 0;
+    this.viabilidadPct = 0;
+    this.muestraPoblacion = [];
+    this.instantaneas = [];
+    this.indiceInstantanea = null;
 
     // Guarda en storage la selección de modelo.
     this._guardarConfiguracionApp();
@@ -270,11 +352,84 @@ export class AppViewModel {
     });
   }
 
-  // Actualiza los parámetros de entrada específicos del modelo activo.
+  // Actualiza los parámetros de entrada específicos del modelo activo y propaga cambios ambientales en vivo.
   actualizarEntradasModelo(nuevasEntradas) {
     this.entradasModelo = { ...this.entradasModelo, ...nuevasEntradas };
+    if (this.modeloActual?.id) {
+      this.entradasPorModelo[this.modeloActual.id] = { ...this.entradasModelo };
+    }
     this._guardarConfiguracionApp();
+
+    if (this.estadoSimulacion === "CORRIENDO" || this.estadoSimulacion === "PAUSADO") {
+      if (this.worker) {
+        this.worker.postMessage({
+          comando: "actualizarEntrada",
+          entrada: this.entradasModelo
+        });
+      } else if (this.motorFallbackLocal) {
+        this.motorFallbackLocal.actualizarDatosEntrada(this.entradasModelo);
+      }
+    }
+
     this.emit("entradasActualizadas", this.entradasModelo);
+  }
+
+  // Selecciona una instantánea histórica en la línea de tiempo (null = vista en vivo).
+  seleccionarInstantanea(indice) {
+    if (indice === null || indice === undefined || !this.instantaneas.length) {
+      this.indiceInstantanea = null;
+    } else {
+      const idx = Math.max(0, Math.min(this.instantaneas.length - 1, Number(indice)));
+      this.indiceInstantanea = idx === this.instantaneas.length - 1 ? null : idx;
+    }
+    this.emit("observatorioActualizado", this.obtenerContextoVisualizacion());
+  }
+
+  // Activa o desactiva la superposición de individuos fantasmas de la población en el canvas.
+  alternarFantasmas(activo) {
+    this.mostrarFantasmas = activo !== undefined ? Boolean(activo) : !this.mostrarFantasmas;
+    this.emit("observatorioActualizado", this.obtenerContextoVisualizacion());
+    return this.mostrarFantasmas;
+  }
+
+  // Activa o desactiva la comparación visual directa con el mejor individuo aleatorio de la generación 0.
+  alternarCompararGen0(activo) {
+    this.compararGen0 = activo !== undefined ? Boolean(activo) : !this.compararGen0;
+    this.emit("observatorioActualizado", this.obtenerContextoVisualizacion());
+    return this.compararGen0;
+  }
+
+  // Construye el contexto visual unificado considerando línea de tiempo histórica, fantasmas y línea base Gen 0.
+  obtenerContextoVisualizacion() {
+    const snap = (this.indiceInstantanea !== null && this.instantaneas[this.indiceInstantanea])
+      ? this.instantaneas[this.indiceInstantanea]
+      : null;
+
+    const genoma = snap
+      ? snap.mejorGenoma
+      : (this.mejorSolucion?.genoma || this.obtenerGenomaInicial(this.modeloActual, this.entradasModelo));
+    const fitness = snap ? snap.mejorFitness : this.mejorSolucion?.fitness;
+    const generacion = snap ? snap.generacion : this.progresoGeneracion;
+    const fantasmas = this.mostrarFantasmas
+      ? (snap ? snap.fantasmas : this.muestraPoblacion)
+      : [];
+
+    return {
+      modelo: this.modeloActual,
+      genoma,
+      fitness,
+      generacion,
+      diversidadPct: snap ? snap.diversidadPct : this.diversidadPct,
+      viabilidadPct: snap ? snap.viabilidadPct : this.viabilidadPct,
+      fantasmas,
+      genomaAzar: this.compararGen0 ? this.genomaInicialAzar : null,
+      fitnessAzar: this.fitnessInicialAzar,
+      mostrarFantasmas: this.mostrarFantasmas,
+      compararGen0: this.compararGen0,
+      indiceInstantanea: this.indiceInstantanea,
+      totalInstantaneas: this.instantaneas.length,
+      esHistorico: Boolean(snap)
+    };
   }
 
   // Actualiza la configuración de parámetros del motor genético sincronizando alias de propiedades.
@@ -346,10 +501,18 @@ export class AppViewModel {
     try {
       this.estadoSimulacion = "CORRIENDO";
       this.solucionParetoSeleccionada = null;
+      this.paretoFijadoManualmente = false;
+      this.genomaInicialAzar = null;
+      this.fitnessInicialAzar = null;
       this.frentePareto = [];
       this.poblacionActual = [];
       this.historiaMejor = [];
       this.historiaPromedio = [];
+      this.diversidadPct = 0;
+      this.viabilidadPct = 0;
+      this.muestraPoblacion = [];
+      this.instantaneas = [];
+      this.indiceInstantanea = null;
       this.tiempoInicio = Date.now();
 
       this._guardarConfiguracionApp();
@@ -417,6 +580,7 @@ export class AppViewModel {
   // Selecciona un punto o individuo específico dentro de la frontera de Pareto para inspeccionar su mecanismo.
   seleccionarSolucionPareto(individuo) {
     if (!individuo) return;
+    this.paretoFijadoManualmente = true;
     this.solucionParetoSeleccionada = individuo;
     this.mejorSolucion = {
       genoma: individuo.genoma,
@@ -689,15 +853,17 @@ export class AppViewModel {
     throw new Error("El JSON provisto no coincide con el formato esperado de simulación o preset.");
   }
 
-  // Persiste la configuración del motor y entradas del modelo en localStorage.
+  // Persiste la configuración del motor y entradas de los modelos en localStorage.
   _guardarConfiguracionApp() {
     try {
+      if (this.modeloActual?.id) {
+        this.entradasPorModelo[this.modeloActual.id] = { ...this.entradasModelo };
+      }
       const config = {
         modeloId: this.modeloActual.id,
         configMotor: this.configMotor,
-        entradasModelos: {}
+        entradasModelos: { ...this.entradasPorModelo }
       };
-      config.entradasModelos[this.modeloActual.id] = this.entradasModelo;
       guardarConfiguracion(config);
     } catch (e) {
       // Ignorar errores transitorios de almacenamiento
@@ -711,12 +877,15 @@ export class AppViewModel {
       if (guardado.configMotor) {
         this.configMotor = { ...this.configMotor, ...guardado.configMotor };
       }
+      if (guardado.entradasModelos && typeof guardado.entradasModelos === "object") {
+        this.entradasPorModelo = { ...guardado.entradasModelos };
+      }
       if (guardado.modeloId) {
         const mod = obtenerModeloPorId(guardado.modeloId);
         if (mod) this.modeloActual = mod;
       }
-      if (guardado.entradasModelos && guardado.entradasModelos[this.modeloActual.id]) {
-        this.entradasModelo = guardado.entradasModelos[this.modeloActual.id];
+      if (this.entradasPorModelo[this.modeloActual.id]) {
+        this.entradasModelo = { ...this.entradasPorModelo[this.modeloActual.id] };
       }
     }
 

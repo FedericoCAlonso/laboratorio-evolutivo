@@ -4,7 +4,7 @@
 // =========================================================================
 
 import { VisualizadorDinamico } from "./visualizers.js?v=3.1";
-import { obtenerPlantillaSimulacion } from "../builder.js?v=3.1";
+import { obtenerPlantillaSimulacion, normalizarSalidaEvaluacion } from "../builder.js?v=3.1";
 import { CATALOGO_PREDEFINIDO, CATALOGO_POR_ID } from "../../catalogo/definiciones.js?v=3.1";
 import { HINTS_VISUALIZACION, mostrarAlerta } from "../ui.js?v=3.1";
 import { MotorCamposUnificados } from "../engines/campos.js?v=3.1";
@@ -57,6 +57,7 @@ export class EstudioView {
     this.modeloIdActual = null;
     this.tabActiva = "vars"; // 'vars' | 'codigo' | 'meta'
     this.valoresGenesPrueba = {};
+    this._parametrosEntradaActuales = [];
     this._eventosRegistrados = false;
 
     this._mapearDom();
@@ -435,6 +436,11 @@ export class EstudioView {
     if (idEfectivo) {
       this.modeloIdActual = idEfectivo;
     }
+    const plantillaAsoc = idEfectivo ? obtenerPlantillaSimulacion(idEfectivo) : null;
+    const paramsFuente = Array.isArray(def.parametrosEntrada) && def.parametrosEntrada.length > 0
+      ? def.parametrosEntrada
+      : (plantillaAsoc?.parametrosEntrada || []);
+    this._parametrosEntradaActuales = JSON.parse(JSON.stringify(paramsFuente));
     if (this.dom.selectPlantilla && idEfectivo && CATALOGO_POR_ID[idEfectivo]) {
       this.dom.selectPlantilla.value = idEfectivo;
     }
@@ -488,6 +494,7 @@ export class EstudioView {
 
   // Carga una configuración por defecto en caso de no proveer plantilla ni datos iniciales.
   _cargarPorDefecto() {
+    this._parametrosEntradaActuales = [];
     if (this.dom.inputNombre) this.dom.inputNombre.value = "Mi Simulación Dinámica";
     if (this.dom.inputDesc) this.dom.inputDesc.value = "Optimización geométrica y de volumen 2D";
     if (this.dom.selectTipoVisualizacion) this.dom.selectTipoVisualizacion.value = "calibracion";
@@ -705,6 +712,7 @@ export class EstudioView {
       descripcion,
       tipoVisualizacion,
       variables,
+      parametrosEntrada: Array.isArray(this._parametrosEntradaActuales) ? JSON.parse(JSON.stringify(this._parametrosEntradaActuales)) : [],
       codigoEvaluacion,
       grafo: this.editorGrafico?.grafo ? this.editorGrafico.grafo.exportarJSON() : null
     };
@@ -811,7 +819,7 @@ export class EstudioView {
 
     try {
       // eslint-disable-next-line no-new-func
-      new Function("vars", "rng", "estructuras", "cinematica", "campos", "ondas", "topologia", "sensores", "mecanismo", codigo);
+      new Function("vars", "entrada", "rng", "estructuras", "cinematica", "campos", "ondas", "topologia", "sensores", "mecanismo", codigo);
       this.dom.statusCodigo.textContent = "✓ Sintaxis JavaScript válida";
       this.dom.statusCodigo.className = "status-codigo status-valido";
       return true;
@@ -828,7 +836,7 @@ export class EstudioView {
 
     try {
       const def = this.extraerDatos();
-      const fnEval = new Function("vars", "rng", "estructuras", "cinematica", "campos", "ondas", "topologia", "sensores", "mecanismo", def.codigoEvaluacion);
+      const fnEval = new Function("vars", "entrada", "rng", "estructuras", "cinematica", "campos", "ondas", "topologia", "sensores", "mecanismo", def.codigoEvaluacion);
 
       // Arma el objeto vars con los valores de prueba activos
       const vars = {};
@@ -852,10 +860,11 @@ export class EstudioView {
         ? this.editorGrafico.obtenerTelemetriaSensores(vars)
         : {};
 
-      // Medición de rendimiento de la función
+      // Medición de rendimiento de la función (proveyendo entrada por defecto para compatibilidad total)
       const t0 = performance.now();
-      const resultadoFitness = fnEval(
+      const resultadoCrudo = fnEval(
         vars,
+        {},
         Math.random,
         MotorEstructurasCinematica,
         MotorEstructurasCinematica,
@@ -867,6 +876,8 @@ export class EstudioView {
       );
       const t1 = performance.now();
       const tiempoMs = (t1 - t0).toFixed(2);
+      const salida = normalizarSalidaEvaluacion(resultadoCrudo);
+      const resultadoFitness = salida.fitness;
 
       // Actualiza indicadores del HUD
       if (this.dom.hudTiempo) {
@@ -881,10 +892,11 @@ export class EstudioView {
           const f1 = typeof resultadoFitness[0] === "number" ? resultadoFitness[0].toFixed(3) : resultadoFitness[0];
           const f2 = typeof resultadoFitness[1] === "number" ? resultadoFitness[1].toFixed(3) : resultadoFitness[1];
           this.dom.hudFitness.textContent = `[f₁: ${f1}, f₂: ${f2}] (Pareto)`;
-          this.dom.hudFitness.style.color = "var(--md-sys-color-primary)";
+          this.dom.hudFitness.style.color = salida.violacion > 0 ? "var(--md-sys-color-error)" : "var(--md-sys-color-primary)";
         } else if (typeof resultadoFitness === "number") {
-          this.dom.hudFitness.textContent = isFinite(resultadoFitness) ? resultadoFitness.toFixed(4) : "Infinito (Inválido)";
-          this.dom.hudFitness.style.color = isFinite(resultadoFitness) ? "var(--md-sys-color-success)" : "var(--md-sys-color-error)";
+          const sufViol = salida.violacion > 0 ? ` (Inviable: Δ=${salida.violacion.toFixed(2)})` : "";
+          this.dom.hudFitness.textContent = isFinite(resultadoFitness) ? `${resultadoFitness.toFixed(4)}${sufViol}` : "Infinito (Inválido)";
+          this.dom.hudFitness.style.color = isFinite(resultadoFitness) && salida.violacion <= 0 ? "var(--md-sys-color-success)" : "var(--md-sys-color-error)";
         } else {
           this.dom.hudFitness.textContent = String(resultadoFitness);
         }
@@ -912,6 +924,7 @@ export class EstudioView {
           {
             modelo: modeloMock,
             fitness: resultadoFitness,
+            escena: salida.escena,
             esEstudio: true,
             onParamChange: (nuevosValores) => {
               for (const [k, v] of Object.entries(nuevosValores)) {
@@ -973,6 +986,9 @@ return [suavidad, errZancada];`;
         break;
       case "topologia":
         snippet = `\n// Motor Funcional: Carta de Smith y ROE\nconst roe = 1.0 + Math.abs((vars.zReal - 50) / (vars.zReal + 50));\nreturn roe;`;
+        break;
+      case "escena":
+        snippet = `\n// Escena 2D declarativa con restricción explícita (Deb feasibility-first):\nconst x = vars.x ?? 0, y = vars.y ?? 0;\nconst error = Math.hypot(x - 10, y - 5);\nconst violacion = Math.max(0, 6 - Math.hypot(x, y)); // Radio prohibido r < 6\nreturn {\n  fitness: error,\n  violacion,\n  escena: {\n    xlim: [-20, 20], ylim: [-20, 20], titulo: "Simulación Personalizada",\n    circulos: [{ x: 0, y: 0, r: 6, borde: "#ef4444", relleno: "rgba(239,68,68,0.18)" }],\n    lineas: [{ x1: 0, y1: 0, x2: x, y2: y, color: "#38bdf8", grosor: 3 }],\n    puntos: [{ x, y, color: "#f59e0b", etiqueta: "Actual" }, { x: 10, y: 5, color: "#22c55e", etiqueta: "Objetivo" }]\n  }\n};`;
         break;
       default:
         break;

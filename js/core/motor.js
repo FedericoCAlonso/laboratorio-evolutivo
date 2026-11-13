@@ -28,6 +28,14 @@ export class Motor {
     this.elitismo = opciones.elitismo !== undefined ? opciones.elitismo : 2;
     // Cantidad de candidatos participantes en cada torneo de selección (por defecto 3).
     this.tamanoTorneo = opciones.tamanoTorneo || 3;
+    // Probabilidad de aplicar cruce entre padres (por defecto 0.85).
+    this.probCruzamiento = opciones.probCruzamiento !== undefined ? opciones.probCruzamiento : 0.85;
+    // Esquema de selección parental ('torneo' | 'ruleta' | 'rango').
+    this.esquemaSeleccion = opciones.esquemaSeleccion || "torneo";
+    // Operador de cruce genético ('sbx' | 'aritmetico' | 'un_punto' | 'uniforme').
+    this.crossover = opciones.crossover || "sbx";
+    // Factor de escala para la amplitud relativa de mutación continua.
+    this.sigmaMutacion = opciones.sigmaMutacion !== undefined ? opciones.sigmaMutacion : 0.15;
     // Semilla numérica para inicializar el generador determinista.
     this.semilla = opciones.semilla !== undefined ? opciones.semilla : 123456;
     // Cantidad de generaciones calculadas por tanda para evitar congelar el hilo de ejecución.
@@ -56,6 +64,10 @@ export class Motor {
     this.genomaInicialAzar = null;
     // Mejor fitness inicial obtenido al azar en la generación 0.
     this.fitnessInicialAzar = null;
+    // Historial espaciado de instantáneas generacionales para línea de tiempo y fantasmas.
+    this.historiaInstantaneas = [];
+    // Cantidad aproximada de generaciones entre cada instantánea capturada.
+    this.intervaloInstantaneas = 1;
 
     // Identificador de temporizador para la tanda asíncrona.
     this.idAnimacion = null;
@@ -101,24 +113,39 @@ export class Motor {
       const lenP = esArrP ? fitP.length : 1;
 
       for (let q = p + 1; q < N; q++) {
-        const fitQ = individuos[q].fitness;
+        const indP = individuos[p];
+        const indQ = individuos[q];
+        const vpViol = indP.violacion || 0;
+        const vqViol = indQ.violacion || 0;
         let pDomina = false;
         let qDomina = false;
 
-        if (esArrP && Array.isArray(fitQ)) {
-          let pMejor = false;
-          let qMejor = false;
-          for (let m = 0; m < lenP; m++) {
-            const vp = fitP[m];
-            const vq = fitQ[m];
-            if (vp < vq) pMejor = true;
-            else if (vp > vq) qMejor = true;
-          }
-          pDomina = pMejor && !qMejor;
-          qDomina = qMejor && !pMejor;
+        // Reglas de Deb con restricciones: cualquier solución viable domina a una inviable;
+        // entre dos inviables domina la de menor violación acumulada.
+        if (vpViol <= 0 && vqViol > 0) {
+          pDomina = true;
+        } else if (vpViol > 0 && vqViol <= 0) {
+          qDomina = true;
+        } else if (vpViol > 0 && vqViol > 0) {
+          pDomina = vpViol < vqViol;
+          qDomina = vqViol < vpViol;
         } else {
-          pDomina = fitP < fitQ;
-          qDomina = fitQ < fitP;
+          const fitQ = indQ.fitness;
+          if (esArrP && Array.isArray(fitQ)) {
+            let pMejor = false;
+            let qMejor = false;
+            for (let m = 0; m < lenP; m++) {
+              const vp = fitP[m];
+              const vq = fitQ[m];
+              if (vp < vq) pMejor = true;
+              else if (vp > vq) qMejor = true;
+            }
+            pDomina = pMejor && !qMejor;
+            qDomina = qMejor && !pMejor;
+          } else {
+            pDomina = fitP < fitQ;
+            qDomina = fitQ < fitP;
+          }
         }
 
         if (pDomina) {
@@ -216,6 +243,8 @@ export class Motor {
     this.generacionActual = 0;
     this.historiaMejor = [];
     this.historiaPromedio = [];
+    this.historiaInstantaneas = [];
+    this.intervaloInstantaneas = Math.max(1, Math.floor(this.generaciones / 24));
     this.frentePareto = [];
     this.estado = "CORRIENDO";
 
@@ -223,8 +252,8 @@ export class Motor {
     this.poblacion = [];
     for (let i = 0; i < this.tamanoPoblacion; i++) {
       const genoma = this.crearGenomaAleatorio();
-      const fitness = this.evaluarIndividuo(genoma);
-      this.poblacion.push({ genoma, fitness, rango: 0, crowdingDistance: 0 });
+      const { fitness, violacion } = this._evaluarDetallado(genoma);
+      this.poblacion.push({ genoma, fitness, violacion, rango: 0, crowdingDistance: 0 });
     }
 
     // Detección automática de optimización multiobjetivo según la forma del fitness.
@@ -240,8 +269,8 @@ export class Motor {
       this.genomaInicialAzar = JSON.parse(JSON.stringify(this.poblacion[0].genoma));
       this.fitnessInicialAzar = [...this.poblacion[0].fitness];
     } else {
-      // Modo monobjetivo clásico: ordenamiento directo por aptitud escalar.
-      this.poblacion.sort((a, b) => a.fitness - b.fitness);
+      // Modo monobjetivo clásico con priorización de viabilidad (reglas de Deb).
+      this.poblacion.sort((a, b) => this._compararEscalar(a, b));
       this.genomaInicialAzar = JSON.parse(JSON.stringify(this.poblacion[0].genoma));
       this.fitnessInicialAzar = this.poblacion[0].fitness;
     }
@@ -268,13 +297,37 @@ export class Motor {
     return genoma;
   }
 
-  // Evalúa un genoma considerando si el modelo tiene ruido estocástico o es determinista, con soporte escalar y multiobjetivo.
-  evaluarIndividuo(genoma) {
+  // Normaliza el resultado devuelto por modelo.evaluar a { fitness, violacion } para manejo de restricciones.
+  _desempenoIndividuo(res) {
+    if (res && typeof res === "object" && !Array.isArray(res) && res.fitness !== undefined) {
+      return {
+        fitness: res.fitness,
+        violacion: typeof res.violacion === "number" && Number.isFinite(res.violacion) ? Math.max(0, res.violacion) : 0
+      };
+    }
+    return { fitness: res, violacion: 0 };
+  }
+
+  // Comparador escalar con reglas de Deb: viable siempre vence a inviable; menor violación desempata inviables.
+  _compararEscalar(a, b) {
+    const va = a.violacion || 0;
+    const vb = b.violacion || 0;
+    if ((va > 0) !== (vb > 0)) return va > 0 ? 1 : -1;
+    if (va > 0 && vb > 0) return va - vb;
+    return a.fitness - b.fitness;
+  }
+
+  // Evalúa un genoma devolviendo { fitness, violacion } promediando réplicas si hay ruido estocástico.
+  _evaluarDetallado(genoma) {
     if (this.modelo.usaRuido) {
       const replicas = [];
+      let violSum = 0;
       for (let r = 0; r < this.nReplicasRuido; r++) {
-        replicas.push(this.modelo.evaluar(genoma, this.datosEntrada));
+        const d = this._desempenoIndividuo(this.modelo.evaluar(genoma, this.datosEntrada));
+        replicas.push(d.fitness);
+        violSum += d.violacion;
       }
+      const violProm = violSum / this.nReplicasRuido;
       if (Array.isArray(replicas[0])) {
         const numObj = replicas[0].length;
         const promedio = new Array(numObj).fill(0);
@@ -283,50 +336,155 @@ export class Motor {
             promedio[m] += replicas[r][m];
           }
         }
-        return promedio.map((v) => v / this.nReplicasRuido);
+        return { fitness: promedio.map((v) => v / this.nReplicasRuido), violacion: violProm };
       }
       let suma = 0;
       for (let r = 0; r < this.nReplicasRuido; r++) {
         suma += replicas[r];
       }
-      return suma / this.nReplicasRuido;
+      return { fitness: suma / this.nReplicasRuido, violacion: violProm };
     }
-    return this.modelo.evaluar(genoma, this.datosEntrada);
+    return this._desempenoIndividuo(this.modelo.evaluar(genoma, this.datosEntrada));
+  }
+
+  // Evalúa un genoma considerando si el modelo tiene ruido estocástico o es determinista, con soporte escalar y multiobjetivo.
+  evaluarIndividuo(genoma) {
+    return this._evaluarDetallado(genoma).fitness;
+  }
+
+  // Calcula métricas poblacionales de diversidad fenotípica, viabilidad y una muestra representativa de individuos.
+  _calcularMetricasPoblacion() {
+    const N = this.poblacion.length;
+    if (N === 0) {
+      return { diversidadPct: 0, viabilidadPct: 0, muestraPoblacion: [] };
+    }
+
+    // Diversidad genética: desviación estándar promedio normalizada sobre [min, max] de cada gen.
+    const numGenes = this.definicionGenes.length;
+    let sumaDesvNorm = 0;
+    let genesConRango = 0;
+    for (let g = 0; g < numGenes; g++) {
+      const def = this.definicionGenes[g];
+      const rango = def ? (def.max - def.min) : 0;
+      if (rango <= 1e-12) continue;
+
+      let suma = 0;
+      for (let i = 0; i < N; i++) {
+        suma += (this.poblacion[i].genoma[g] - def.min) / rango;
+      }
+      const media = suma / N;
+      let varSuma = 0;
+      for (let i = 0; i < N; i++) {
+        const diff = (this.poblacion[i].genoma[g] - def.min) / rango - media;
+        varSuma += diff * diff;
+      }
+      sumaDesvNorm += Math.sqrt(varSuma / N);
+      genesConRango++;
+    }
+    // En uniforme [0,1], std teórico es 1/sqrt(12) ≈ 0.2887 -> se escala a 100%.
+    const promedioStd = genesConRango > 0 ? sumaDesvNorm / genesConRango : 0;
+    const diversidadPct = Math.min(100, Math.max(0, (promedioStd / 0.2887) * 100));
+
+    // Porcentaje de soluciones viables (sin violación de restricciones ni penalización severa >= 500).
+    let viables = 0;
+    for (let i = 0; i < N; i++) {
+      const ind = this.poblacion[i];
+      if (typeof ind.violacion === "number") {
+        if (ind.violacion <= 0) viables++;
+      } else if (Array.isArray(ind.fitness)) {
+        if (ind.fitness.every((v) => Number.isFinite(v) && v < 500)) viables++;
+      } else if (Number.isFinite(ind.fitness) && ind.fitness < 500) {
+        viables++;
+      }
+    }
+    const viabilidadPct = (viables / N) * 100;
+
+    // Muestra representativa de hasta 12 individuos distribuidos uniformemente en la población.
+    const maxFantasmas = Math.min(12, N);
+    const muestraPoblacion = [];
+    const paso = N / maxFantasmas;
+    for (let k = 0; k < maxFantasmas; k++) {
+      const idx = Math.min(N - 1, Math.floor(k * paso));
+      muestraPoblacion.push([...this.poblacion[idx].genoma]);
+    }
+
+    return {
+      diversidadPct: Number(diversidadPct.toFixed(1)),
+      viabilidadPct: Number(viabilidadPct.toFixed(1)),
+      muestraPoblacion
+    };
+  }
+
+  // Guarda una instantánea de la generación actual si corresponde al intervalo de muestreo o hitos clave.
+  _registrarInstantaneaSiCorresponde(metricas, forzar = false) {
+    const ultima = this.historiaInstantaneas[this.historiaInstantaneas.length - 1];
+    const esInicioOFin = this.generacionActual === 0 || this.generacionActual >= this.generaciones;
+    const tocaPorIntervalo = !ultima || (this.generacionActual - ultima.generacion >= this.intervaloInstantaneas);
+    if (!forzar && !esInicioOFin && !tocaPorIntervalo) return;
+
+    const lider = this.esMultiobjetivo && this.frentePareto[0] ? this.frentePareto[0] : this.poblacion[0];
+    if (!lider) return;
+
+    const instantanea = {
+      generacion: this.generacionActual,
+      mejorGenoma: [...lider.genoma],
+      mejorFitness: Array.isArray(lider.fitness) ? [...lider.fitness] : lider.fitness,
+      diversidadPct: metricas.diversidadPct,
+      viabilidadPct: metricas.viabilidadPct,
+      fantasmas: metricas.muestraPoblacion
+    };
+
+    if (ultima && ultima.generacion === this.generacionActual) {
+      this.historiaInstantaneas[this.historiaInstantaneas.length - 1] = instantanea;
+    } else {
+      this.historiaInstantaneas.push(instantanea);
+    }
   }
 
   // Registra las estadísticas de la generación actual en los historiales y notifica al observador.
   registrarEstadisticas(emitirEvento = true) {
     if (this.esMultiobjetivo) {
-      if (emitirEvento) {
-        // Extracción y ordenamiento del Frente de Pareto F0 por el primer objetivo para visualización fluida.
-        const frenteF0 = this.poblacion.filter((ind) => ind.rango === 0);
-        frenteF0.sort((a, b) => a.fitness[0] - b.fitness[0]);
-        this.frentePareto = frenteF0;
+      const frenteF0 = this.poblacion.filter((ind) => ind.rango === 0);
+      frenteF0.sort((a, b) => a.fitness[0] - b.fitness[0]);
+      this.frentePareto = frenteF0;
 
-        if (this.onProgreso) {
-          this.onProgreso({
-            esMultiobjetivo: true,
-            generacion: this.generacionActual,
-            totalGeneraciones: this.generaciones,
-            frentePareto: this.frentePareto.map((ind) => ({
-              genoma: [...ind.genoma],
-              fitness: [...ind.fitness],
-              rango: ind.rango,
-              crowdingDistance: ind.crowdingDistance
-            })),
-            poblacion: this.poblacion.map((ind) => ({
-              genoma: [...ind.genoma],
-              fitness: [...ind.fitness],
-              rango: ind.rango
-            })),
-            mejorGenoma: this.frentePareto[0] ? this.frentePareto[0].genoma : this.poblacion[0].genoma,
-            mejorFitness: this.frentePareto[0] ? this.frentePareto[0].fitness : this.poblacion[0].fitness,
-            genomaInicialAzar: this.genomaInicialAzar,
-            fitnessInicialAzar: this.fitnessInicialAzar,
-            nombresObjetivos: this.modelo.nombresObjetivos || ["Objetivo 1", "Objetivo 2"],
-            completado: this.generacionActual >= this.generaciones
-          });
-        }
+      const metricas = (emitirEvento || this.generacionActual === 0 || this.generacionActual >= this.generaciones ||
+        !this.historiaInstantaneas.length ||
+        this.generacionActual - this.historiaInstantaneas[this.historiaInstantaneas.length - 1].generacion >= this.intervaloInstantaneas)
+        ? this._calcularMetricasPoblacion()
+        : null;
+
+      if (metricas) {
+        this._registrarInstantaneaSiCorresponde(metricas);
+      }
+
+      if (emitirEvento && this.onProgreso) {
+        this.onProgreso({
+          esMultiobjetivo: true,
+          generacion: this.generacionActual,
+          totalGeneraciones: this.generaciones,
+          frentePareto: this.frentePareto.map((ind) => ({
+            genoma: [...ind.genoma],
+            fitness: [...ind.fitness],
+            rango: ind.rango,
+            crowdingDistance: ind.crowdingDistance
+          })),
+          poblacion: this.poblacion.map((ind) => ({
+            genoma: [...ind.genoma],
+            fitness: [...ind.fitness],
+            rango: ind.rango
+          })),
+          mejorGenoma: this.frentePareto[0] ? this.frentePareto[0].genoma : this.poblacion[0].genoma,
+          mejorFitness: this.frentePareto[0] ? this.frentePareto[0].fitness : this.poblacion[0].fitness,
+          genomaInicialAzar: this.genomaInicialAzar,
+          fitnessInicialAzar: this.fitnessInicialAzar,
+          diversidadPct: metricas.diversidadPct,
+          viabilidadPct: metricas.viabilidadPct,
+          muestraPoblacion: metricas.muestraPoblacion,
+          instantaneas: this.historiaInstantaneas,
+          nombresObjetivos: this.modelo.nombresObjetivos || ["Objetivo 1", "Objetivo 2"],
+          completado: this.generacionActual >= this.generaciones
+        });
       }
     } else {
       // Métricas de convergencia monobjetivo tradicional.
@@ -340,6 +498,16 @@ export class Motor {
       this.historiaMejor.push(mejorFitness);
       this.historiaPromedio.push(promedioFitness);
 
+      const metricas = (emitirEvento || this.generacionActual === 0 || this.generacionActual >= this.generaciones ||
+        !this.historiaInstantaneas.length ||
+        this.generacionActual - this.historiaInstantaneas[this.historiaInstantaneas.length - 1].generacion >= this.intervaloInstantaneas)
+        ? this._calcularMetricasPoblacion()
+        : null;
+
+      if (metricas) {
+        this._registrarInstantaneaSiCorresponde(metricas);
+      }
+
       if (emitirEvento && this.onProgreso) {
         this.onProgreso({
           esMultiobjetivo: false,
@@ -350,6 +518,10 @@ export class Motor {
           mejorGenoma: this.poblacion[0].genoma,
           genomaInicialAzar: this.genomaInicialAzar,
           fitnessInicialAzar: this.fitnessInicialAzar,
+          diversidadPct: metricas.diversidadPct,
+          viabilidadPct: metricas.viabilidadPct,
+          muestraPoblacion: metricas.muestraPoblacion,
+          instantaneas: this.historiaInstantaneas,
           historiaMejor: this.historiaMejor,
           historiaPromedio: this.historiaPromedio,
           completado: this.generacionActual >= this.generaciones
@@ -411,18 +583,19 @@ export class Motor {
     const N = this.tamanoPoblacion;
     const descendencia = [];
 
-    // Creación de N descendientes mediante torneo abarrotado, cruce y mutación.
+    // Creación de N descendientes mediante selección, cruce y mutación.
     for (let i = 0; i < N; i++) {
-      const padre1 = this.seleccionPorTorneo();
-      const padre2 = this.seleccionPorTorneo();
+      const padre1 = this.seleccionarPadre();
+      const padre2 = this.seleccionarPadre();
 
-      let genomaHijo = this.cruceUniforme(padre1.genoma, padre2.genoma);
+      let genomaHijo = this.cruzarGenomas(padre1.genoma, padre2.genoma);
       genomaHijo = this.mutarGenoma(genomaHijo);
-      const fitnessHijo = this.evaluarIndividuo(genomaHijo);
+      const { fitness: fitnessHijo, violacion: violacionHijo } = this._evaluarDetallado(genomaHijo);
 
       descendencia.push({
         genoma: genomaHijo,
         fitness: fitnessHijo,
+        violacion: violacionHijo,
         rango: 0,
         crowdingDistance: 0
       });
@@ -472,24 +645,36 @@ export class Motor {
     for (let e = 0; e < cantidadElitismo; e++) {
       nuevaPoblacion.push({
         genoma: [...this.poblacion[e].genoma],
-        fitness: this.poblacion[e].fitness
+        fitness: this.poblacion[e].fitness,
+        violacion: this.poblacion[e].violacion || 0
       });
     }
 
-    // 2. Generación de descendencia mediante torneo, cruce y mutación.
+    // 2. Generación de descendencia mediante selección, cruce y mutación.
     while (nuevaPoblacion.length < this.tamanoPoblacion) {
-      const padre1 = this.seleccionPorTorneo();
-      const padre2 = this.seleccionPorTorneo();
+      const padre1 = this.seleccionarPadre();
+      const padre2 = this.seleccionarPadre();
 
-      let genomaHijo = this.cruceUniforme(padre1.genoma, padre2.genoma);
+      let genomaHijo = this.cruzarGenomas(padre1.genoma, padre2.genoma);
       genomaHijo = this.mutarGenoma(genomaHijo);
-      const fitnessHijo = this.evaluarIndividuo(genomaHijo);
+      const { fitness: fitnessHijo, violacion: violacionHijo } = this._evaluarDetallado(genomaHijo);
 
-      nuevaPoblacion.push({ genoma: genomaHijo, fitness: fitnessHijo });
+      nuevaPoblacion.push({ genoma: genomaHijo, fitness: fitnessHijo, violacion: violacionHijo });
     }
 
-    nuevaPoblacion.sort((a, b) => a.fitness - b.fitness);
+    nuevaPoblacion.sort((a, b) => this._compararEscalar(a, b));
     this.poblacion = nuevaPoblacion;
+  }
+
+  // Selecciona un padre delegando al esquema configurado ('torneo', 'ruleta' o 'rango').
+  seleccionarPadre() {
+    if (this.esquemaSeleccion === "ruleta") {
+      return this.seleccionPorRuleta();
+    }
+    if (this.esquemaSeleccion === "rango") {
+      return this.seleccionPorRango();
+    }
+    return this.seleccionPorTorneo();
   }
 
   // Selecciona un individuo eligiendo el mejor entre varios candidatos al azar (torneo monobjetivo o Pareto).
@@ -505,11 +690,154 @@ export class Motor {
         if (this.compararPorPareto(candidato, mejorCandidato) < 0) {
           mejorCandidato = candidato;
         }
-      } else if (candidato.fitness < mejorCandidato.fitness) {
+      } else if (this._compararEscalar(candidato, mejorCandidato) < 0) {
         mejorCandidato = candidato;
       }
     }
     return mejorCandidato;
+  }
+
+  // Selecciona un individuo proporcionalmente a su aptitud relativa (ruleta inversa en minimización).
+  seleccionPorRuleta() {
+    const N = this.poblacion.length;
+    if (N === 0) return null;
+
+    let sumaPesos = 0;
+    const pesos = new Float64Array(N);
+
+    if (this.esMultiobjetivo) {
+      for (let i = 0; i < N; i++) {
+        const ind = this.poblacion[i];
+        const bonoDistancia = Number.isFinite(ind.crowdingDistance) ? Math.min(1.0, ind.crowdingDistance * 0.25) : 1.0;
+        const penViol = ind.violacion > 0 ? 1.0 / (1.0 + ind.violacion) : 1.0;
+        const w = ((1.0 / (1.0 + (ind.rango || 0))) + bonoDistancia * 0.2) * penViol;
+        pesos[i] = w;
+        sumaPesos += w;
+      }
+    } else {
+      let maxFit = -Infinity;
+      let minFit = Infinity;
+      for (let i = 0; i < N; i++) {
+        const f = this.poblacion[i].fitness;
+        if (f > maxFit) maxFit = f;
+        if (f < minFit) minFit = f;
+      }
+      const span = Math.max(1e-9, maxFit - minFit);
+      for (let i = 0; i < N; i++) {
+        const ind = this.poblacion[i];
+        const w = (ind.violacion > 0)
+          ? (0.01 / (1.0 + ind.violacion))
+          : (((maxFit - ind.fitness) / span) + 0.05);
+        pesos[i] = w;
+        sumaPesos += w;
+      }
+    }
+
+    let umbral = this.random() * sumaPesos;
+    for (let i = 0; i < N; i++) {
+      umbral -= pesos[i];
+      if (umbral <= 0) return this.poblacion[i];
+    }
+    return this.poblacion[N - 1];
+  }
+
+  // Selecciona un individuo con probabilidad lineal según su ordenamiento en la población (rank selection).
+  seleccionPorRango() {
+    const N = this.poblacion.length;
+    if (N === 0) return null;
+    const sumaRangos = (N * (N + 1)) / 2;
+    let umbral = this.random() * sumaRangos;
+    for (let i = 0; i < N; i++) {
+      umbral -= (N - i);
+      if (umbral <= 0) return this.poblacion[i];
+    }
+    return this.poblacion[0];
+  }
+
+  // Aplica el operador de cruce configurado respetando la probabilidad de cruzamiento.
+  cruzarGenomas(genomaA, genomaB) {
+    if (this.random() > this.probCruzamiento) {
+      return [...genomaA];
+    }
+    if (this.crossover === "aritmetico") {
+      return this.cruceAritmetico(genomaA, genomaB);
+    }
+    if (this.crossover === "un_punto") {
+      return this.cruceUnPunto(genomaA, genomaB);
+    }
+    if (this.crossover === "uniforme") {
+      return this.cruceUniforme(genomaA, genomaB);
+    }
+    return this.cruceSBX(genomaA, genomaB);
+  }
+
+  // Cruce Binario Simulado (SBX) para variables continuas y uniforme para variables discretas.
+  cruceSBX(genomaA, genomaB, etaC = 15) {
+    const hijo = new Array(genomaA.length);
+    const tomarPrimero = this.random() < 0.5;
+
+    for (let i = 0; i < genomaA.length; i++) {
+      const def = this.definicionGenes[i];
+      const v1 = genomaA[i];
+      const v2 = genomaB[i];
+
+      if (!def || def.tipo !== "continuo" || this.random() > 0.5 || Math.abs(v1 - v2) < 1e-12) {
+        hijo[i] = this.random() < 0.5 ? v1 : v2;
+        continue;
+      }
+
+      const y1 = Math.min(v1, v2);
+      const y2 = Math.max(v1, v2);
+      const lb = def.min;
+      const ub = def.max;
+
+      const u = this.random();
+      let beta = 1.0 + (2.0 * (y1 - lb)) / Math.max(1e-12, y2 - y1);
+      let alpha = 2.0 - Math.pow(beta, -(etaC + 1.0));
+      let betaq = u <= 1.0 / alpha
+        ? Math.pow(u * alpha, 1.0 / (etaC + 1.0))
+        : Math.pow(1.0 / Math.max(1e-12, 2.0 - u * alpha), 1.0 / (etaC + 1.0));
+      const c1 = 0.5 * ((y1 + y2) - betaq * (y2 - y1));
+
+      beta = 1.0 + (2.0 * (ub - y2)) / Math.max(1e-12, y2 - y1);
+      alpha = 2.0 - Math.pow(beta, -(etaC + 1.0));
+      betaq = u <= 1.0 / alpha
+        ? Math.pow(u * alpha, 1.0 / (etaC + 1.0))
+        : Math.pow(1.0 / Math.max(1e-12, 2.0 - u * alpha), 1.0 / (etaC + 1.0));
+      const c2 = 0.5 * ((y1 + y2) + betaq * (y2 - y1));
+
+      const elegido = tomarPrimero ? c1 : c2;
+      hijo[i] = Math.min(ub, Math.max(lb, elegido));
+    }
+    return hijo;
+  }
+
+  // Cruce aritmético BLX-alfa para genes continuos y uniforme para discretos.
+  cruceAritmetico(genomaA, genomaB) {
+    const hijo = new Array(genomaA.length);
+    for (let i = 0; i < genomaA.length; i++) {
+      const def = this.definicionGenes[i];
+      if (def && def.tipo === "continuo") {
+        const alfa = -0.1 + this.random() * 1.2;
+        const val = alfa * genomaA[i] + (1 - alfa) * genomaB[i];
+        hijo[i] = Math.min(def.max, Math.max(def.min, val));
+      } else {
+        hijo[i] = this.random() < 0.5 ? genomaA[i] : genomaB[i];
+      }
+    }
+    return hijo;
+  }
+
+  // Cruce clásico de un punto de corte sobre la secuencia del genoma.
+  cruceUnPunto(genomaA, genomaB) {
+    const L = genomaA.length;
+    if (L <= 1) return [...genomaA];
+    const corte = 1 + Math.floor(this.random() * (L - 1));
+    const hijo = new Array(L);
+    for (let i = 0; i < L; i++) {
+      hijo[i] = i < corte ? genomaA[i] : genomaB[i];
+    }
+    return hijo;
   }
 
   // Combina dos genomas parentales asignando cada gen de un padre u otro con probabilidad del 50%.
@@ -521,14 +849,22 @@ export class Motor {
     return hijo;
   }
 
-  // Aplica mutaciones genéticas a los genes del individuo según la tasa y tipo de cada gen.
+  // Aplica mutaciones genéticas adaptativas según el avance generacional y el tipo de cada gen.
   mutarGenoma(genoma) {
     const mutado = [...genoma];
+    const progreso = Math.min(1, Math.max(0, this.generacionActual / Math.max(1, this.generaciones)));
+    // Decaimiento progresivo: exploración amplia al inicio, ajuste fino al final.
+    const factorEscala = Math.max(0.08, 1.0 - 0.85 * progreso) * Math.max(0.05, this.sigmaMutacion * 2.0);
+
     for (let i = 0; i < mutado.length; i++) {
       if (this.random() < this.tasaMutacion) {
         const def = this.definicionGenes[i];
         if (def.tipo === "continuo") {
-          const delta = (this.random() - 0.5) * 0.25 * (def.max - def.min);
+          // 15% de mutaciones globales suaves para evitar estancamiento en mínimos locales.
+          const escala = this.random() < 0.15 ? 0.35 : factorEscala;
+          // Suma de dos uniformes centrada en 0 (distribución triangular) para favorecer pasos pequeños.
+          const gaussAprox = (this.random() + this.random() - 1.0);
+          const delta = gaussAprox * escala * (def.max - def.min);
           mutado[i] = Math.min(def.max, Math.max(def.min, mutado[i] + delta));
         } else if (def.tipo === "entero") {
           const rango = def.max - def.min + 1;
@@ -543,6 +879,40 @@ export class Motor {
       }
     }
     return mutado;
+  }
+
+  // Actualiza los parámetros ambientales en vivo y re-evalúa la población para forzar adaptación darwiniana.
+  actualizarDatosEntrada(nuevosDatos) {
+    if (!this.modelo || !this.poblacion || this.poblacion.length === 0) return;
+    this.datosEntrada = nuevosDatos;
+
+    // Si la población estaba hiperconvergida, reinyecta 25% no-élite aleatorio para explorar el nuevo entorno.
+    const metricasPrevias = this._calcularMetricasPoblacion();
+    if (metricasPrevias.diversidadPct < 10) {
+      const inicioReemplazo = Math.max(1, Math.floor(this.poblacion.length * 0.75));
+      for (let i = inicioReemplazo; i < this.poblacion.length; i++) {
+        this.poblacion[i].genoma = this.crearGenomaAleatorio();
+      }
+    }
+
+    for (let i = 0; i < this.poblacion.length; i++) {
+      const det = this._evaluarDetallado(this.poblacion[i].genoma);
+      this.poblacion[i].fitness = det.fitness;
+      this.poblacion[i].violacion = det.violacion;
+    }
+
+    if (this.esMultiobjetivo) {
+      const frentes = this.clasificarFrentesPareto(this.poblacion);
+      frentes.forEach((f) => this.calcularDistanciaApiñamiento(f));
+      this.poblacion.sort((a, b) => this.compararPorPareto(a, b));
+      this.frentePareto = this.poblacion.filter((ind) => ind.rango === 0);
+    } else {
+      this.poblacion.sort((a, b) => this._compararEscalar(a, b));
+    }
+
+    const metricasActuales = this._calcularMetricasPoblacion();
+    this._registrarInstantaneaSiCorresponde(metricasActuales, true);
+    this.registrarEstadisticas(true);
   }
 
   // Pausa temporalmente el ciclo evolutivo.

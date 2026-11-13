@@ -92,16 +92,22 @@ export class MotorFuncionalTopologico {
   // RAMA B: TOPOLOGÍA, CORTE DE MATERIAL 2D (NESTING) Y BALANCEO DE RECURSOS
   // -----------------------------------------------------------------------
 
-  // Resuelve el anidado y empaquetamiento rectangular 2D (Nesting / Cutting Stock) para corte de chapa
-  static resolverNesting2D(anchoChapa, altoChapa, piezas) {
-    // Copia y ordena las piezas por área decreciente (heurística Bottom-Left Fill)
+  // Resuelve el anidado y empaquetamiento rectangular 2D (Nesting / Cutting Stock) para corte de chapa.
+  // Si las piezas traen 'prioridad' definida, respeta su orden y orientación para optimización evolutiva.
+  static resolverNesting2D(anchoChapa, altoChapa, piezas, opciones = {}) {
+    const respetarGenoma = Boolean(opciones.respetarOrden) || piezas.some(p => p && p.prioridad !== undefined);
     const items = piezas.map((p, idx) => ({
       id: p.id !== undefined ? p.id : idx,
       w: p.w,
       h: p.h,
       area: p.w * p.h,
+      rotada: Boolean(p.rotada),
       color: p.color || "#38bdf8"
-    })).sort((a, b) => b.area - a.area);
+    }));
+
+    if (!respetarGenoma) {
+      items.sort((a, b) => b.area - a.area);
+    }
 
     const colocadas = [];
     let areaUtilizada = 0.0;
@@ -115,10 +121,13 @@ export class MotorFuncionalTopologico {
       const item = items[i];
       let colocado = false;
 
+      // Prioriza espacios más a la izquierda y arriba para compactar el frente de corte.
+      espaciosLibres.sort((a, b) => (a.x - b.x) || (a.y - b.y));
+
       for (let e = 0; e < espaciosLibres.length; e++) {
         const esp = espaciosLibres[e];
 
-        // Prueba en orientación original (rotada = false)
+        // Prueba en la orientación indicada por el item
         if (item.w <= esp.w && item.h <= esp.h) {
           colocadas.push({
             id: item.id,
@@ -126,21 +135,23 @@ export class MotorFuncionalTopologico {
             y: esp.y,
             w: item.w,
             h: item.h,
-            rotada: false,
+            rotada: item.rotada,
             color: item.color
           });
           areaUtilizada += item.area;
 
           // Divide el espacio libre restante en sub-rectángulos (corte guillotina)
-          espaciosLibres.push({ x: esp.x + item.w, y: esp.y, w: esp.w - item.w, h: item.h });
-          espaciosLibres.push({ x: esp.x, y: esp.y + item.h, w: esp.w, h: esp.h - item.h });
+          const anchoRest = esp.w - item.w;
+          const altoRest = esp.h - item.h;
+          if (anchoRest > 0) espaciosLibres.push({ x: esp.x + item.w, y: esp.y, w: anchoRest, h: item.h });
+          if (altoRest > 0) espaciosLibres.push({ x: esp.x, y: esp.y + item.h, w: esp.w, h: altoRest });
           espaciosLibres.splice(e, 1);
           colocado = true;
           break;
         }
 
-        // Prueba con rotación de 90° (rotada = true)
-        if (item.h <= esp.w && item.w <= esp.h) {
+        // Solo rota automáticamente como respaldo si el llamador no fijó orientación genómica
+        if (!respetarGenoma && item.h <= esp.w && item.w <= esp.h) {
           colocadas.push({
             id: item.id,
             x: esp.x,
@@ -152,8 +163,10 @@ export class MotorFuncionalTopologico {
           });
           areaUtilizada += item.area;
 
-          espaciosLibres.push({ x: esp.x + item.h, y: esp.y, w: esp.w - item.h, h: item.w });
-          espaciosLibres.push({ x: esp.x, y: esp.y + item.w, w: esp.w, h: esp.h - item.w });
+          const anchoRest = esp.w - item.h;
+          const altoRest = esp.h - item.w;
+          if (anchoRest > 0) espaciosLibres.push({ x: esp.x + item.h, y: esp.y, w: anchoRest, h: item.w });
+          if (altoRest > 0) espaciosLibres.push({ x: esp.x, y: esp.y + item.w, w: esp.w, h: altoRest });
           espaciosLibres.splice(e, 1);
           colocado = true;
           break;
@@ -232,8 +245,8 @@ export const PIEZAS_DEFECTO = [
 
 // Simula la colocación espacial y calcula el desperdicio porcentual de corte en la chapa
 export function simularCorteChapaNesting(genoma, entrada) {
-  const anchoChapa = Number(entrada?.anchoChapaMm !== undefined ? entrada.anchoChapaMm : 500.0);
-  const altoChapa = Number(entrada?.altoChapaMm !== undefined ? entrada.altoChapaMm : 350.0);
+  const anchoChapa = Number(entrada?.anchoChapaMm !== undefined ? entrada.anchoChapaMm : 420.0);
+  const altoChapa = Number(entrada?.altoChapaMm !== undefined ? entrada.altoChapaMm : 310.0);
 
   const numPiezas = PIEZAS_DEFECTO.length;
 
@@ -250,13 +263,14 @@ export function simularCorteChapaNesting(genoma, entrada) {
       id: p.id,
       w: rotar ? p.h : p.w,
       h: rotar ? p.w : p.h,
+      rotada: rotar,
       prioridad: prioridades[idx] !== undefined ? prioridades[idx] : idx,
       color: p.color
     };
   }).sort((a, b) => b.prioridad - a.prioridad);
 
-  // Ejecuta la heurística de anidado 2D del motor topológico
-  const resNesting = MotorFuncionalTopologico.resolverNesting2D(anchoChapa, altoChapa, piezasPreparadas);
+  // Ejecuta la heurística de anidado 2D del motor topológico respetando el genoma
+  const resNesting = MotorFuncionalTopologico.resolverNesting2D(anchoChapa, altoChapa, piezasPreparadas, { respetarOrden: true });
 
   // Calcula la envolvente real ocupada (ancho y alto máximo alcanzado por las piezas)
   let maxAlcanzadoX = 0.0;

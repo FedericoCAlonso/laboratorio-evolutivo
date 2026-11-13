@@ -281,7 +281,7 @@ export function resolverEstaticaArmadura(genoma, entrada) {
 
   // Cálculo de longitudes y pesos de las 11 barras
   const densidadAcero = 7850; // kg/m^3
-  const seccionBarra = 0.0035; // m^2 (sección transversal promedio)
+  const seccionBarra = 0.0065; // m^2 (sección transversal cajón/I estructural)
   let masaTotalKg = 0;
   const barras = [];
 
@@ -321,7 +321,7 @@ export function resolverEstaticaArmadura(genoma, entrada) {
 
     // Carga crítica de pandeo de Euler P_cr = (pi^2 * E * I) / L^2
     const E = 210e9; // Pa
-    const I = 2.5e-6; // m^4
+    const I = 3.2e-5; // m^4
     const cargaCriticaKN = (Math.PI * Math.PI * E * I) / (longitud * longitud * 1000);
     const pandea = esCompresion && Math.abs(fuerzaAxialKN) > cargaCriticaKN;
 

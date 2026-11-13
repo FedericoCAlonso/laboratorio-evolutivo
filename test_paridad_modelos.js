@@ -52,14 +52,20 @@ for (const def of CATALOGO_PREDEFINIDO.filter(d => !filtro.length || filtro.incl
           ? Math.round(x.min + rnd() * (x.max - x.min))
           : x.min + rnd() * (x.max - x.min)));
 
-      const a = [].concat(modRegistrado.evaluar(g, undefined, sembrar(7)));
-      const b = [].concat(comp.evaluar(g, undefined, sembrar(7)));
+      const rawA = modRegistrado.evaluar(g, undefined, sembrar(7));
+      const rawB = comp.evaluar(g, undefined, sembrar(7));
+      const esObjA = rawA && typeof rawA === "object" && !Array.isArray(rawA) && rawA.fitness !== undefined;
+      const esObjB = rawB && typeof rawB === "object" && !Array.isArray(rawB) && rawB.fitness !== undefined;
+      const a = [].concat(esObjA ? rawA.fitness : rawA);
+      const b = [].concat(esObjB ? rawB.fitness : rawB);
+      const vA = esObjA ? Number(rawA.violacion || 0) : 0;
+      const vB = esObjB ? Number(rawB.violacion || 0) : 0;
 
-      if (a.some(v => typeof v !== "number" || isNaN(v))) {
-        errores.push(`evaluación produjo NaN en caso ${t}: ${JSON.stringify(a)}`);
+      if (a.some(v => typeof v !== "number" || isNaN(v)) || isNaN(vA)) {
+        errores.push(`evaluación produjo NaN en caso ${t}: ${JSON.stringify(rawA)}`);
       }
-      if (a.length !== b.length || !a.every((x, i) => cerca(x, b[i]))) {
-        errores.push(`discrepancia en caso ${t}: registrado=${JSON.stringify(a)} compilado=${JSON.stringify(b)}`);
+      if (a.length !== b.length || !a.every((x, i) => cerca(x, b[i])) || !cerca(vA, vB)) {
+        errores.push(`discrepancia en caso ${t}: registrado=${JSON.stringify(rawA)} compilado=${JSON.stringify(rawB)}`);
       }
     }
   } catch (e) {
