@@ -699,13 +699,13 @@ export class VisualizadorJansen {
 
 
 // -------------------------------------------------------------------------
-// 2. VISUALIZADOR DE BRAZO ROBÓTICO (CINEMÁTICA INVERSA 3 ESLABONES)
+// 2. VISUALIZADOR DE BRAZO ROBÓTICO (PLANIFICACIÓN DE TRAYECTORIA 3 ESLABONES)
 // -------------------------------------------------------------------------
 export class VisualizadorBrazo {
   constructor() {
     this.animId = null;
     this.angulosActuales = null;
-    this.historialEfector = [];
+    this.tiempoAnimacion = 0;
   }
 
   detener() {
@@ -734,21 +734,65 @@ export class VisualizadorBrazo {
 
     const ctx = canvas.getContext("2d");
 
+    const esTrayectoria = Array.isArray(genoma) && genoma.length >= 9;
+    const iniX = Number(entrada?.inicioX !== undefined ? entrada.inicioX : 55);
+    const iniY = Number(entrada?.inicioY !== undefined ? entrada.inicioY : -35);
     const targetX = Number(entrada?.objetivoX !== undefined ? entrada.objetivoX : 55);
     const targetY = Number(entrada?.objetivoY !== undefined ? entrada.objetivoY : 40);
-    const obsX = Number(entrada?.obstaculoX !== undefined ? entrada.obstaculoX : 30);
-    const obsY = Number(entrada?.obstaculoY !== undefined ? entrada.obstaculoY : 20);
+    const obsX = Number(entrada?.obstaculoX !== undefined ? entrada.obstaculoX : (esTrayectoria ? 35 : 30));
+    const obsY = Number(entrada?.obstaculoY !== undefined ? entrada.obstaculoY : (esTrayectoria ? 5 : 20));
     const obsRadio = Number(entrada?.obstaculoRadio !== undefined ? entrada.obstaculoRadio : 16);
+
+    const muestrearAngulosTrayectoria = (g, s) => {
+      const u = s <= 0.5 ? s * 2.0 : (s - 0.5) * 2.0;
+      const offsetA = s <= 0.5 ? 0 : 3;
+      const offsetB = s <= 0.5 ? 3 : 6;
+      return [
+        g[offsetA] + (g[offsetB] - g[offsetA]) * u,
+        g[offsetA + 1] + (g[offsetB + 1] - g[offsetA + 1]) * u,
+        g[offsetA + 2] + (g[offsetB + 2] - g[offsetA + 2]) * u
+      ];
+    };
+
+    const extraerPuntosEfector = (g) => {
+      if (Array.isArray(g) && g.length >= 9) {
+        const pts = [];
+        for (let k = 0; k <= 24; k++) {
+          pts.push(resolverCinematicaBrazo(muestrearAngulosTrayectoria(g, k / 24)).p3);
+        }
+        return { esRuta: true, puntos: pts };
+      }
+      const pose = resolverCinematicaBrazo([g[0], g[1], g[2]]);
+      return { esRuta: false, pose };
+    };
+
+    const { fantasmas: comparacionFantasmas, azar: comparacionAzar } = prepararComparacionPoblacion(contexto, extraerPuntosEfector);
+
+    // Precalcula la trayectoria completa del efector y despeje mínimo en ruta si hay 9 genes
+    let rutaEfector = [];
+    let minObsRuta = Infinity;
+    let errIniRuta = 0;
+    let errFinRuta = 0;
+    if (esTrayectoria) {
+      for (let k = 0; k <= 28; k++) {
+        const angs = muestrearAngulosTrayectoria(genoma, k / 28);
+        const fk = resolverCinematicaBrazo(angs);
+        rutaEfector.push(fk.p3);
+        const dFrame = Math.min(
+          distanciaPuntoASegmento({ x: obsX, y: obsY }, fk.p0, fk.p1),
+          distanciaPuntoASegmento({ x: obsX, y: obsY }, fk.p1, fk.p2),
+          distanciaPuntoASegmento({ x: obsX, y: obsY }, fk.p2, fk.p3)
+        );
+        if (dFrame < minObsRuta) minObsRuta = dFrame;
+        if (k === 0) errIniRuta = Math.hypot(fk.p3.x - iniX, fk.p3.y - iniY);
+        if (k === 28) errFinRuta = Math.hypot(fk.p3.x - targetX, fk.p3.y - targetY);
+      }
+    }
 
     const [targetTh1, targetTh2, targetTh3] = genoma;
     if (!Array.isArray(this.angulosActuales) || this.angulosActuales.length < 3) {
       this.angulosActuales = [targetTh1, targetTh2, targetTh3];
     }
-    const { fantasmas: posesFantasmas, azar: poseAzar } = prepararComparacionPoblacion(contexto, (g) =>
-      resolverCinematicaBrazo([g[0], g[1], g[2]])
-    );
-    let tiempoAnimacion = 0;
-    const historialEfector = this.historialEfector;
     const deltaAngularCorto = (actual, objetivo) => {
       const diff = ((objetivo - actual + 540) % 360) - 180;
       return actual + diff * 0.22;
@@ -773,15 +817,19 @@ export class VisualizadorBrazo {
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, anchoCSS, altoCSS);
 
-      this.angulosActuales[0] = deltaAngularCorto(this.angulosActuales[0], targetTh1);
-      this.angulosActuales[1] = deltaAngularCorto(this.angulosActuales[1], targetTh2);
-      this.angulosActuales[2] = deltaAngularCorto(this.angulosActuales[2], targetTh3);
-      const th1Actual = this.angulosActuales[0];
-      const th2Actual = this.angulosActuales[1];
-      const th3Actual = this.angulosActuales[2];
+      const sTrayectoria = 0.5 - 0.5 * Math.cos(this.tiempoAnimacion);
+      let th1Actual, th2Actual, th3Actual;
+      if (esTrayectoria) {
+        [th1Actual, th2Actual, th3Actual] = muestrearAngulosTrayectoria(genoma, sTrayectoria);
+      } else {
+        this.angulosActuales[0] = deltaAngularCorto(this.angulosActuales[0], targetTh1);
+        this.angulosActuales[1] = deltaAngularCorto(this.angulosActuales[1], targetTh2);
+        this.angulosActuales[2] = deltaAngularCorto(this.angulosActuales[2], targetTh3);
+        [th1Actual, th2Actual, th3Actual] = this.angulosActuales;
+      }
 
-      const origenX = anchoCSS * 0.35;
-      const origenY = altoCSS * 0.55;
+      const origenX = anchoCSS * 0.42;
+      const origenY = altoCSS * 0.54;
       const escala = Math.min(anchoCSS, altoCSS) / 220;
 
       const toPx = (p) => ({
@@ -795,14 +843,14 @@ export class VisualizadorBrazo {
 
       ctx.strokeStyle = "rgba(100, 116, 139, 0.15)";
       ctx.lineWidth = 1;
-      for (let x = -100; x <= 120; x += 20) {
+      for (let x = -120; x <= 120; x += 20) {
         const p = toPx({ x, y: 0 });
         ctx.beginPath();
         ctx.moveTo(p.x, 0);
         ctx.lineTo(p.x, altoCSS);
         ctx.stroke();
       }
-      for (let y = -80; y <= 80; y += 20) {
+      for (let y = -100; y <= 100; y += 20) {
         const p = toPx({ x: 0, y });
         ctx.beginPath();
         ctx.moveTo(0, p.y);
@@ -829,9 +877,29 @@ export class VisualizadorBrazo {
       ctx.textAlign = "center";
       ctx.fillText("Zona Prohibida", pObs.x, pObs.y - rObsPx - 6);
 
-      // 2. Objetivo animado
+      // 2. Punto inicial (en modo trayectoria) y punto blanco final
+      const pIniMarker = toPx({ x: iniX, y: iniY });
+      if (esTrayectoria) {
+        ctx.beginPath();
+        ctx.arc(pIniMarker.x, pIniMarker.y, 11, 0, 2 * Math.PI);
+        ctx.fillStyle = "rgba(56, 189, 248, 0.18)";
+        ctx.fill();
+        ctx.strokeStyle = "#0284c7";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(pIniMarker.x, pIniMarker.y, 4.5, 0, 2 * Math.PI);
+        ctx.fillStyle = "#0284c7";
+        ctx.fill();
+
+        ctx.fillStyle = "#0369a1";
+        ctx.textAlign = "center";
+        ctx.fillText("Inicio", pIniMarker.x, pIniMarker.y + 22);
+      }
+
       const pTar = toPx({ x: targetX, y: targetY });
-      const pulsoRadio = 14 + 2 * Math.sin(tiempoAnimacion * 4);
+      const pulsoRadio = 14 + 2 * Math.sin(this.tiempoAnimacion * 4);
 
       ctx.beginPath();
       ctx.arc(pTar.x, pTar.y, pulsoRadio, 0, 2 * Math.PI);
@@ -859,37 +927,46 @@ export class VisualizadorBrazo {
       ctx.textAlign = "center";
       ctx.fillText("Blanco", pTar.x, pTar.y + 26);
 
-      // 2b. Fantasmas de la población y referencia Gen 0 (pose final comparativa)
-      posesFantasmas.forEach((pose) => {
-        dibujarPolilinea(ctx, [pose.p0, pose.p1, pose.p2, pose.p3], toPx, "rgba(148, 163, 184, 0.25)", 4);
+      // 2b. Fantasmas de la población y referencia Gen 0
+      comparacionFantasmas.forEach((item) => {
+        if (item.esRuta) {
+          dibujarPolilinea(ctx, item.puntos, toPx, "rgba(148, 163, 184, 0.28)", 2);
+        } else if (item.pose) {
+          dibujarPolilinea(ctx, [item.pose.p0, item.pose.p1, item.pose.p2, item.pose.p3], toPx, "rgba(148, 163, 184, 0.25)", 4);
+        }
       });
-      if (poseAzar) {
-        dibujarPolilinea(ctx, [poseAzar.p0, poseAzar.p1, poseAzar.p2, poseAzar.p3], toPx, "rgba(244, 63, 94, 0.7)", 3, [5, 4]);
+      if (comparacionAzar) {
+        if (comparacionAzar.esRuta) {
+          dibujarPolilinea(ctx, comparacionAzar.puntos, toPx, "rgba(244, 63, 94, 0.68)", 2.2, [5, 4]);
+        } else if (comparacionAzar.pose) {
+          const pA = comparacionAzar.pose;
+          dibujarPolilinea(ctx, [pA.p0, pA.p1, pA.p2, pA.p3], toPx, "rgba(244, 63, 94, 0.7)", 3, [5, 4]);
+        }
       }
 
-      // 3. Mecanismo articulado
+      // 2c. Ruta planificada completa del efector y siluetas de inicio/fin
+      const rutaLibre = esTrayectoria ? minObsRuta >= obsRadio : true;
+      if (esTrayectoria && rutaEfector.length > 1) {
+        const poseIni = resolverCinematicaBrazo([genoma[0], genoma[1], genoma[2]]);
+        const poseFin = resolverCinematicaBrazo([genoma[6], genoma[7], genoma[8]]);
+        dibujarPolilinea(ctx, [poseIni.p0, poseIni.p1, poseIni.p2, poseIni.p3], toPx, "rgba(2, 132, 199, 0.18)", 5);
+        dibujarPolilinea(ctx, [poseFin.p0, poseFin.p1, poseFin.p2, poseFin.p3], toPx, "rgba(16, 185, 129, 0.18)", 5);
+        dibujarPolilinea(
+          ctx,
+          rutaEfector,
+          toPx,
+          rutaLibre ? "rgba(16, 185, 129, 0.85)" : "rgba(239, 68, 68, 0.85)",
+          3,
+          [6, 4]
+        );
+      }
+
+      // 3. Mecanismo articulado en el instante actual
       const { p0, p1, p2, p3 } = resolverCinematicaBrazo([th1Actual, th2Actual, th3Actual]);
       const px0 = toPx(p0);
       const px1 = toPx(p1);
       const px2 = toPx(p2);
       const px3 = toPx(p3);
-
-      historialEfector.push(px3);
-      if (historialEfector.length > 80) historialEfector.shift();
-
-      if (historialEfector.length > 1) {
-        ctx.beginPath();
-        ctx.strokeStyle = "rgba(245, 158, 11, 0.4)";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([3, 3]);
-        for (let i = 0; i < historialEfector.length; i++) {
-          const pt = historialEfector[i];
-          if (i === 0) ctx.moveTo(pt.x, pt.y);
-          else ctx.lineTo(pt.x, pt.y);
-        }
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
 
       // Base
       ctx.fillStyle = "#475569";
@@ -900,9 +977,9 @@ export class VisualizadorBrazo {
       const d0 = distanciaPuntoASegmento({ x: obsX, y: obsY }, p0, p1);
       const d1 = distanciaPuntoASegmento({ x: obsX, y: obsY }, p1, p2);
       const d2 = distanciaPuntoASegmento({ x: obsX, y: obsY }, p2, p3);
-      const minObs = Math.min(d0, d1, d2);
-      const colisiona = minObs < obsRadio;
-      const despejeLibre = minObs - obsRadio;
+      const minObsInstant = Math.min(d0, d1, d2);
+      const colisiona = minObsInstant < obsRadio;
+      const despejeMostrar = (esTrayectoria ? minObsRuta : minObsInstant) - obsRadio;
 
       const dibujarEslabon = (inicio, fin, color, grosor) => {
         ctx.beginPath();
@@ -960,31 +1037,35 @@ export class VisualizadorBrazo {
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      ctx.beginPath();
-      ctx.moveTo(px3.x, px3.y);
-      ctx.lineTo(pTar.x, pTar.y);
-      ctx.strokeStyle = "rgba(245, 158, 11, 0.8)";
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([3, 3]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
       const distReal = Math.hypot(p3.x - targetX, p3.y - targetY);
 
       ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
       ctx.beginPath();
-      ctx.roundRect(14, 14, 330, 60, 8);
+      ctx.roundRect(14, 14, 370, 60, 8);
       ctx.fill();
 
       ctx.font = "bold 11px system-ui";
       ctx.fillStyle = "#f8fafc";
       ctx.textAlign = "left";
-      ctx.fillText(`Distancia al Blanco: ${distReal.toFixed(2)} mm (Efector: ${p3.x.toFixed(1)}, ${p3.y.toFixed(1)})`, 24, 34);
+      if (esTrayectoria) {
+        ctx.fillText(
+          `Error Inicio: ${errIniRuta.toFixed(2)} mm | Blanco: ${errFinRuta.toFixed(2)} mm | Ruta: ${(sTrayectoria * 100).toFixed(0)}%`,
+          24,
+          34
+        );
+        ctx.fillStyle = rutaLibre ? "#4ade80" : "#f87171";
+        ctx.fillText(
+          `Trayectoria: ${rutaLibre ? "LIBRE DE COLISIONES ✓" : "COLISIÓN EN RUTA ⚠️"} (Despeje mín: ${despejeMostrar >= 0 ? "+" : ""}${despejeMostrar.toFixed(1)} mm)`,
+          24,
+          54
+        );
+      } else {
+        ctx.fillText(`Distancia al Blanco: ${distReal.toFixed(2)} mm (Efector: ${p3.x.toFixed(1)}, ${p3.y.toFixed(1)})`, 24, 34);
+        ctx.fillStyle = colisiona ? "#f87171" : "#4ade80";
+        ctx.fillText(`Obstáculo: ${colisiona ? "COLISIÓN ⚠️" : "EVADIDO ✓"} (Despeje: ${despejeMostrar >= 0 ? "+" : ""}${despejeMostrar.toFixed(1)} mm)`, 24, 54);
+      }
 
-      ctx.fillStyle = colisiona ? "#f87171" : "#4ade80";
-      ctx.fillText(`Obstáculo: ${colisiona ? "COLISIÓN ⚠️" : "EVADIDO ✓"} (Despeje: ${despejeLibre >= 0 ? "+" : ""}${despejeLibre.toFixed(1)} mm)`, 24, 54);
-
-      tiempoAnimacion += 0.035;
+      this.tiempoAnimacion += 0.032;
       this.animId = requestAnimationFrame(animar);
     };
 

@@ -123,8 +123,8 @@ console.log(`    ✓ Exportación e importación completada: tipo '${resultadoIm
 console.log("\n[6] Verificando resumen de genoma M3 y sincronización de configMotor...");
 vm.seleccionarModelo("brazo-robotico");
 const resumenChips = vm.obtenerResumenGenomaActual();
-if (!Array.isArray(resumenChips) || resumenChips.length !== 3 || resumenChips[0].nombre !== "theta1") {
-  throw new Error("obtenerResumenGenomaActual() no devolvió los 3 genes estructurados del Brazo Robótico.");
+if (!Array.isArray(resumenChips) || resumenChips.length !== 9 || resumenChips[0].nombre !== "ini1") {
+  throw new Error("obtenerResumenGenomaActual() no devolvió los 9 genes de trayectoria del Brazo Robótico.");
 }
 vm.actualizarConfigMotor({ tamPoblacion: 120, probMutacion: 0.08, torneoK: 5, replicasRuido: 4 });
 if (vm.configMotor.tamanoPoblacion !== 120 || vm.configMotor.tasaMutacion !== 0.08 || vm.configMotor.tamanoTorneo !== 5 || vm.configMotor.nReplicasRuido !== 4) {

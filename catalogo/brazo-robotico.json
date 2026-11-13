@@ -2,39 +2,28 @@
   "$schema": "./schema-modelo.json",
   "id": "brazo-robotico",
   "version": "1.0",
-  "nombre": "Brazo Robótico (Cinemática Inversa)",
-  "descripcion": "Manipulador planar de 3 eslabones articulados que optimiza la orientación de sus articulaciones para alcanzar un punto objetivo evadiendo un obstáculo circular.",
+  "nombre": "Brazo Robótico (Planificación de Trayectoria)",
+  "descripcion": "Manipulador planar de 3 eslabones articulados que evoluciona una trayectoria articular completa desde un punto inicial hasta un punto final evadiendo un obstáculo circular durante todo el recorrido.",
   "categoria": "Robótica y Cinemática",
   "dificultad": "Intermedio",
   "tags": [
     "robótica",
     "cinemática inversa",
+    "planificación de trayectoria",
     "brazo scara",
-    "eslabones"
+    "evasión"
   ],
   "tipoVisualizacion": "brazo_robotico",
   "variables": [
-    {
-      "nombre": "theta1",
-      "etiqueta": "theta1: Ángulo eslabón base θ₁ (-180° a 180°)",
-      "tipo": "continuo",
-      "min": -180,
-      "max": 180
-    },
-    {
-      "nombre": "theta2",
-      "etiqueta": "theta2: Ángulo eslabón codo θ₂ (-180° a 180°)",
-      "tipo": "continuo",
-      "min": -180,
-      "max": 180
-    },
-    {
-      "nombre": "theta3",
-      "etiqueta": "theta3: Ángulo efector muñeca θ₃ (-180° a 180°)",
-      "tipo": "continuo",
-      "min": -180,
-      "max": 180
-    }
+    { "nombre": "ini1", "etiqueta": "ini1: Hombro inicio θ₁ (-360° a 360°)", "tipo": "continuo", "min": -360, "max": 360 },
+    { "nombre": "ini2", "etiqueta": "ini2: Codo inicio θ₂ (-180° a 180°)", "tipo": "continuo", "min": -180, "max": 180 },
+    { "nombre": "ini3", "etiqueta": "ini3: Muñeca inicio θ₃ (-180° a 180°)", "tipo": "continuo", "min": -180, "max": 180 },
+    { "nombre": "via1", "etiqueta": "via1: Hombro paso θ₁ (-360° a 360°)", "tipo": "continuo", "min": -360, "max": 360 },
+    { "nombre": "via2", "etiqueta": "via2: Codo paso θ₂ (-180° a 180°)", "tipo": "continuo", "min": -180, "max": 180 },
+    { "nombre": "via3", "etiqueta": "via3: Muñeca paso θ₃ (-180° a 180°)", "tipo": "continuo", "min": -180, "max": 180 },
+    { "nombre": "fin1", "etiqueta": "fin1: Hombro final θ₁ (-360° a 360°)", "tipo": "continuo", "min": -360, "max": 360 },
+    { "nombre": "fin2", "etiqueta": "fin2: Codo final θ₂ (-180° a 180°)", "tipo": "continuo", "min": -180, "max": 180 },
+    { "nombre": "fin3", "etiqueta": "fin3: Muñeca final θ₃ (-180° a 180°)", "tipo": "continuo", "min": -180, "max": 180 }
   ],
   "parametrosEntrada": [
     {
@@ -42,18 +31,20 @@
       "etiqueta": "Modo de Optimización",
       "tipo": "selector",
       "opciones": [
-        { "valor": "multiobjetivo", "etiqueta": "Multiobjetivo Pareto (Precisión vs. Esfuerzo)" },
-        { "valor": "monobjetivo", "etiqueta": "Monobjetivo (Precisión ponderada)" }
+        { "valor": "multiobjetivo", "etiqueta": "Multiobjetivo Pareto (Precisión vs. Recorrido)" },
+        { "valor": "monobjetivo", "etiqueta": "Monobjetivo (Trayectoria óptima)" }
       ],
       "valorDefecto": "multiobjetivo"
     },
-    { "clave": "objetivoX", "etiqueta": "Coordenada Objetivo X", "tipo": "numero", "min": -90, "max": 90, "paso": 5, "valorDefecto": 55 },
-    { "clave": "objetivoY", "etiqueta": "Coordenada Objetivo Y", "tipo": "numero", "min": -90, "max": 90, "paso": 5, "valorDefecto": 40 },
-    { "clave": "obstaculoX", "etiqueta": "Centro Obstáculo X", "tipo": "numero", "min": -90, "max": 90, "paso": 5, "valorDefecto": 30 },
-    { "clave": "obstaculoY", "etiqueta": "Centro Obstáculo Y", "tipo": "numero", "min": -90, "max": 90, "paso": 5, "valorDefecto": 20 },
+    { "clave": "inicioX", "etiqueta": "Punto Inicial X", "tipo": "numero", "min": -90, "max": 90, "paso": 5, "valorDefecto": 55 },
+    { "clave": "inicioY", "etiqueta": "Punto Inicial Y", "tipo": "numero", "min": -90, "max": 90, "paso": 5, "valorDefecto": -35 },
+    { "clave": "objetivoX", "etiqueta": "Punto Final (Blanco) X", "tipo": "numero", "min": -90, "max": 90, "paso": 5, "valorDefecto": 55 },
+    { "clave": "objetivoY", "etiqueta": "Punto Final (Blanco) Y", "tipo": "numero", "min": -90, "max": 90, "paso": 5, "valorDefecto": 40 },
+    { "clave": "obstaculoX", "etiqueta": "Centro Obstáculo X", "tipo": "numero", "min": -90, "max": 90, "paso": 5, "valorDefecto": 35 },
+    { "clave": "obstaculoY", "etiqueta": "Centro Obstáculo Y", "tipo": "numero", "min": -90, "max": 90, "paso": 5, "valorDefecto": 5 },
     { "clave": "obstaculoRadio", "etiqueta": "Radio Obstáculo", "tipo": "numero", "min": 5, "max": 40, "paso": 2, "valorDefecto": 16 }
   ],
-  "codigoEvaluacion": "// Parámetros del escenario (editables): objetivo, obstáculo circular y longitudes de eslabones\nconst modoOptimizacion = (entrada && entrada.modoOptimizacion) ? entrada.modoOptimizacion : \"multiobjetivo\";\nconst objX = Number(entrada?.objetivoX !== undefined ? entrada.objetivoX : 55);\nconst objY = Number(entrada?.objetivoY !== undefined ? entrada.objetivoY : 40);\nconst obsX = Number(entrada?.obstaculoX !== undefined ? entrada.obstaculoX : 30);\nconst obsY = Number(entrada?.obstaculoY !== undefined ? entrada.obstaculoY : 20);\nconst obsR = Number(entrada?.obstaculoRadio !== undefined ? entrada.obstaculoRadio : 16);\nconst objetivo = { x: objX, y: objY };\nconst obstaculo = { x: obsX, y: obsY, radio: obsR };\nconst [L1, L2, L3] = [45, 35, 25];\n\n// Cinemática directa: ángulos acumulados a lo largo de la cadena\nconst a1 = (vars.theta1 * Math.PI) / 180;\nconst a2 = a1 + (vars.theta2 * Math.PI) / 180;\nconst a3 = a2 + (vars.theta3 * Math.PI) / 180;\nconst p0 = { x: 0, y: 0 };\nconst p1 = { x: L1 * Math.cos(a1), y: L1 * Math.sin(a1) };\nconst p2 = { x: p1.x + L2 * Math.cos(a2), y: p1.y + L2 * Math.sin(a2) };\nconst p3 = { x: p2.x + L3 * Math.cos(a3), y: p2.y + L3 * Math.sin(a3) };\n\n// Distancia mínima del obstáculo a cada eslabón (p0-p1, p1-p2, p2-p3)\nconst distSegmento = (p, a, b) => {\n  const abx = b.x - a.x, aby = b.y - a.y;\n  const l2 = abx * abx + aby * aby;\n  if (l2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);\n  const t = Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / l2));\n  return Math.hypot(p.x - (a.x + t * abx), p.y - (a.y + t * aby));\n};\nconst minDist = Math.min(\n  distSegmento(obstaculo, p0, p1),\n  distSegmento(obstaculo, p1, p2),\n  distSegmento(obstaculo, p2, p3)\n);\n\n// Restricción estricta de Deb con margen físico de seguridad (radio + 1.5 mm)\nconst radioSeguro = obstaculo.radio + 1.5;\nconst violacion = minDist < radioSeguro ? (radioSeguro - minDist) * 20.0 : 0.0;\nconst distObjetivo = Math.hypot(p3.x - objetivo.x, p3.y - objetivo.y);\nconst esfuerzo = (Math.abs(vars.theta1) + Math.abs(vars.theta2) + Math.abs(vars.theta3)) / 540;\nconst despejeSeguro = Math.max(0.5, minDist - obstaculo.radio + 1.5);\n\nif (modoOptimizacion === \"monobjetivo\") {\n  return { fitness: distObjetivo + esfuerzo * 4.0 + 4.0 / despejeSeguro, violacion };\n}\n// Acotamiento de esfuerzo: evita el atractor degenerado [0,0,0] lejos del blanco\nconst objSecundario = esfuerzo + (8.0 / despejeSeguro) * 0.15 + Math.max(0, distObjetivo - 2.0) * 0.5;\nreturn { fitness: [distObjetivo, objSecundario], violacion };",
+  "codigoEvaluacion": "// Planificador de trayectoria articular libre de colisiones (Inicio -> Paso Intermedio -> Final)\nconst modoOptimizacion = (entrada && entrada.modoOptimizacion) ? entrada.modoOptimizacion : \"multiobjetivo\";\nconst iniX = Number(entrada?.inicioX !== undefined ? entrada.inicioX : 55);\nconst iniY = Number(entrada?.inicioY !== undefined ? entrada.inicioY : -35);\nconst objX = Number(entrada?.objetivoX !== undefined ? entrada.objetivoX : 55);\nconst objY = Number(entrada?.objetivoY !== undefined ? entrada.objetivoY : 40);\nconst obsX = Number(entrada?.obstaculoX !== undefined ? entrada.obstaculoX : 35);\nconst obsY = Number(entrada?.obstaculoY !== undefined ? entrada.obstaculoY : 5);\nconst obsR = Number(entrada?.obstaculoRadio !== undefined ? entrada.obstaculoRadio : 16);\nconst inicio = { x: iniX, y: iniY };\nconst objetivo = { x: objX, y: objY };\nconst obstaculo = { x: obsX, y: obsY, radio: obsR };\nconst [L1, L2, L3] = [45, 35, 25];\n\nconst distSegmento = (p, a, b) => {\n  const abx = b.x - a.x, aby = b.y - a.y;\n  const l2 = abx * abx + aby * aby;\n  if (l2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);\n  const t = Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / l2));\n  return Math.hypot(p.x - (a.x + t * abx), p.y - (a.y + t * aby));\n};\n\nconst q0 = [vars.ini1, vars.ini2, vars.ini3];\nconst q1 = [vars.via1, vars.via2, vars.via3];\nconst q2 = [vars.fin1, vars.fin2, vars.fin3];\nconst muestras = 24;\nconst radioSeguro = obstaculo.radio + 1.5;\n\nlet minDist = Infinity, penCol = 0, lenPath = 0, prevP3 = null;\nlet p3Ini = null, p3Fin = null;\n\nfor (let k = 0; k <= muestras; k++) {\n  const s = k / muestras;\n  const u = s <= 0.5 ? s * 2.0 : (s - 0.5) * 2.0;\n  const a = s <= 0.5 ? q0 : q1;\n  const b = s <= 0.5 ? q1 : q2;\n  const th1 = a[0] + (b[0] - a[0]) * u;\n  const th2 = a[1] + (b[1] - a[1]) * u;\n  const th3 = a[2] + (b[2] - a[2]) * u;\n  const a1 = (th1 * Math.PI) / 180;\n  const a2 = a1 + (th2 * Math.PI) / 180;\n  const a3 = a2 + (th3 * Math.PI) / 180;\n  const p0 = { x: 0, y: 0 };\n  const p1 = { x: L1 * Math.cos(a1), y: L1 * Math.sin(a1) };\n  const p2 = { x: p1.x + L2 * Math.cos(a2), y: p1.y + L2 * Math.sin(a2) };\n  const p3 = { x: p2.x + L3 * Math.cos(a3), y: p2.y + L3 * Math.sin(a3) };\n  if (k === 0) p3Ini = p3;\n  if (k === muestras) p3Fin = p3;\n  if (prevP3) lenPath += Math.hypot(p3.x - prevP3.x, p3.y - prevP3.y);\n  prevP3 = p3;\n  const d = Math.min(\n    distSegmento(obstaculo, p0, p1),\n    distSegmento(obstaculo, p1, p2),\n    distSegmento(obstaculo, p2, p3)\n  );\n  if (d < minDist) minDist = d;\n  if (d < radioSeguro) penCol += (radioSeguro - d);\n}\n\nconst errIni = Math.hypot(p3Ini.x - inicio.x, p3Ini.y - inicio.y);\nconst errFin = Math.hypot(p3Fin.x - objetivo.x, p3Fin.y - objetivo.y);\nconst errTotal = errIni + errFin;\nconst rotTotal = Math.abs(q1[0] - q0[0]) + Math.abs(q1[1] - q0[1]) + Math.abs(q1[2] - q0[2])\n               + Math.abs(q2[0] - q1[0]) + Math.abs(q2[1] - q1[1]) + Math.abs(q2[2] - q1[2]);\n\nconst violacion = penCol * 6.0\n  + (minDist < radioSeguro ? (radioSeguro - minDist) * 18.0 : 0.0)\n  + Math.max(0.0, errIni - 5.0) * 6.0\n  + Math.max(0.0, errFin - 5.0) * 6.0;\n\nconst objRecorrido = lenPath * 0.1 + rotTotal * 0.015 + Math.max(0.0, errTotal - 2.0) * 3.0;\nif (modoOptimizacion === \"monobjetivo\") {\n  return { fitness: errTotal * 2.5 + objRecorrido * 0.25, violacion };\n}\nreturn { fitness: [errTotal, objRecorrido], violacion };",
   "grafo": {
     "nodos": [
       {

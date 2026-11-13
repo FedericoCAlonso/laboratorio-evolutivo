@@ -96,6 +96,19 @@ async function ejecutarPruebas() {
 
   // 3. Verificar operadores genéticos múltiples (ruleta, rango, aritmético, un_punto).
   console.log("\n[3] Verificando esquemas de selección y operadores de cruce en Motor...");
+  const modBenchmarkOp = compilarModeloDinamico({
+    nombre: "Benchmark Operadores",
+    variables: [
+      { nombre: "x1", tipo: "continuo", min: -10, max: 10 },
+      { nombre: "x2", tipo: "continuo", min: -10, max: 10 },
+      { nombre: "x3", tipo: "continuo", min: -10, max: 10 },
+      { nombre: "x4", tipo: "continuo", min: -10, max: 10 }
+    ],
+    codigoEvaluacion: `
+      const tx = Number(entrada?.targetX ?? 3.5);
+      return (vars.x1 - tx) ** 2 + (vars.x2 + 2.0) ** 2 + (vars.x3 - 1.5) ** 2 + vars.x4 ** 2;
+    `
+  });
   for (const esquema of ["torneo", "ruleta", "rango"]) {
     for (const crossover of ["sbx", "aritmetico", "un_punto"]) {
       const mOp = new Motor({
@@ -105,7 +118,7 @@ async function ejecutarPruebas() {
         crossover,
         semilla: 123
       });
-      const evs = await correrMotorAsync(mOp, modBrazo, { modoOptimizacion: "monobjetivo", objetivoX: 50, objetivoY: 30 });
+      const evs = await correrMotorAsync(mOp, modBenchmarkOp, { targetX: 3.5 });
       const fin = evs[evs.length - 1];
       assert(fin.mejorFitness < fin.fitnessInicialAzar * 0.5, `Combinación ${esquema}+${crossover} debe converger`);
     }
