@@ -153,15 +153,22 @@ export class AppViewModel {
     }
   }
 
-  // Selecciona el individuo de compromiso (punto rodilla normalizado) en un frente de Pareto.
+  // Selecciona el individuo de compromiso priorizando soluciones viables y sin descuidar el objetivo principal.
   _seleccionarPuntoCompromisoPareto(frente = []) {
     if (!Array.isArray(frente) || frente.length === 0) return null;
     if (frente.length === 1) return frente[0];
 
+    const viables = frente.filter((ind) => (Number(ind?.violacion) || 0) <= 1e-9);
+    const pool = viables.length > 0
+      ? viables
+      : [...frente].sort((a, b) => (Number(a?.violacion) || 0) - (Number(b?.violacion) || 0)).slice(0, Math.max(1, Math.ceil(frente.length * 0.25)));
+
+    if (pool.length === 1) return pool[0];
+
     let min0 = Infinity, max0 = -Infinity;
     let min1 = Infinity, max1 = -Infinity;
-    for (let i = 0; i < frente.length; i++) {
-      const f = frente[i].fitness;
+    for (let i = 0; i < pool.length; i++) {
+      const f = pool[i].fitness;
       if (!Array.isArray(f) || f.length < 2) continue;
       if (f[0] < min0) min0 = f[0];
       if (f[0] > max0) max0 = f[0];
@@ -171,18 +178,18 @@ export class AppViewModel {
 
     const r0 = Math.max(1e-9, max0 - min0);
     const r1 = Math.max(1e-9, max1 - min1);
-    let mejor = frente[0];
+    let mejor = pool[0];
     let menorDist = Infinity;
 
-    for (let i = 0; i < frente.length; i++) {
-      const f = frente[i].fitness;
+    for (let i = 0; i < pool.length; i++) {
+      const f = pool[i].fitness;
       if (!Array.isArray(f) || f.length < 2) continue;
       const d0 = (f[0] - min0) / r0;
       const d1 = (f[1] - min1) / r1;
-      const dist = d0 * d0 + d1 * d1;
+      const dist = 1.4 * d0 * d0 + d1 * d1;
       if (dist < menorDist) {
         menorDist = dist;
-        mejor = frente[i];
+        mejor = pool[i];
       }
     }
     return mejor;

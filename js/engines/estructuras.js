@@ -1000,13 +1000,21 @@ export function obtenerMetricasJansen(genoma, entrada = {}) {
 export function evaluarJansen(genoma, opciones = {}) {
   const m = obtenerMetricasJansen(genoma, opciones);
   const modo = (opciones?.modoOptimizacion || "multiobjetivo").toString().toLowerCase().trim();
+  const violacionInvalidez = m.valido
+    ? 0
+    : ((1 - (m.pctValidos || 0)) * 100 +
+      Math.max(0, (m.anchoTotal || 0) - m.maxAncho) +
+      Math.max(0, (m.alturaTotal || 0) - m.maxAlto) +
+      Math.max(0, (m.obstaculoAlto || 0) - (m.despejeReal || 0)) * 2 +
+      5);
+
   if (modo === "multiobjetivo") {
     if (!m.valido) {
-      return [m.fitness, m.fitness];
+      return { fitness: [100, 1], violacion: violacionInvalidez };
     }
-    return [m.f5, m.f2];
+    return { fitness: [m.fitness, m.f2], violacion: 0 };
   }
-  return m.fitness;
+  return m.valido ? m.fitness : { fitness: 100, violacion: violacionInvalidez };
 }
 
 export default MotorEstructurasCinematica;

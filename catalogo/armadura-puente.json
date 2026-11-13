@@ -51,16 +51,46 @@
       "etiqueta": "Modo de Optimización",
       "tipo": "selector",
       "opciones": [
-        { "valor": "multiobjetivo", "etiqueta": "Multiobjetivo Pareto (Masa mínima vs. Rigidez estructural)" },
-        { "valor": "monobjetivo", "etiqueta": "Monobjetivo (Peso admisible ponderado)" }
+        {
+          "valor": "multiobjetivo",
+          "etiqueta": "Multiobjetivo Pareto (Masa mínima vs. Rigidez estructural)"
+        },
+        {
+          "valor": "monobjetivo",
+          "etiqueta": "Monobjetivo (Peso admisible ponderado)"
+        }
       ],
       "valorDefecto": "multiobjetivo"
     },
-    { "clave": "luzTotal", "etiqueta": "Luz del Puente L (m)", "tipo": "numero", "min": 30, "max": 120, "paso": 10, "valorDefecto": 60 },
-    { "clave": "cargaVertical", "etiqueta": "Carga de Tránsito P (kN)", "tipo": "numero", "min": 10, "max": 200, "paso": 10, "valorDefecto": 50 },
-    { "clave": "limiteTension", "etiqueta": "Límite Elástico Admisible (MPa)", "tipo": "numero", "min": 100, "max": 400, "paso": 25, "valorDefecto": 250 }
+    {
+      "clave": "luzTotal",
+      "etiqueta": "Luz del Puente L (m)",
+      "tipo": "numero",
+      "min": 30,
+      "max": 120,
+      "paso": 10,
+      "valorDefecto": 60
+    },
+    {
+      "clave": "cargaVertical",
+      "etiqueta": "Carga de Tránsito P (kN)",
+      "tipo": "numero",
+      "min": 10,
+      "max": 200,
+      "paso": 10,
+      "valorDefecto": 50
+    },
+    {
+      "clave": "limiteTension",
+      "etiqueta": "Límite Elástico Admisible (MPa)",
+      "tipo": "numero",
+      "min": 100,
+      "max": 400,
+      "paso": 25,
+      "valorDefecto": 250
+    }
   ],
-  "codigoEvaluacion": "// Parámetros de entrada por defecto (luz, carga de tránsito, límite elástico)\nconst modoOptimizacion = (entrada && entrada.modoOptimizacion) ? entrada.modoOptimizacion : \"multiobjetivo\";\nconst luz = Number(entrada?.luzTotal !== undefined ? entrada.luzTotal : 60.0);\nconst cargaP = Number(entrada?.cargaVertical !== undefined ? entrada.cargaVertical : 50.0);\nconst limiteTension = Number(entrada?.limiteTension !== undefined ? entrada.limiteTension : 250.0);\nconst { h1, xCentroRel, hCentro, h2 } = vars;\n\n// Nudos: 4 inferiores fijos en la calzada y 3 superiores variables\nconst nodos = [\n  { x: 0, y: 0 }, { x: luz / 3, y: 0 }, { x: (2 * luz) / 3, y: 0 }, { x: luz, y: 0 },\n  { x: luz / 3, y: h1 }, { x: luz / 2 + xCentroRel, y: hCentro }, { x: (2 * luz) / 3, y: h2 }\n];\n// Las 11 barras como pares de nudos [inicio, fin]\nconst barrasDef = [[0, 1], [1, 2], [2, 3], [4, 5], [5, 6], [0, 4], [1, 4], [1, 5], [2, 5], [2, 6], [3, 6]];\n\nconst rY0 = cargaP; // reacción de apoyo (simetría)\nconst densidadAcero = 7850, seccionBarra = 0.0065;\nconst E = 210e9, I = 3.2e-5;\nlet masaTotalKg = 0, maxTensionMPa = -Infinity, hayPandeo = false;\n\nfor (let b = 0; b < barrasDef.length; b++) {\n  const nA = nodos[barrasDef[b][0]], nB = nodos[barrasDef[b][1]];\n  const longitud = Math.hypot(nB.x - nA.x, nB.y - nA.y);\n  masaTotalKg += longitud * seccionBarra * densidadAcero;\n\n  // Esfuerzo axial: cordones por momento/brazo, diagonales por cortante/seno\n  let fuerzaAxialKN = 0;\n  const brazoH = Math.max(2.0, (nA.y + nB.y) / 2 || hCentro);\n  if (b <= 2) {\n    fuerzaAxialKN = (cargaP * (luz / 3)) / brazoH;\n  } else if (b <= 4) {\n    fuerzaAxialKN = -((cargaP * (luz / 3)) / brazoH);\n  } else if (b === 5 || b === 10) {\n    const angulo = Math.atan2(Math.abs(nB.y - nA.y), Math.abs(nB.x - nA.x)) || 0.5;\n    fuerzaAxialKN = -(rY0 / Math.sin(angulo));\n  } else {\n    const senAng = Math.sin(Math.atan2(Math.abs(nB.y - nA.y), Math.abs(nB.x - nA.x))) || 0.7;\n    fuerzaAxialKN = (cargaP * 0.45) / senAng;\n  }\n\n  const tensionMPa = (Math.abs(fuerzaAxialKN) * 1000) / (seccionBarra * 1e6);\n  if (tensionMPa > maxTensionMPa) maxTensionMPa = tensionMPa;\n  // Pandeo de Euler en barras comprimidas\n  const cargaCriticaKN = (Math.PI * Math.PI * E * I) / (longitud * longitud * 1000);\n  if (fuerzaAxialKN < 0 && Math.abs(fuerzaAxialKN) > cargaCriticaKN) hayPandeo = true;\n}\n\nconst maxFactorUso = maxTensionMPa / limiteTension;\n\n// Penalizaciones por pandeo y por exceder el límite elástico\nlet penalizacion = 0;\nif (hayPandeo) penalizacion += 500;\nif (maxFactorUso > 1.0) penalizacion += (maxFactorUso - 1.0) * 300;\n\nconst objMasa = masaTotalKg / 1000 + (penalizacion > 0 ? 10.0 : 0);\nconst objTension = maxFactorUso * 100 + penalizacion;\n\nif (modoOptimizacion === \"monobjetivo\") {\n  return objMasa * 0.5 + objTension * 0.5;\n}\n// Frente de Pareto: masa de acero vs. tensión máxima / pandeo\nreturn [objMasa, objTension];",
+  "codigoEvaluacion": "const modoOptimizacion = (entrada && entrada.modoOptimizacion) ? entrada.modoOptimizacion : \"multiobjetivo\";\nconst luz = Number(entrada?.luzTotal !== undefined ? entrada.luzTotal : 60.0);\nconst cargaP = Number(entrada?.cargaVertical !== undefined ? entrada.cargaVertical : 50.0);\nconst limiteTension = Number(entrada?.limiteTension !== undefined ? entrada.limiteTension : 250.0);\nconst { h1, xCentroRel, hCentro, h2 } = vars;\n\nconst nodos = [\n  { x: 0, y: 0 }, { x: luz / 3, y: 0 }, { x: (2 * luz) / 3, y: 0 }, { x: luz, y: 0 },\n  { x: luz / 3, y: h1 }, { x: luz / 2 + xCentroRel, y: hCentro }, { x: (2 * luz) / 3, y: h2 }\n];\nconst barrasDef = [[0, 1], [1, 2], [2, 3], [4, 5], [5, 6], [0, 4], [1, 4], [1, 5], [2, 5], [2, 6], [3, 6]];\n\nconst rY0 = cargaP;\nconst densidadAcero = 7850, seccionBarra = 0.0065;\nconst E = 210e9, I = 3.2e-5;\nlet masaTotalKg = 0, maxTensionMPa = -Infinity, excesoPandeo = 0;\n\nfor (let b = 0; b < barrasDef.length; b++) {\n  const nA = nodos[barrasDef[b][0]], nB = nodos[barrasDef[b][1]];\n  const longitud = Math.hypot(nB.x - nA.x, nB.y - nA.y);\n  masaTotalKg += longitud * seccionBarra * densidadAcero;\n\n  let fuerzaAxialKN = 0;\n  const brazoH = Math.max(2.0, (nA.y + nB.y) / 2 || hCentro);\n  if (b <= 2) {\n    fuerzaAxialKN = (cargaP * (luz / 3)) / brazoH;\n  } else if (b <= 4) {\n    fuerzaAxialKN = -((cargaP * (luz / 3)) / brazoH);\n  } else if (b === 5 || b === 10) {\n    const angulo = Math.atan2(Math.abs(nB.y - nA.y), Math.abs(nB.x - nA.x)) || 0.5;\n    fuerzaAxialKN = -(rY0 / Math.sin(angulo));\n  } else {\n    const senAng = Math.sin(Math.atan2(Math.abs(nB.y - nA.y), Math.abs(nB.x - nA.x))) || 0.7;\n    fuerzaAxialKN = (cargaP * 0.45) / senAng;\n  }\n\n  const tensionMPa = (Math.abs(fuerzaAxialKN) * 1000) / (seccionBarra * 1e6);\n  if (tensionMPa > maxTensionMPa) maxTensionMPa = tensionMPa;\n  const cargaCriticaKN = (Math.PI * Math.PI * E * I) / (longitud * longitud * 1000);\n  if (fuerzaAxialKN < 0 && Math.abs(fuerzaAxialKN) > cargaCriticaKN) {\n    excesoPandeo += Math.abs(fuerzaAxialKN) - cargaCriticaKN;\n  }\n}\n\nconst maxFactorUso = maxTensionMPa / limiteTension;\nconst violacion = excesoPandeo + (maxFactorUso > 1.0 ? (maxFactorUso - 1.0) * 100.0 : 0.0);\nconst objMasa = masaTotalKg / 1000;\nconst objTension = maxFactorUso * 100;\n\nif (modoOptimizacion === \"monobjetivo\") {\n  return { fitness: objMasa * 0.5 + objTension * 0.5, violacion };\n}\nreturn { fitness: [objMasa, objTension], violacion };",
   "grafo": {
     "nodos": [
       {

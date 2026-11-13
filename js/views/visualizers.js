@@ -704,6 +704,8 @@ export class VisualizadorJansen {
 export class VisualizadorBrazo {
   constructor() {
     this.animId = null;
+    this.angulosActuales = null;
+    this.historialEfector = [];
   }
 
   detener() {
@@ -739,11 +741,18 @@ export class VisualizadorBrazo {
     const obsRadio = Number(entrada?.obstaculoRadio !== undefined ? entrada.obstaculoRadio : 16);
 
     const [targetTh1, targetTh2, targetTh3] = genoma;
+    if (!Array.isArray(this.angulosActuales) || this.angulosActuales.length < 3) {
+      this.angulosActuales = [targetTh1, targetTh2, targetTh3];
+    }
     const { fantasmas: posesFantasmas, azar: poseAzar } = prepararComparacionPoblacion(contexto, (g) =>
       resolverCinematicaBrazo([g[0], g[1], g[2]])
     );
     let tiempoAnimacion = 0;
-    const historialEfector = [];
+    const historialEfector = this.historialEfector;
+    const deltaAngularCorto = (actual, objetivo) => {
+      const diff = ((objetivo - actual + 540) % 360) - 180;
+      return actual + diff * 0.22;
+    };
 
     const animar = () => {
       if (!canvas.isConnected) {
@@ -764,10 +773,12 @@ export class VisualizadorBrazo {
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, anchoCSS, altoCSS);
 
-      const factorInterpolacion = 0.5 - 0.5 * Math.cos(tiempoAnimacion);
-      const th1Actual = targetTh1 * factorInterpolacion;
-      const th2Actual = targetTh2 * factorInterpolacion;
-      const th3Actual = targetTh3 * factorInterpolacion;
+      this.angulosActuales[0] = deltaAngularCorto(this.angulosActuales[0], targetTh1);
+      this.angulosActuales[1] = deltaAngularCorto(this.angulosActuales[1], targetTh2);
+      this.angulosActuales[2] = deltaAngularCorto(this.angulosActuales[2], targetTh3);
+      const th1Actual = this.angulosActuales[0];
+      const th2Actual = this.angulosActuales[1];
+      const th3Actual = this.angulosActuales[2];
 
       const origenX = anchoCSS * 0.35;
       const origenY = altoCSS * 0.55;
@@ -886,6 +897,13 @@ export class VisualizadorBrazo {
       ctx.roundRect(px0.x - 22, px0.y - 10, 44, 20, 6);
       ctx.fill();
 
+      const d0 = distanciaPuntoASegmento({ x: obsX, y: obsY }, p0, p1);
+      const d1 = distanciaPuntoASegmento({ x: obsX, y: obsY }, p1, p2);
+      const d2 = distanciaPuntoASegmento({ x: obsX, y: obsY }, p2, p3);
+      const minObs = Math.min(d0, d1, d2);
+      const colisiona = minObs < obsRadio;
+      const despejeLibre = minObs - obsRadio;
+
       const dibujarEslabon = (inicio, fin, color, grosor) => {
         ctx.beginPath();
         ctx.moveTo(inicio.x, inicio.y);
@@ -903,9 +921,9 @@ export class VisualizadorBrazo {
         ctx.stroke();
       };
 
-      dibujarEslabon(px0, px1, "#0284c7", 12);
-      dibujarEslabon(px1, px2, "#0369a1", 10);
-      dibujarEslabon(px2, px3, "#075985", 8);
+      dibujarEslabon(px0, px1, colisiona ? "#dc2626" : "#0284c7", 12);
+      dibujarEslabon(px1, px2, colisiona ? "#ef4444" : "#0369a1", 10);
+      dibujarEslabon(px2, px3, colisiona ? "#f87171" : "#075985", 8);
 
       const dibujarArticulacion = (pt, radio, label = "") => {
         ctx.beginPath();
@@ -918,7 +936,7 @@ export class VisualizadorBrazo {
 
         ctx.beginPath();
         ctx.arc(pt.x, pt.y, radio * 0.4, 0, 2 * Math.PI);
-        ctx.fillStyle = "#0284c7";
+        ctx.fillStyle = colisiona ? "#ef4444" : "#0284c7";
         ctx.fill();
 
         if (label) {
@@ -952,15 +970,10 @@ export class VisualizadorBrazo {
       ctx.setLineDash([]);
 
       const distReal = Math.hypot(p3.x - targetX, p3.y - targetY);
-      const d0 = distanciaPuntoASegmento({ x: obsX, y: obsY }, p0, p1);
-      const d1 = distanciaPuntoASegmento({ x: obsX, y: obsY }, p1, p2);
-      const d2 = distanciaPuntoASegmento({ x: obsX, y: obsY }, p2, p3);
-      const minObs = Math.min(d0, d1, d2);
-      const colisiona = minObs < obsRadio;
 
       ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
       ctx.beginPath();
-      ctx.roundRect(14, 14, 310, 60, 8);
+      ctx.roundRect(14, 14, 330, 60, 8);
       ctx.fill();
 
       ctx.font = "bold 11px system-ui";
@@ -969,7 +982,7 @@ export class VisualizadorBrazo {
       ctx.fillText(`Distancia al Blanco: ${distReal.toFixed(2)} mm (Efector: ${p3.x.toFixed(1)}, ${p3.y.toFixed(1)})`, 24, 34);
 
       ctx.fillStyle = colisiona ? "#f87171" : "#4ade80";
-      ctx.fillText(`Obstáculo: ${colisiona ? "COLISIÓN ⚠️" : "EVADIDO ✓"} (Dist: ${minObs.toFixed(1)} mm) | Mov: ${(factorInterpolacion * 100).toFixed(0)}%`, 24, 54);
+      ctx.fillText(`Obstáculo: ${colisiona ? "COLISIÓN ⚠️" : "EVADIDO ✓"} (Despeje: ${despejeLibre >= 0 ? "+" : ""}${despejeLibre.toFixed(1)} mm)`, 24, 54);
 
       tiempoAnimacion += 0.035;
       this.animId = requestAnimationFrame(animar);

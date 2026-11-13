@@ -571,6 +571,7 @@ export class Motor {
 
   // Realiza el paso evolutivo: selección, cruce, mutación y reemplazo generacional (NSGA-II en multiobjetivo).
   avanzarUnaGeneracion() {
+    if (this._boostMutacionGens > 0) this._boostMutacionGens--;
     if (this.esMultiobjetivo) {
       this.avanzarGeneracionNSGA2();
     } else {
@@ -853,8 +854,9 @@ export class Motor {
   mutarGenoma(genoma) {
     const mutado = [...genoma];
     const progreso = Math.min(1, Math.max(0, this.generacionActual / Math.max(1, this.generaciones)));
-    // Decaimiento progresivo: exploración amplia al inicio, ajuste fino al final.
-    const factorEscala = Math.max(0.08, 1.0 - 0.85 * progreso) * Math.max(0.05, this.sigmaMutacion * 2.0);
+    const boost = this._boostMutacionGens > 0 ? 1.8 : 1.0;
+    // Decaimiento progresivo: exploración amplia al inicio, ajuste fino al final (con refuerzo tras cambios ambientales).
+    const factorEscala = Math.min(0.45, Math.max(0.08, 1.0 - 0.85 * progreso) * Math.max(0.05, this.sigmaMutacion * 2.0) * boost);
 
     for (let i = 0; i < mutado.length; i++) {
       if (this.random() < this.tasaMutacion) {
@@ -885,15 +887,7 @@ export class Motor {
   actualizarDatosEntrada(nuevosDatos) {
     if (!this.modelo || !this.poblacion || this.poblacion.length === 0) return;
     this.datosEntrada = nuevosDatos;
-
-    // Si la población estaba hiperconvergida, reinyecta 25% no-élite aleatorio para explorar el nuevo entorno.
-    const metricasPrevias = this._calcularMetricasPoblacion();
-    if (metricasPrevias.diversidadPct < 10) {
-      const inicioReemplazo = Math.max(1, Math.floor(this.poblacion.length * 0.75));
-      for (let i = inicioReemplazo; i < this.poblacion.length; i++) {
-        this.poblacion[i].genoma = this.crearGenomaAleatorio();
-      }
-    }
+    this._boostMutacionGens = 15;
 
     for (let i = 0; i < this.poblacion.length; i++) {
       const det = this._evaluarDetallado(this.poblacion[i].genoma);
@@ -908,6 +902,27 @@ export class Motor {
       this.frentePareto = this.poblacion.filter((ind) => ind.rango === 0);
     } else {
       this.poblacion.sort((a, b) => this._compararEscalar(a, b));
+    }
+
+    // Si la población estaba hiperconvergida o quedó en zonas no viables tras el cambio ambiental, reinyecta 30% aleatorio.
+    const metricasTrasCambio = this._calcularMetricasPoblacion();
+    if (metricasTrasCambio.diversidadPct < 20 || metricasTrasCambio.viabilidadPct < 90) {
+      const inicioReemplazo = Math.max(1, Math.floor(this.poblacion.length * 0.7));
+      for (let i = inicioReemplazo; i < this.poblacion.length; i++) {
+        const g = this.crearGenomaAleatorio();
+        const det = this._evaluarDetallado(g);
+        this.poblacion[i].genoma = g;
+        this.poblacion[i].fitness = det.fitness;
+        this.poblacion[i].violacion = det.violacion;
+      }
+      if (this.esMultiobjetivo) {
+        const frentes = this.clasificarFrentesPareto(this.poblacion);
+        frentes.forEach((f) => this.calcularDistanciaApiñamiento(f));
+        this.poblacion.sort((a, b) => this.compararPorPareto(a, b));
+        this.frentePareto = this.poblacion.filter((ind) => ind.rango === 0);
+      } else {
+        this.poblacion.sort((a, b) => this._compararEscalar(a, b));
+      }
     }
 
     const metricasActuales = this._calcularMetricasPoblacion();
